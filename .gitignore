@@ -1,0 +1,17 @@
+.DS_Store
+**/.env
+**/.env.*
+!**/.env.example
+**/*.jks
+**/*.keystore
+**/*.pem
+**/*.p12
+**/*.apk
+**/local.properties
+**/build/
+**/__pycache__/
+**/node_modules/
+**/.ai-bridge/
+/private/
+/captures/
+/secrets/
