@@ -15,7 +15,7 @@
         <package android:name="com.openai.chatgpt" />
         <package android:name="com.sec.android.daemonapp" />
     </queries>
-    <application android:extractNativeLibs="true" android:label="Journal local" android:icon="@android:drawable/ic_menu_recent_history" android:theme="@android:style/Theme.Material.Light.NoActionBar" android:allowBackup="false" android:usesCleartextTraffic="false" android:supportsRtl="true">
+    <application android:extractNativeLibs="true" android:label="Journal local" android:icon="@android:drawable/ic_menu_recent_history" android:theme="@android:style/Theme.Material.NoActionBar" android:allowBackup="false" android:usesCleartextTraffic="false" android:supportsRtl="true">
         <receiver android:name=".ResumeReceiver" android:exported="false"><intent-filter><action android:name="android.intent.action.BOOT_COMPLETED" /><action android:name="android.intent.action.MY_PACKAGE_REPLACED" /></intent-filter></receiver>
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
