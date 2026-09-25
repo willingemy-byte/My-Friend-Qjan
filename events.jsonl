@@ -1,0 +1,23 @@
+{"id":"SE-2026-08-27-001","date":"2026-08-27","type":"system_event","provider":"OpenAI","component":"Workspace Agents / ChatGPT Work","event":"Elevated errors","evidence_status":"public_status"}
+{"id":"SE-2026-08-31-001","date":"2026-08-31","type":"system_event","provider":"OpenAI","component":"ChatGPT Work","event":"Elevated errors and latency","evidence_status":"public_status"}
+{"id":"SE-2026-09-01-001","date":"2026-09-01","type":"system_event","provider":"OpenAI","component":"Responses API","event":"Elevated latency","evidence_status":"public_status"}
+{"id":"SE-2026-09-01-002","date":"2026-09-01","type":"system_event","provider":"GitHub","component":"Commit processing","event":"Delayed processing","evidence_status":"public_status"}
+{"id":"SE-2026-09-03-001","date":"2026-09-03","type":"system_event","provider":"OpenAI","component":"ChatGPT Work","event":"High error rates","evidence_status":"public_status"}
+{"id":"SE-2026-09-03-002","date":"2026-09-03","type":"system_event","provider":"OpenAI","component":"ChatGPT / Codex","event":"Elevated errors","evidence_status":"public_status"}
+{"id":"SE-2026-09-10-001","date":"2026-09-10","type":"system_event","provider":"OpenAI","component":"ChatGPT Work","event":"Elevated errors","evidence_status":"public_status"}
+{"id":"SE-2026-09-11-001","date":"2026-09-11","type":"system_event","provider":"OpenAI","component":"ChatGPT Work","event":"Existing thread turn failures","evidence_status":"public_status"}
+{"id":"SE-2026-09-13-001","date":"2026-09-13","type":"system_event","provider":"GitHub","component":"Multiple services incl. Codespaces/PR/Actions","event":"Multi-service degradation","evidence_status":"public_status"}
+{"id":"SE-2026-09-13-002","date":"2026-09-13","type":"system_event","provider":"OpenAI","component":"Codex / GitHub","event":"Review and pull request failures due to upstream GitHub disruption","evidence_status":"public_status"}
+{"id":"SE-2026-09-14-001","date":"2026-09-14","type":"system_event","provider":"OpenAI","component":"Codex / ChatGPT Work","event":"Elevated errors","evidence_status":"public_status"}
+{"id":"SE-2026-09-14-002","date":"2026-09-14","type":"system_event","provider":"OpenAI","component":"Work Mode","event":"Workspace tools/files limitations","evidence_status":"public_status"}
+{"id":"SE-2026-09-15-001","date":"2026-09-15","type":"system_event","provider":"GitHub","component":"Copilot Code Review","event":"Disruption","evidence_status":"public_status"}
+{"id":"SE-2026-09-16-001","date":"2026-09-16","type":"system_event","provider":"OpenAI","component":"ChatGPT Work","event":"Elevated errors","evidence_status":"public_status"}
+{"id":"SE-2026-09-17-001","date":"2026-09-17","type":"system_event","provider":"OpenAI","component":"ChatGPT Work","event":"Elevated errors","evidence_status":"public_status"}
+{"id":"SE-2026-09-17-002","date":"2026-09-17","type":"system_event","provider":"OpenAI","component":"API models","event":"Elevated error rates","evidence_status":"public_status"}
+{"id":"SE-2026-09-17-003","date":"2026-09-17","type":"system_event","provider":"GitHub","component":"OpenAI models in Copilot","event":"Elevated errors","evidence_status":"public_status"}
+{"id":"SE-2026-09-20-001","date":"2026-09-20","type":"system_event","provider":"GitHub","component":"Pull Requests / Actions","event":"Degradation and delays","evidence_status":"public_status"}
+{"id":"SE-2026-09-22-001","date":"2026-09-22","type":"system_event","provider":"OpenAI","component":"ChatGPT Work","event":"Elevated errors","evidence_status":"public_status"}
+{"id":"SE-2026-09-23-001","date":"2026-09-23","type":"system_event","provider":"OpenAI","component":"Work Mode mobile","event":"Unavailable to some users","evidence_status":"public_status"}
+{"id":"SE-2026-09-23-002","date":"2026-09-23","type":"system_event","provider":"GitHub","component":"API / Projects","event":"Multi-service incident","evidence_status":"public_status"}
+{"id":"SE-2026-09-25-001","date":"2026-09-25","type":"system_event","provider":"OpenAI","component":"Platform","event":"Operational at verification","evidence_status":"public_status"}
+{"id":"SE-2026-09-25-002","date":"2026-09-25","type":"system_event","provider":"GitHub","component":"Platform","event":"Operational at verification","evidence_status":"public_status"}
