@@ -7,7 +7,7 @@ from pathlib import Path
 p=argparse.ArgumentParser()
 p.add_argument('--android-jar',required=True,type=Path)
 p.add_argument('--build-tools',required=True,type=Path)
-p.add_argument('--ecj',required=True,type=Path)
+p.add_argument('--ecj',type=Path)
 native=p.add_mutually_exclusive_group(required=True)
 native.add_argument('--ndk',type=Path)
 native.add_argument('--reuse-native-apk',type=Path,help='Reuse only the pinned 0.2.0 native binaries with unchanged native sources.')
@@ -44,7 +44,7 @@ for abi,target in [('arm64-v8a','aarch64-linux-android26'),('x86_64','x86_64-lin
  run(*common,'-Wl,-soname,libjournal_zdtun.so','-Wl,--version-script='+str(cpp/'zdtun.exports'),vendor/'zdtun.c',vendor/'utils.c','-o',out/'libjournal_zdtun.so')
  run(*common,'-fvisibility=hidden','-Wl,-soname,libjournalrelay.so',cpp/'relay.c',cpp/'tls_sni.c',cpp/'jni.c','-L'+str(out),'-ljournal_zdtun','-o',out/'libjournalrelay.so')
 sources=sorted((root/'app/src/main/java').rglob('*.java'))
-run('java','-jar',a.ecj,'-encoding','UTF-8','-source','1.8','-target','1.8','-bootclasspath',os.pathsep.join([str(a.android_jar),str(a.build_tools/'core-lambda-stubs.jar')]),'-warn:-deprecation','-d',classes,*sources)
+if a.ecj:\n run('java','-jar',a.ecj,'-encoding','UTF-8','-source','1.8','-target','1.8','-bootclasspath',os.pathsep.join([str(a.android_jar),str(a.build_tools/'core-lambda-stubs.jar')]),'-warn:-deprecation','-d',classes,*sources)\nelse:\n run('javac','-encoding','UTF-8','-source','8','-target','8','-bootclasspath',os.pathsep.join([str(a.android_jar),str(a.build_tools/'core-lambda-stubs.jar')]),'-Xlint:-deprecation','-d',classes,*sources)
 run('java','-cp',a.build_tools/'lib/d8.jar','com.android.tools.r8.D8','--min-api','26','--lib',a.android_jar,'--output',dex,*sorted(classes.rglob('*.class')))
 unsigned=build/'journal-local-unsigned.apk'
 run(a.build_tools/'aapt2','link','--manifest',root/'app/src/main/AndroidManifest.xml','-I',a.android_jar,'-A',root/'app/src/main/assets','--min-sdk-version','26','--target-sdk-version','35','-o',unsigned)
