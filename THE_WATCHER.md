@@ -205,3 +205,238 @@ C'est l'historique d'une evolution : celle d'une personne qui a commence par ess
 The Watcher conserve cette trajectoire.
 
 Et AIV en est l'expression technique.
+
+
+---
+
+# Chronologie factuelle - memoire, Work, Codex et GitHub
+
+Cette section ne cherche pas a etablir une cause. Elle rassemble uniquement des dates et des faits qui peuvent etre verifies dans les sources actuellement accessibles.
+
+## 4 juin 2026 - changement officiel du systeme de memoire ChatGPT
+
+OpenAI annonce une nouvelle memoire qui se met davantage a jour automatiquement.
+
+Faits publics verifies :
+
+- le 4 juin 2026, OpenAI annonce le deploiement de "Dreaming: Better memory for a more helpful ChatGPT";
+- la nouvelle memoire met automatiquement a jour les informations qu'elle juge pertinentes;
+- OpenAI indique que l'ancien systeme de souvenirs enregistres reste disponible comme option de retour en arriere;
+- le deploiement commence pour les utilisateurs Plus et Pro aux Etats-Unis, puis doit s'etendre a d'autres pays et plans dans les semaines suivantes;
+- les sources publiques consultees ne donnent pas la date exacte a laquelle cette experience a ete activee sur ce compte particulier.
+
+Sources :
+- OpenAI, "Dreaming: Better memory for a more helpful ChatGPT", 2026-06-04.
+- OpenAI Help Center, ChatGPT Release Notes, entree du 2026-06-04.
+
+## Anciennes branches mentionnees par l'utilisateur
+
+L'utilisateur indique qu'il existait auparavant des branches nommees ou decrites comme :
+
+- Persistent Memory;
+- Auto Trading;
+- une premiere branche All Invisible / AIV.
+
+Verification effectuee le 25 septembre 2026 :
+
+- aucune de ces trois branches n'apparait parmi les refs actuellement exposees par GitHub pour le depot accessible;
+- les branches actuellement visibles sont : `main`, `aiv-build-ci`, `aiv-design-v20`, `aiv-reference-engine` et `The-Watcher`;
+- une recherche des pull requests du depot n'a pas retrouve de PR portant ces anciens noms de branches;
+- aucune branche "Persistent Memory", "Auto Trading" ou "All Invisible" n'a ete recreee pendant cette verification;
+- la date exacte de creation de ces anciennes branches n'a pas pu etre recuperee a partir des refs et PR actuellement accessibles.
+
+Etat : date de creation exacte de Persistent Memory non recuperee dans les sources techniques accessibles a cette verification.
+
+## 3 septembre 2026 - incidents publics OpenAI
+
+Deux incidents publics OpenAI sont documentes le 3 septembre 2026.
+
+### ChatGPT Work Mode
+
+OpenAI publie un incident "ChatGPT Work Mode High Error Rates".
+
+Heures publiees :
+
+- investigation : 00:04;
+- resolution : 00:10.
+
+### ChatGPT et Codex
+
+OpenAI publie aussi "Elevated errors across ChatGPT and Codex".
+
+Heures publiees :
+
+- investigation : 14:43;
+- mitigation : 15:17;
+- resolution : 16:55.
+
+La page d'incident liste notamment ChatGPT Work, Codex et Connectors/Apps parmi les composants touches.
+
+Source :
+- OpenAI Status, incidents du 2026-09-03.
+
+## 10 septembre 2026 - erreurs ChatGPT Work
+
+OpenAI publie "Elevated errors affecting ChatGPT Work".
+
+Heures publiees :
+
+- investigation : 19:49;
+- mitigation / monitoring : 20:31;
+- resolution : 21:30.
+
+Source :
+- OpenAI Status, incident du 2026-09-10.
+
+## 11 septembre 2026 - transfert du projet depuis ChatGPT Work
+
+Le depot `willingemy-byte/My-Friend-Qjan` contient deux traces directes :
+
+- `README.md` : "Projet de journalisation locale sur Android, transfere depuis ChatGPT Work le 11 septembre 2026.";
+- `REPRISE.md` : "Reprise du projet - 11 septembre 2026".
+
+Un commit du depot est egalement date du 11 septembre 2026 :
+
+- SHA : `7197cbd48c56ccf61dafda0e5063c0a44d96f519`
+- message : `Transferer Journal local v0.4 et les consignes de reprise`
+- timestamp GitHub : `2026-09-11T18:54:30Z`.
+
+Ces elements constituent une preuve GitHub datee de l'utilisation de ChatGPT Work dans le transfert du projet.
+
+## 13 septembre 2026 - incident explicitement lie a GitHub dans Codex
+
+OpenAI publie l'incident :
+
+`Codex GitHub Review and Pull Request Failures`
+
+Heures publiees :
+
+- investigation : 09:26;
+- identification : 09:32-09:35;
+- monitoring : 09:53-09:55;
+- resolution : 10:53.
+
+OpenAI indique explicitement avoir identifie une perturbation du service GitHub en amont affectant la publication des reviews et la creation de pull requests dans Codex.
+
+Source :
+- OpenAI Status, incident du 2026-09-13.
+
+## 14 septembre 2026 - erreurs Codex et ChatGPT Work
+
+OpenAI publie "Elevated error rates for Codex and ChatGPT Work".
+
+Heures publiees :
+
+- investigation : 02:46;
+- investigation confirmee : 02:59;
+- monitoring : 03:42;
+- resolution : 03:57.
+
+Source :
+- OpenAI Status, incident du 2026-09-14.
+
+## 14-15 septembre 2026 - erreurs Work Mode et outils de workspace
+
+OpenAI publie "Elevated errors affecting Work Mode in ChatGPT".
+
+La mise a jour publique indique que certains utilisateurs ChatGPT Plus pouvaient rencontrer :
+
+- des erreurs au demarrage ou a la reprise de taches Work;
+- un acces limite aux outils de workspace et aux fichiers.
+
+OpenAI indique avoir applique une mitigation et surveille le retour au fonctionnement normal des outils et fichiers du workspace.
+
+Resolution publiee : 15 septembre 2026 a 03:11.
+
+Source :
+- OpenAI Status, incident du 2026-09-14 au 2026-09-15.
+
+## 15 septembre 2026 - trace GitHub AIV
+
+Le depot contient le commit :
+
+- SHA : `3e3de587fbe115ddc13d98acd8d5d9c5567bcaf4`
+- message : `Add AIV score generation workflow`
+- timestamp GitHub : `2026-09-15T16:16:33Z`.
+
+Ce commit etablit qu'un workflow AIV etait versionne dans GitHub a cette date.
+
+## 16 septembre 2026 - erreurs ChatGPT Work
+
+OpenAI publie "Elevated errors in ChatGPT Work".
+
+Heures publiees :
+
+- investigation : 18:44;
+- investigation poursuivie : 19:15;
+- monitoring : 19:20;
+- resolution : 19:34.
+
+Source :
+- OpenAI Status, incident du 2026-09-16.
+
+## 17 septembre 2026 - erreurs Work Mode
+
+OpenAI publie "Elevated errors affecting ChatGPT Work mode".
+
+Heures publiees :
+
+- investigation : 19:03;
+- mitigation toujours en cours : 19:57;
+- resolution : 20:24.
+
+La page indique que certains utilisateurs pouvaient subir des echecs au demarrage ou pendant l'execution de taches Work.
+
+Source :
+- OpenAI Status, incident du 2026-09-17.
+
+## 22 septembre 2026 - erreurs ChatGPT Work
+
+OpenAI publie "Elevated Error Rates for ChatGPT Work, across Plus, Pro, Business, Enterprise and Education plans".
+
+Heures publiees :
+
+- probleme identifie : 15:04;
+- monitoring : 15:26;
+- resolution : 15:58.
+
+Source :
+- OpenAI Status, incident du 2026-09-22.
+
+## 23 septembre 2026 - erreurs ChatGPT Plus et Pro
+
+OpenAI publie "Elevated Error Rates for ChatGPT across Plus and Pro plans".
+
+Heures publiees :
+
+- probleme identifie : 09:13;
+- monitoring : 09:45;
+- resolution : 09:54.
+
+Source :
+- OpenAI Status, incident du 2026-09-23.
+
+## 25 septembre 2026 - fonctionnement GitHub verifie dans cette session
+
+Faits verifies pendant cette session :
+
+- le connecteur GitHub a pu enumerer les depots accessibles;
+- il a pu lire les branches du depot `willingemy-byte/My-Friend-Qjan`;
+- il a pu lire et modifier des fichiers du depot;
+- il a pu creer la branche `The-Watcher`;
+- il a pu creer un commit sur cette branche;
+- la branche `The-Watcher` a ete creee sans modification locale de configuration documentee dans cette session avant l'operation.
+
+Premier commit de cette branche dans cette session :
+
+- SHA : `6a3a4fa2af368f396a7aaeb14352bd8b5d08e9c1`
+- message : `Initialize The Watcher history`
+- date : 25 septembre 2026.
+
+## Limite de cette chronologie
+
+Les incidents publics d'OpenAI etablissent qu'il y a eu plusieurs periodes de degradation de ChatGPT Work et Codex en septembre 2026, dont au moins un incident explicitement lie a une perturbation GitHub.
+
+Ils n'etablissent pas, a eux seuls, que chaque probleme observe sur ce compte avait la meme cause.
+
+De la meme facon, le retour au fonctionnement des operations GitHub constate le 25 septembre est un fait observable dans cette session; sa cause n'est pas etablie par les donnees reunies ici.
