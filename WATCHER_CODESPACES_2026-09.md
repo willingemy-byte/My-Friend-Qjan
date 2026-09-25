@@ -50,7 +50,25 @@ Le même jour, OpenAI Status publie `Codex GitHub Review and Pull Request Failur
 
 **Fait établi :** le 13 septembre 2026, GitHub Codespaces était officiellement inclus dans une panne GitHub multi-services, tandis qu’OpenAI documentait simultanément un incident Codex causé par une perturbation GitHub en amont.
 
-**Fait non établi :** la date exacte à laquelle l’utilisateur a personnellement créé ou ouvert son premier Codespace.
+## 25 septembre 2026 — preuve visuelle de la date exacte de création
+
+Deux captures fournies par l’utilisateur montrent le Codespace actif dans l’interface `github.dev`, ouvert sur le dépôt `My-Friend-Qjan`.
+
+Dans le panneau Copilot du Codespace, à la question demandant la date exacte de création de l’environnement, la réponse affichée est :
+
+`Ton Codespace super-waddle-96j9pqw7rq7x29v4v a été créé le 11 septembre 2026 à 18:57:09 UTC, soit 20:57:09 en France métropolitaine.`
+
+La seconde capture montre simultanément :
+
+- le dépôt `My-Friend-Qjan` ouvert dans Codespaces;
+- la branche `main`;
+- le terminal dans `/workspaces/My-Friend-Qjan`;
+- le panneau Copilot affichant la date ci-dessus;
+- le Codespace toujours actif et réouvert le 25 septembre 2026.
+
+**Fait établi à partir de la preuve visuelle fournie :** le Codespace nommé `super-waddle-96j9pqw7rq7x29v4v` a été rapporté par Copilot dans cet environnement comme ayant été créé le **11 septembre 2026 à 18:57:09 UTC**.
+
+Cette entrée documente la date de création rapportée dans l’environnement lui-même. Elle ne dépend pas d’une reconstruction à partir des incidents de service ou de l’historique de commits.
 
 ## Sources
 
