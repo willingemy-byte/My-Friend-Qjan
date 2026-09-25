@@ -1,6 +1,6 @@
 # The Watcher — Chronologie factuelle détaillée
 ## OpenAI / ChatGPT / Work / Codex / GitHub
-### Période : 2 septembre 2026 → 25 septembre 2026
+### Période : 1er septembre 2026 → 25 septembre 2026
 
 > Objet : conserver les faits datés disponibles aujourd'hui, sans attribuer de causalité lorsqu'elle n'est pas explicitement établie par une source.
 >
@@ -35,7 +35,38 @@ OpenAI indique que ChatGPT Work subit des erreurs élevées et de la latence. Pl
 Source : OpenAI Status History  
 https://status.openai.com/history
 
-## 1er septembre 2026 — OpenAI + GitHub
+## 1er septembre 2026 — Demo-AIV, ChatGPT Work, OpenAI et GitHub
+
+### Trace utilisateur / ChatGPT Work
+
+Des captures fournies le 25 septembre 2026 montrent une conversation ChatGPT Work portant sur la création du Site All Invisible à partir d'une infrastructure GitHub déjà existante.
+
+La tâche affichée contient notamment :
+
+- `SOURCE DE VÉRITÉ : GitHub repository: willingemy-byte/Demo-AIV`;
+- `SOURCE CANONIQUE : main`;
+- `BRANCHE SITE RÉSERVÉE : site/aiv-demo-sync-v1`;
+- instruction explicite de ne pas recréer l'infrastructure GitHub;
+- lecture prioritaire de `site-source/manifest.json`;
+- chargement de `index.html`, `styles.css` et `app.js`;
+- respect des checksums et du `source_commit` indiqués par le manifest;
+- conservation de GitHub comme source de vérité.
+
+La réponse Work affichée indique ensuite :
+
+`Le Site All Invisible est prêt en aperçu privé, accessible uniquement à ton compte.`
+
+Elle précise que la démo provient du commit vérifié du dépôt `Demo-AIV`, que les checksums correspondent, et qu'aucune publication publique ni modification de l'infrastructure GitHub n'a été effectuée.
+
+Une capture du menu de ce message affiche la date et l'heure :
+
+`septembre 1, 5:03 p.m.`
+
+Le fuseau horaire n'est pas inscrit dans la capture; l'heure est donc conservée telle qu'affichée dans l'interface ChatGPT.
+
+**Fait établi à partir des captures :** au 1er septembre 2026 à 17:03, heure affichée dans ChatGPT, le projet All In Visible utilisait déjà un dépôt GitHub `willingemy-byte/Demo-AIV` comme source de vérité pour une démo de site générée via ChatGPT Work.
+
+La recherche GitHub effectuée le 25 septembre ne permet plus d'ouvrir ce dépôt privé depuis le connecteur actuel. Les captures antérieures montrant `Demo-AIV` comme dépôt privé archivé de l'organisation `Allinvisible` sont conservées comme contexte d'archivage ultérieur.
 
 ### OpenAI
 **Elevated latency in the Responses API**
