@@ -229,51 +229,178 @@ Sources :
 - OpenAI, "Dreaming: Better memory for a more helpful ChatGPT", 2026-06-04.
 - OpenAI Help Center, ChatGPT Release Notes, entree du 2026-06-04.
 
-## Anciennes branches mentionnees par l'utilisateur
+## Organisation GitHub Allinvisible et depots archives
 
-L'utilisateur indique qu'il existait auparavant des branches nommees ou decrites comme :
+Les captures fournies le 25 septembre 2026 montrent une organisation GitHub nommee `Allinvisible`, rattachee au meme utilisateur GitHub visible dans les captures.
 
-- Persistent Memory;
-- Auto Trading;
-- une premiere branche All Invisible / AIV.
+La page de l'organisation montre cinq depots :
 
-Verification effectuee le 25 septembre 2026 :
+- `demo-repository` - archive privee;
+- `Instant` - archive publique;
+- `Persistent-Memory` - archive privee;
+- `AutoTrading` - archive privee;
+- `Demo-AIV` - archive privee.
 
-- aucune de ces trois branches n'apparait parmi les refs actuellement exposees par GitHub pour le depot accessible;
-- les branches actuellement visibles sont : `main`, `aiv-build-ci`, `aiv-design-v20`, `aiv-reference-engine` et `The-Watcher`;
-- une recherche des pull requests du depot n'a pas retrouve de PR portant ces anciens noms de branches;
-- aucune branche "Persistent Memory", "Auto Trading" ou "All Invisible" n'a ete recreee pendant cette verification;
-- la date exacte de creation de ces anciennes branches n'a pas pu etre recuperee a partir des refs et PR actuellement accessibles.
+Les captures montrent egalement que l'organisation a ete marquee comme archivee le 11 septembre 2026.
 
-Etat : date de creation exacte de Persistent Memory non recuperee dans les sources techniques accessibles a cette verification.
+Le connecteur GitHub actuellement disponible dans ChatGPT peut confirmer publiquement l'existence de `Allinvisible/Instant`, qui est archive, mais il ne dispose pas actuellement de l'acces necessaire pour lire les quatre depots prives archives. Les captures utilisateur constituent donc la source directe pour l'existence et l'etat de ces depots prives dans cette chronologie.
 
-## 3 septembre 2026 - incidents publics OpenAI
+## Persistent-Memory - existence verifiee au plus tard le 2 septembre 2026
+
+Les captures de `Persistent-Memory` montrent :
+
+- depot : `Persistent-Memory`;
+- visibilite : privee;
+- etat actuel : archive;
+- branche montree : `main`;
+- commit abrege affiche : `e51b31c`;
+- message : `docs(persona): define general orchestrator role`;
+- historique du fichier `00_PERSONA/01_ROLE_ORCHESTRATOR.md` : `Commits on Sep 2, 2026`.
+
+Ce commit constitue une preuve datee que `Persistent-Memory` existait et etait utilise au plus tard le 2 septembre 2026.
+
+Important : cette date de commit n'est pas presentee comme la date technique exacte de creation du depot, car la capture ne montre pas le champ GitHub `created_at`. Elle etablit une borne certaine d'existence et d'utilisation.
+
+Les captures du README de `Persistent-Memory` montrent aussi explicitement l'objectif du depot :
+
+> Ce depot est la memoire canonique controlee par l'utilisateur pour ses projets, recherches, modeles, decisions et regles de collaboration avec ChatGPT.
+
+Le README visible dans la capture pose notamment les principes suivants :
+
+- GitHub est la source de verite durable;
+- la memoire dynamique de ChatGPT peut servir de contexte opportuniste, mais ne remplace pas ce depot;
+- les conclusions deja validees ne doivent pas etre reecrites silencieusement;
+- toute modification importante doit etre explicite, tracable par Git et reliee a une nouvelle decision, une nouvelle preuve ou une correction identifiee;
+- une conversation importante peut produire une synthese canonique poussee dans le depot sur instruction de l'utilisateur.
+
+Ces elements documentent factuellement que, le 2 septembre 2026 au plus tard, un systeme de memoire persistante controle par l'utilisateur et versionne dans Git etait en cours d'utilisation.
+
+## 27 aout 2026 - erreurs Workspace Agents et ChatGPT Work
+
+OpenAI publie un incident indiquant une augmentation des erreurs dans Workspace Agents et ChatGPT Work sur Web et Mobile.
+
+Heures publiees :
+
+- probleme identifie : 18:00;
+- mise a jour : 18:16;
+- monitoring : 19:07;
+- resolution : 22:14.
+
+Source :
+- OpenAI Status, `Users may experience an increase in error rates in Workspace Agents and ChatGPT Work on Web and Mobile`, 2026-08-27.
+
+## 31 aout 2026 - ChatGPT Work en erreurs et latence
+
+OpenAI publie `ChatGPT Work seeing elevated errors and latency`.
+
+La page indique notamment :
+
+- des erreurs et de la latence sur ChatGPT Work;
+- que des utilisateurs de plusieurs plans pouvaient etre incapables de demarrer ou poursuivre des taches;
+- que les utilisateurs Plus etaient particulierement touches et que Work pouvait etre indisponible.
+
+Heures publiees :
+
+- probleme identifie : 15:21;
+- mises a jour successives : 16:02, 17:01, 17:52, 19:29;
+- monitoring : 20:01;
+- resolution : 20:28.
+
+Source :
+- OpenAI Status, `ChatGPT Work seeing elevated errors and latency`, 2026-08-31.
+
+## 1er septembre 2026 - latence Responses API
+
+OpenAI publie `Elevated latency in the Responses API`.
+
+L'incident commence le 31 aout au soir et se poursuit le 1er septembre, avec plusieurs phases de mitigation et de monitoring avant resolution le 1er septembre a 19:05.
+
+Cet incident concerne l'API Responses et n'est pas presente ici comme un incident GitHub.
+
+Source :
+- OpenAI Status, `Elevated latency in the Responses API`, 2026-08-31 au 2026-09-01.
+
+## 2 septembre 2026 - jalon Persistent-Memory et incident OpenAI distinct
+
+Deux faits dates independants sont documentes le 2 septembre 2026 :
+
+### GitHub
+
+Le fichier `00_PERSONA/01_ROLE_ORCHESTRATOR.md` de `Persistent-Memory` montre un commit date du 2 septembre 2026 :
+
+- `docs(persona): define general orchestrator role`.
+
+### OpenAI
+
+OpenAI publie le meme jour un incident `Elevated errors creating new accounts`, entre 18:13 et 18:45.
+
+Cet incident public porte sur la creation de nouveaux comptes. Il n'est pas presente comme une panne GitHub, Work ou Codex.
+
+Source :
+- OpenAI Status, incident du 2026-09-02.
+
+## 3 septembre 2026 - incidents publics ChatGPT Work, ChatGPT et Codex
 
 Deux incidents publics OpenAI sont documentes le 3 septembre 2026.
 
-### ChatGPT Work Mode
+### ChatGPT Work Mode High Error Rates
 
-OpenAI publie un incident "ChatGPT Work Mode High Error Rates".
+OpenAI publie `ChatGPT Work Mode High Error Rates`.
 
 Heures publiees :
 
 - investigation : 00:04;
 - resolution : 00:10.
 
-### ChatGPT et Codex
+La page d'incident liste parmi les composants touches ChatGPT Work, Codex in ChatGPT Desktop et Connectors/Apps.
 
-OpenAI publie aussi "Elevated errors across ChatGPT and Codex".
+### Elevated errors across ChatGPT and Codex
+
+OpenAI publie ensuite `Elevated errors across ChatGPT and Codex`.
 
 Heures publiees :
 
 - investigation : 14:43;
-- mitigation : 15:17;
+- mitigation / monitoring : 15:17;
 - resolution : 16:55.
 
-La page d'incident liste notamment ChatGPT Work, Codex et Connectors/Apps parmi les composants touches.
+La page liste notamment :
+
+- ChatGPT Work;
+- Connectors/Apps;
+- Codex Web;
+- Codex API;
+- Codex CLI;
+- extension VS Code.
 
 Source :
 - OpenAI Status, incidents du 2026-09-03.
+
+## Ce que les dates du 31 aout au 3 septembre permettent d'etablir
+
+Sans attribuer de cause commune, les faits dates montrent la proximite temporelle suivante :
+
+- 31 aout : incident public important sur ChatGPT Work;
+- 1er septembre : incident Responses API encore en cours;
+- 2 septembre : `Persistent-Memory` est deja actif et versionne dans GitHub;
+- 2 septembre : incident distinct sur la creation de comptes OpenAI;
+- 3 septembre a 00:04 : incident ChatGPT Work;
+- 3 septembre a 14:43 : incident etendu ChatGPT + Codex incluant Work et Connectors/Apps.
+
+Aucun incident public trouve pour le 2 ou le 3 septembre n'est decrit par OpenAI comme une panne GitHub specifique.
+
+Le premier incident public retrouve dans cette chronologie ou OpenAI attribue explicitement une panne Codex a un service GitHub en amont est celui du 13 septembre 2026, documente plus bas.
+
+Cette section etablit donc une coincidence temporelle entre l'utilisation de `Persistent-Memory` et une periode d'incidents repetes de Work/Codex/ChatGPT, sans transformer cette coincidence en preuve de causalite.
+
+## 4 septembre 2026 - incident regional Work et Codex
+
+OpenAI publie un incident regional indiquant que les utilisateurs de la region APAC pouvaient rencontrer davantage d'erreurs dans ChatGPT, Work, le televersement de fichiers, Voice et Codex Cloud.
+
+Cet incident est conserve dans la chronologie globale, mais sa portee regionale est explicitement notee.
+
+Source :
+- OpenAI Status, incident du 2026-09-04.
 
 ## 10 septembre 2026 - erreurs ChatGPT Work
 
