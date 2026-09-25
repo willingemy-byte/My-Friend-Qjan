@@ -10,7 +10,7 @@ BUILD_MODE="${AIV_BUILD_MODE:-signed}"
 mkdir -p "$DL" "$SDK/platforms" "$SDK/build-tools" "$SDK/ndk" "$SIGNING_DIR"
 
 need(){ command -v "$1" >/dev/null 2>&1 || { echo "Missing required host tool: $1" >&2; exit 2; }; }
-for x in python3 java keytool unzip curl sha256sum stat; do need "$x"; done
+for x in python3 java javac keytool unzip curl sha256sum stat; do need "$x"; done
 
 fetch(){
   local name="$1" url="$2" sha="$3" bytes="$4"
@@ -37,10 +37,6 @@ fetch build-tools_r35_linux.zip \
 fetch android-ndk-r27d-linux.zip \
   https://dl.google.com/android/repository/android-ndk-r27d-linux.zip \
   601246087a682d1944e1e16dd85bc6e49560fe8b6d61255be2829178c8ed15d9 663956036
-fetch ecj-3.40.0.jar \
-  https://repo.maven.apache.org/maven2/org/eclipse/jdt/ecj/3.40.0/ecj-3.40.0.jar \
-  05cc22a24e7982970f63a405fc6c820bc80b806f27f3c5a6236fc475f8f7152b 3312549
-
 if [[ ! -f "$SDK/platforms/android-35/android.jar" ]]; then
   rm -rf "$TOOLROOT/platform-unpack"
   mkdir -p "$TOOLROOT/platform-unpack"
