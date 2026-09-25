@@ -13,7 +13,8 @@ need(){ command -v "$1" >/dev/null 2>&1 || { echo "Missing required host tool: $
 for x in python3 java keytool unzip curl sha256sum stat; do need "$x"; done
 
 fetch(){
-  local name="$1" url="$2" sha="$3" bytes="$4"\n  local dst="$DL/$name"
+  local name="$1" url="$2" sha="$3" bytes="$4"
+  local dst="$DL/$name"
   if [[ -f "$dst" ]]; then
     local got
     got="$(sha256sum "$dst" | awk '{print $1}')"
