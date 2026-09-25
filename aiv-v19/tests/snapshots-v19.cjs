@@ -1,0 +1,14 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const model=require('../tools/penalty-model');let calls=0,saved=null;
+const text=fs.readFileSync(require('node:path').join(__dirname,'../tools/penalty-ui.js'),'utf8');
+const fn=text.slice(text.indexOf('  function penaltySnapshot('),text.indexOf('  function penaltyLoad('));
+const bridge={calculationLoad:key=>({cached:saved?.key===key,result:saved?.result}),calculationSave:(key,value)=>{saved={key,result:JSON.parse(value)};return{ok:true}}};
+const c={nativeBridge:bridge,penaltyRead:(method,...args)=>bridge[method](...args),penaltyStatus:()=>{},PenaltyModel:{evaluate:(...args)=>{calls++;return model.evaluate(...args)}}};vm.createContext(c);vm.runInContext(fn+';this.snapshot=penaltySnapshot;',c);
+const input={scan_id:1,apps:[],references:{}},settings={policy:model.defaults()};
+c.snapshot(input,settings);assert.equal(calls,1);
+const next=c.snapshot({...input,scan_id:2},settings);assert.equal(calls,1);assert.equal(next.scan_id,2);
+settings.policy.colors.yellow_ratio=2.5;c.snapshot(input,settings);assert.equal(calls,2);
+input.references.a={penalty_evidence:{findings:[]}};c.snapshot(input,settings);assert.equal(calls,3);
+c.snapshot(JSON.parse(JSON.stringify(input)),settings);assert.equal(calls,3);
+input.apps.push({package_name:'test.app',uid:10001,permissions:[]});c.snapshot(input,settings);assert.equal(calls,4);
+console.log('PASS durable cache contract: reuse across scan IDs, invalidation by policy, reference and inventory');
