@@ -1,6 +1,6 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const model=require('../tools/penalty-model');let calls=0,saved=null;
-const text=fs.readFileSync(require('node:path').join(__dirname,'../tools/penalty-ui.js'),'utf8');
+const text=fs.readFileSync(require('node:path').join(__dirname,'../app/src/main/assets/journal.html'),'utf8');
 const fn=text.slice(text.indexOf('  function penaltySnapshot('),text.indexOf('  function penaltyLoad('));
 const bridge={calculationLoad:key=>({cached:saved?.key===key,result:saved?.result}),calculationSave:(key,value)=>{saved={key,result:JSON.parse(value)};return{ok:true}}};
 const c={nativeBridge:bridge,penaltyRead:(method,...args)=>bridge[method](...args),penaltyStatus:()=>{},PenaltyModel:{evaluate:(...args)=>{calls++;return model.evaluate(...args)}}};vm.createContext(c);vm.runInContext(fn+';this.snapshot=penaltySnapshot;',c);
