@@ -40,6 +40,29 @@ fetch build-tools_r35_linux.zip \
 fetch android-ndk-r27d-linux.zip \
   https://dl.google.com/android/repository/android-ndk-r27d-linux.zip \
   601246087a682d1944e1e16dd85bc6e49560fe8b6d61255be2829178c8ed15d9 663956036
+fetch shizuku-api-13.1.5.aar \
+  https://repo1.maven.org/maven2/dev/rikka/shizuku/api/13.1.5/api-13.1.5.aar \
+  4def9bde498ef8626614c2fc5db9af4749c86f16f6c33e3f5658d35e70bab59b 24652
+fetch shizuku-provider-13.1.5.aar \
+  https://repo1.maven.org/maven2/dev/rikka/shizuku/provider/13.1.5/provider-13.1.5.aar \
+  b0f18cd9812464ec171c53cac93a819fe411718a3965c311f01eb4de265381b3 7056
+fetch shizuku-aidl-13.1.5.aar \
+  https://repo1.maven.org/maven2/dev/rikka/shizuku/aidl/13.1.5/aidl-13.1.5.aar \
+  33fe7191cdd69fcb66d649264f3b0c47acb2f3d6343afc05b98dbbff6f221963 23673
+fetch shizuku-shared-13.1.5.aar \
+  https://repo1.maven.org/maven2/dev/rikka/shizuku/shared/13.1.5/shared-13.1.5.aar \
+  4659642c9339be0a26e9c65bb8648f7ad6d8f4a465f557993ccbc78802381635 2614
+fetch androidx-annotation-1.3.0.jar \
+  https://dl.google.com/dl/android/maven2/androidx/annotation/annotation/1.3.0/annotation-1.3.0.jar \
+  97dc45afefe3a1e421da42b8b6e9f90491477c45fc6178203e3a5e8a05ee8553 31705
+
+SHIZUKU="$TOOLROOT/shizuku"
+mkdir -p "$SHIZUKU"
+cp "$DL/shizuku-api-13.1.5.aar" "$SHIZUKU/api-13.1.5.aar"
+cp "$DL/shizuku-provider-13.1.5.aar" "$SHIZUKU/provider-13.1.5.aar"
+cp "$DL/shizuku-aidl-13.1.5.aar" "$SHIZUKU/aidl-13.1.5.aar"
+cp "$DL/shizuku-shared-13.1.5.aar" "$SHIZUKU/shared-13.1.5.aar"
+cp "$DL/androidx-annotation-1.3.0.jar" "$SHIZUKU/annotation-1.3.0.jar"
 
 if [[ ! -f "$SDK/platforms/android-35/android.jar" ]]; then
   rm -rf "$TOOLROOT/platform-unpack"
@@ -101,6 +124,7 @@ python3 "$ROOT/build.py" \
   --android-jar "$SDK/platforms/android-35/android.jar" \
   --build-tools "$SDK/build-tools/35.0.0" \
   --ndk "$SDK/ndk/27.3.13750724" \
+  --shizuku-dir "$SHIZUKU" \
   "${SIGN_ARGS[@]}"
 
 if [[ "$BUILD_MODE" == unsigned ]]; then
