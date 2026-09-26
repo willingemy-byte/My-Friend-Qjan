@@ -1,17 +1,19 @@
-# My Friend Qjan
+# AIV 0.6.23 — Défense et ménage
 
-Projet de journalisation locale sur Android, transféré depuis ChatGPT Work le 11 septembre 2026.
+APK signé pour Android, package fr.erick.journallocal, versionCode 29.
 
-Le code de l’application **Journal local v0.4** est dans [`journal-local/`](journal-local/). Son [README](journal-local/README.md) contient les instructions de compilation et de vérification.
+Source : https://github.com/willingemy-byte/My-Friend-Qjan/tree/a1f44bf6a3a1e26e8f45f70a2a4d2f48ce433c75
 
-## État actuel
+Téléchargement : https://raw.githubusercontent.com/willingemy-byte/My-Friend-Qjan/aiv-v23-download/AIV-0.6.23.apk
 
-- Sources v0.4 conservées telles que livrées, avec tests et dépendances natives.
-- Capture des métadonnées réseau, DNS et SNI lorsque disponibles.
-- Export et récupération des journaux, diagnostics et règles d’analyse.
-- Le choix d’un proxy et du déchiffrement TLS reste **ouvert**. Le document de recherche n’est pas une décision de mise en œuvre.
-- La connexion d’un exécuteur à l’API OpenAI reste à configurer séparément.
+SHA-256 APK : 8039fc5f81292efa026f6fb2d547c2fb92727d4e594b01b6e7fc79cd40dc808a
 
-Ce dépôt contient le code et la documentation technique. Les journaux du téléphone et la clé privée de signature restent hors du dépôt public.
+Certificat SHA-256 : 4a14b9e2cf3869fa9faf2317cba96e948145e4dba32240f9547380c040deba7b
 
-Voir [`REPRISE.md`](REPRISE.md) pour reprendre le travail sans recommencer l’enquête.
+Accueil → Ménage, ou Applications → Défense et ménage · L4 / L5.
+
+L’inventaire prépare les dossiers automatiquement à l’ouverture et après les changements observés pendant la collecte. Désinstallation avec confirmation Android, raccourcis vers les autorisations, choix de conservation et journal exportable. Les dossiers restent après retrait. Un changement de version ou de permissions rouvre l’examen.
+
+L4/L5 ne détermine pas si une application est nécessaire. Les applications système, UID partagés et rôles essentiels identifiés passent par un examen manuel dans Android. Aucune désinstallation silencieuse, aucun contournement de permission.
+
+Tests : régressions V22, règles natives, empreinte de relevé, parcours mobile avec pont simulé; compilation signée, certificat et alignement vérifiés. Pas encore vérifié sur un téléphone Android réel.
