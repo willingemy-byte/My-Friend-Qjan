@@ -23,7 +23,7 @@ public final class MainActivity extends Activity {
     private static final int DEFENSE_EXPORT_REQUEST=30;
     private boolean defenseResumed,defenseResultHandled;
     @Override public void onCreate(Bundle state){
-        super.onCreate(state);Continuous.initialize(this);DefenseMonitor.start(this);
+        super.onCreate(state);Continuous.initialize(this);DefenseMonitor.start(this);ShizukuCleanup.attach(this);
         prepareStartup();
         reader=new WebView(this);reader.setBackgroundColor(0xFF05090D);
         reader.setOnApplyWindowInsetsListener((view,insets)->{
@@ -60,6 +60,7 @@ public final class MainActivity extends Activity {
                 startupState="Préparation de la référence";
                 startupResult=audit.penaltyData().toString();
                 startupState="Prêt";
+                ShizukuCleanup.requestOrRun();
                 AnomalyMonitor.request(this);TrackerIndex.get(this).request();ApkEvidence.get(this).request();
             }catch(Exception e){startupError=e.getMessage()==null?e.getClass().getSimpleName():e.getMessage();startupState="Erreur";}
         },"aiv-initialisation").start();
@@ -91,6 +92,8 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public String startupStatus(){return EventStore.object("state",startupState,"ready",!startupResult.isEmpty(),"error",startupError).toString();}
         @JavascriptInterface public void startupRetry(){if("Erreur".equals(startupState)){startupError="";startupState="Calcul en cours";prepareStartup();}}
         @JavascriptInterface public String startupData(){return startupResult;}
+        @JavascriptInterface public String shizukuCleanupStatus(){return ShizukuCleanup.status();}
+        @JavascriptInterface public String shizukuCleanupRestore(){try{return ShizukuCleanup.restore(MainActivity.this).toString();}catch(Exception e){return auditError(e);}}
 
         @JavascriptInterface public String aivSummary(){try{return AivStore.summary(MainActivity.this).put("file_status",fileStatus).toString();}catch(Exception e){return auditError(e);}}
         @JavascriptInterface public String aivPage(String filter,long before){try{return AivStore.page(MainActivity.this,filter,before).toString();}catch(Exception e){return auditError(e);}}
@@ -258,5 +261,5 @@ public final class MainActivity extends Activity {
     private void refreshDefenseReader(){if(reader!=null)reader.evaluateJavascript("window.AivDefenseRefresh && window.AivDefenseRefresh()",null);}
 
     @Override protected void onPause(){if(reader!=null)reader.onPause();super.onPause();}
-    @Override protected void onDestroy(){DefenseMonitor.stop(this);journalReads.shutdownNow();if(reader!=null){reader.removeJavascriptInterface("JournalAndroid");reader.destroy();}super.onDestroy();}
+    @Override protected void onDestroy(){ShizukuCleanup.detach();DefenseMonitor.stop(this);journalReads.shutdownNow();if(reader!=null){reader.removeJavascriptInterface("JournalAndroid");reader.destroy();}super.onDestroy();}
 }
