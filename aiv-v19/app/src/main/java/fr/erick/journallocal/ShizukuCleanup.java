@@ -49,11 +49,26 @@ public final class ShizukuCleanup {
 
     public static String status(){return status;}
 
+    public static JSONObject state(Context c){
+        JSONObject out=EventStore.object("status",status,"running",running);
+        try{
+            boolean binder=Shizuku.pingBinder();
+            out.put("binder",binder);
+            out.put("authorized",binder&&Shizuku.checkSelfPermission()==PackageManager.PERMISSION_GRANTED);
+            out.put("server_uid",binder?safeServerUid():-1);
+        }catch(Throwable t){
+            out.put("binder",false).put("authorized",false).put("shizuku_error",t.getClass().getSimpleName());
+        }
+        try{out.put("candidates",DefenseStore.get(c).automaticCandidates().length());}
+        catch(Throwable t){out.put("candidates",-1).put("candidate_error",t.getClass().getSimpleName());}
+        return out;
+    }
+
     public static void requestOrRun(){
         Activity a=activity;
         if(a==null)return;
         try{
-            if(!Shizuku.pingBinder()){status="Shizuku non démarré";return;}
+            if(!Shizuku.pingBinder()){status="Shizuku non démarré — démarre Shizuku puis relance le nettoyage";return;}
             if(Shizuku.isPreV11()){status="Version Shizuku non prise en charge";return;}
             if(Shizuku.checkSelfPermission()==PackageManager.PERMISSION_GRANTED){runAsync();return;}
             if(Shizuku.shouldShowRequestPermissionRationale()){status="Autorisation Shizuku requise";return;}
@@ -66,6 +81,7 @@ public final class ShizukuCleanup {
         Activity a=activity;
         if(a==null||running)return;
         running=true;
+        status="Nettoyage Shizuku en cours";
         new Thread(()->{
             try{run(a.getApplicationContext());}
             catch(Throwable t){status="Nettoyage interrompu : "+t.getClass().getSimpleName();log(a,"CLEANUP_ERROR",EventStore.object("error",String.valueOf(t.getMessage()),"type",t.getClass().getName()));}
@@ -75,6 +91,8 @@ public final class ShizukuCleanup {
 
     private static void run(Context c)throws Exception{
         JSONArray candidates=DefenseStore.get(c).automaticCandidates();
+        int candidateCount=candidates.length();
+        status="Nettoyage Shizuku en cours : "+candidateCount+" application(s) admissible(s)";
         JSONObject snapshot=new JSONObject().put("schema","aiv-shizuku-cleanup/24").put("created_ms",System.currentTimeMillis()).put("server_uid",safeServerUid()).put("changes",new JSONArray());
         writeSnapshot(c,snapshot);
         int attempted=0,changed=0,failed=0,skipped=0;
@@ -123,8 +141,8 @@ public final class ShizukuCleanup {
         snapshot.put("finished_ms",System.currentTimeMillis()).put("attempted",attempted).put("changed",changed).put("failed",failed).put("skipped",skipped);
         writeSnapshot(c,snapshot);
         PermissionAudit.get(c).scan();
-        status="Nettoyage terminé : "+changed+" droit(s) retiré(s), "+failed+" échec(s)";
-        log(c,"CLEANUP_DONE",EventStore.object("attempted",attempted,"changed",changed,"failed",failed,"skipped",skipped,"snapshot",snapshotFile(c).getAbsolutePath()));
+        status="Nettoyage terminé : "+changed+" droit(s) retiré(s) sur "+attempted+" tentative(s), "+failed+" échec(s), "+candidateCount+" app(s) admissible(s)";
+        log(c,"CLEANUP_DONE",EventStore.object("candidates",candidateCount,"attempted",attempted,"changed",changed,"failed",failed,"skipped",skipped,"snapshot",snapshotFile(c).getAbsolutePath()));
     }
 
     public static synchronized JSONObject restore(Context c)throws Exception{
