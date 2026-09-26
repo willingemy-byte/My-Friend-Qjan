@@ -10,7 +10,7 @@ BUILD_MODE="${AIV_BUILD_MODE:-unsigned}"
 mkdir -p "$DL" "$SDK/platforms" "$SDK/build-tools" "$SDK/ndk" "$SIGNING_DIR"
 
 need(){ command -v "$1" >/dev/null 2>&1 || { echo "Missing required host tool: $1" >&2; exit 2; }; }
-for x in python3 java javac keytool unzip curl sha256sum stat; do need "$x"; done
+for x in python3 node java javac keytool unzip curl sha256sum stat; do need "$x"; done
 
 fetch(){
   local name="$1"
@@ -72,6 +72,21 @@ echo "[preflight] V$VERSION"
 python3 -m py_compile "$ROOT/build.py"
 python3 "$ROOT/tools/connect_reader.py"
 
+echo "[preflight] embedded reader completeness + JavaScript syntax"
+python3 - "$ROOT/app/src/main/assets/journal.html" "$TOOLROOT/reader-script.js" <<'PY'
+import re,sys
+from pathlib import Path
+html=Path(sys.argv[1]).read_text(encoding='utf-8')
+if not html.rstrip().endswith('</main></body></html>'):
+    raise SystemExit('journal.html is truncated: closing document marker missing')
+scripts=re.findall(r'<script(?:\s[^>]*)?>([\s\S]*?)</script>',html,re.I)
+if not scripts:
+    raise SystemExit('journal.html contains no complete script block')
+Path(sys.argv[2]).write_text('\n;\n'.join(scripts),encoding='utf-8')
+print('journal.html complete:',len(html),'bytes,',len(scripts),'script block(s)')
+PY
+node --check "$TOOLROOT/reader-script.js"
+
 if [[ "$BUILD_MODE" == unsigned ]]; then
   SIGN_ARGS=(--unsigned)
 else
@@ -104,6 +119,8 @@ with zipfile.ZipFile(sys.argv[1]) as z:
     html=z.read('assets/journal.html').decode('utf-8')
 assert ('AIV '+sys.argv[2]) in html, 'Version marker missing from journal.html'
 assert 'id="ja-scan"' in html and 'id="ja-export"' in html
+assert html.rstrip().endswith('</main></body></html>'), 'Embedded journal.html is truncated'
+assert 'beginStartup();' in html, 'Reader startup hook missing'
 PY
 sha256sum "$FINAL" | tee "$FINAL.sha256"
 echo "FINAL_APK=$FINAL"
