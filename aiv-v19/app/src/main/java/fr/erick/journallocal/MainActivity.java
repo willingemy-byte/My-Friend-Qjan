@@ -18,7 +18,7 @@ public final class MainActivity extends Activity {
     private WebView reader;
     private static final int NOTIFICATION_REQUEST=10,BLUETOOTH_REQUEST=11,EXPORT_REQUEST=12,VPN_REQUEST=13,ANALYSIS_EXPORT_REQUEST=14,LINES_EXPORT_REQUEST=15,RECOVER_IMPORT_REQUEST=16,RECOVER_EXPORT_REQUEST=17,DIAGNOSTIC_IMPORT_REQUEST=18,CORRELATION_EXPORT_REQUEST=19,LAST_EXPORT_REQUEST=20;
     private static volatile String fileStatus="";
-    private static final int AUDIT_EXPORT_REQUEST=21,AUDIT_IMPORT_REQUEST=22,AIV_EXPORT_REQUEST=23,AIV_REFERENCE_REQUEST=24,PENALTY_EXPORT_REQUEST=25,PENALTY_IMPORT_REQUEST=26,REFERENCE_EXPORT_REQUEST=27,AUDIT_FULL_EXPORT_REQUEST=28;
+    private static final int AUDIT_EXPORT_REQUEST=21,AUDIT_IMPORT_REQUEST=22,AIV_EXPORT_REQUEST=23,AIV_REFERENCE_REQUEST=24,PENALTY_EXPORT_REQUEST=25,PENALTY_IMPORT_REQUEST=26,REFERENCE_EXPORT_REQUEST=27,AUDIT_FULL_EXPORT_REQUEST=28,TRACKER_EXPORT_REQUEST=29;
     private volatile String penaltyImport="";
     @Override public void onCreate(Bundle state){
         super.onCreate(state);Continuous.initialize(this);
@@ -58,7 +58,7 @@ public final class MainActivity extends Activity {
                 startupState="Préparation de la référence";
                 startupResult=audit.penaltyData().toString();
                 startupState="Prêt";
-                AnomalyMonitor.request(this);
+                AnomalyMonitor.request(this);TrackerIndex.get(this).request();ApkEvidence.get(this).request();
             }catch(Exception e){startupError=e.getMessage()==null?e.getClass().getSimpleName():e.getMessage();startupState="Erreur";}
         },"aiv-initialisation").start();
     }
@@ -109,6 +109,9 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public String penaltySave(String value){try{return PermissionAudit.get(MainActivity.this).savePenaltyConfig(value).toString();}catch(Exception e){return auditError(e);}}
         @JavascriptInterface public String penaltyImported(){String value=penaltyImport;penaltyImport="";return value;}
         @JavascriptInterface public String auditContext(String pkg){try{return PermissionAudit.get(MainActivity.this).colorContext(pkg).toString();}catch(Exception e){return auditError(e);}}
+        @JavascriptInterface public String trackerStatus(){try{return EventStore.object("catalog",ReferenceCatalog.get(MainActivity.this).summary(),"apk",ApkEvidence.get(MainActivity.this).status(),"index",TrackerIndex.get(MainActivity.this).status()).toString();}catch(Exception e){return auditError(e);}}
+        @JavascriptInterface public String trackerPage(String query,long before){try{return TrackerIndex.get(MainActivity.this).page(query,before).toString();}catch(Exception e){return auditError(e);}}
+        @JavascriptInterface public void trackerResume(){Continuous.prefs(MainActivity.this).edit().putBoolean("enabled",true).putBoolean("analysis_enabled",true).apply();Continuous.start(MainActivity.this);TrackerIndex.get(MainActivity.this).request();ApkEvidence.get(MainActivity.this).request();}
         @JavascriptInterface public String auditSummary(){try{return PermissionAudit.get(MainActivity.this).summary().put("file_status",fileStatus).toString();}catch(Exception e){return auditError(e);}}
         @JavascriptInterface public String auditPage(String query,String scope,int offset){try{return PermissionAudit.get(MainActivity.this).page(query,scope,offset).toString();}catch(Exception e){return auditError(e);}}
         @JavascriptInterface public String auditDetail(String pkg){try{return PermissionAudit.get(MainActivity.this).detail(pkg).toString();}catch(Exception e){return auditError(e);}}
@@ -148,6 +151,7 @@ public final class MainActivity extends Activity {
             }else if("export-penalty".equals(command)){chooseExport(PENALTY_EXPORT_REQUEST,"aiv-bareme-observations.json","application/json");
             }else if("import-penalty".equals(command)){startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("application/json"),PENALTY_IMPORT_REQUEST);
             }else if("export-reference".equals(command)){chooseExport(REFERENCE_EXPORT_REQUEST,"aiv-reference-actuel.json","application/json");
+            }else if("export-trackers".equals(command)){chooseExport(TRACKER_EXPORT_REQUEST,"journal-exodus-v22.json","application/json");
             }else if("export-audit-full".equals(command)){chooseExport(AUDIT_FULL_EXPORT_REQUEST,"journal-autorisations-historique.json","application/json");
             }else if("export-audit".equals(command)){chooseExport(AUDIT_EXPORT_REQUEST,"journal-autorisations.json","application/json");
             }else if("import-audit".equals(command)){startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("application/json"),AUDIT_IMPORT_REQUEST);
@@ -225,11 +229,11 @@ public final class MainActivity extends Activity {
                 }catch(Exception e){fileStatus="Lecture interrompue : "+e.getMessage();runOnUiThread(()->Toast.makeText(this,fileStatus,Toast.LENGTH_LONG).show());}
             },"journal-import").start();return;
         }
-        if(request==REFERENCE_EXPORT_REQUEST||request==AUDIT_FULL_EXPORT_REQUEST||request==PENALTY_EXPORT_REQUEST||request==AUDIT_EXPORT_REQUEST||request==EXPORT_REQUEST||request==ANALYSIS_EXPORT_REQUEST||request==LINES_EXPORT_REQUEST||request==RECOVER_EXPORT_REQUEST||request==CORRELATION_EXPORT_REQUEST||request==LAST_EXPORT_REQUEST){
+        if(request==TRACKER_EXPORT_REQUEST||request==REFERENCE_EXPORT_REQUEST||request==AUDIT_FULL_EXPORT_REQUEST||request==PENALTY_EXPORT_REQUEST||request==AUDIT_EXPORT_REQUEST||request==EXPORT_REQUEST||request==ANALYSIS_EXPORT_REQUEST||request==LINES_EXPORT_REQUEST||request==RECOVER_EXPORT_REQUEST||request==CORRELATION_EXPORT_REQUEST||request==LAST_EXPORT_REQUEST){
             fileStatus="Préparation d’un instantané complet…";
             new Thread(()->{try{
                 File ready;if(request==LAST_EXPORT_REQUEST)ready=savedFile("last_export");else if(request==RECOVER_EXPORT_REQUEST)ready=savedFile("recovered");
-                else ready=ExportFiles.stage(this,writer->{if(request==REFERENCE_EXPORT_REQUEST)PermissionAudit.get(this).exportReference(writer);else if(request==AUDIT_FULL_EXPORT_REQUEST)PermissionAudit.get(this).export(writer,true);else if(request==PENALTY_EXPORT_REQUEST)writer.write(PermissionAudit.get(this).penaltyConfig().toString(2));else if(request==AUDIT_EXPORT_REQUEST)PermissionAudit.get(this).export(writer);else if(request==ANALYSIS_EXPORT_REQUEST)AnomalyMonitor.get(this).export(writer);else if(request==CORRELATION_EXPORT_REQUEST){String cross=getSharedPreferences("files",0).getString("cross_analysis","");if(cross.isEmpty())throw new IOException("Comparaison indisponible");writer.write(cross);}else EventStore.get(this).export(writer,request==LINES_EXPORT_REQUEST);});
+                else ready=ExportFiles.stage(this,writer->{if(request==TRACKER_EXPORT_REQUEST)TrackerIndex.get(this).export(writer);else if(request==REFERENCE_EXPORT_REQUEST)PermissionAudit.get(this).exportReference(writer);else if(request==AUDIT_FULL_EXPORT_REQUEST)PermissionAudit.get(this).export(writer,true);else if(request==PENALTY_EXPORT_REQUEST)writer.write(PermissionAudit.get(this).penaltyConfig().toString(2));else if(request==AUDIT_EXPORT_REQUEST)PermissionAudit.get(this).export(writer);else if(request==ANALYSIS_EXPORT_REQUEST)AnomalyMonitor.get(this).export(writer);else if(request==CORRELATION_EXPORT_REQUEST){String cross=getSharedPreferences("files",0).getString("cross_analysis","");if(cross.isEmpty())throw new IOException("Comparaison indisponible");writer.write(cross);}else EventStore.get(this).export(writer,request==LINES_EXPORT_REQUEST);});
                 if(ready==null)throw new IOException("Instantané expiré; recommencer la préparation");
                 if(request!=LAST_EXPORT_REQUEST)getSharedPreferences("files",0).edit().putString("last_export",ready.getAbsolutePath()).putString("last_extension",request==LINES_EXPORT_REQUEST?"jsonl":"json").apply();
                 fileStatus=ExportFiles.copy(this,ready,uri);runOnUiThread(()->Toast.makeText(this,fileStatus,Toast.LENGTH_LONG).show());
