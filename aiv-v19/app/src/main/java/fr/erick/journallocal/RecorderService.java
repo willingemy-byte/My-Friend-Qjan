@@ -54,7 +54,7 @@ public final class RecorderService extends Service {
         worker.postDelayed(this,60000);
     }};
     @Override public void onCreate(){
-        super.onCreate();store=EventStore.get(this);prefs=getSharedPreferences("journal",MODE_PRIVATE);
+        super.onCreate();store=EventStore.get(this);prefs=getSharedPreferences("journal",MODE_PRIVATE);DefenseMonitor.start(this);
         NotificationManager nm=getSystemService(NotificationManager.class);
         nm.createNotificationChannel(new NotificationChannel("collecte","Collecte du journal",NotificationManager.IMPORTANCE_LOW));
         Notification notification=notification("Collecte locale en cours",true);
@@ -174,6 +174,7 @@ public final class RecorderService extends Service {
         }catch(Exception e){bluetoothRegistered=false;bluetoothReceiver=null;record("collecteur","Journal local","Source Bluetooth indisponible","Collecteur Bluetooth","Bluetooth","Enregistrement API",EventStore.object("error",e.getClass().getSimpleName()));}
     }
     @Override public void onDestroy(){
+        DefenseMonitor.stop(this);
         running=false;stopping=true;networkRegistered=false;bluetoothRegistered=false;
         if(worker!=null){worker.removeCallbacksAndMessages(null);worker.post(()->{
             networkRegistered=false;bluetoothRegistered=false;

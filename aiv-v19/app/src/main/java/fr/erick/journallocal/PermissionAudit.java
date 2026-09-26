@@ -14,6 +14,7 @@ public final class PermissionAudit extends SQLiteOpenHelper {
     private static PermissionAudit instance;
     private final Context context;
     private final AtomicBoolean busy=new AtomicBoolean();
+    private final AtomicBoolean scanAgain=new AtomicBoolean();
     private volatile String error="";
     public static synchronized PermissionAudit get(Context c){if(instance==null)instance=new PermissionAudit(c.getApplicationContext());return instance;}
     private PermissionAudit(Context c){super(c,"permission-audit.sqlite",null,2);context=c;setWriteAheadLoggingEnabled(true);}
@@ -38,9 +39,15 @@ public final class PermissionAudit extends SQLiteOpenHelper {
     private JSONObject reference(String pkg)throws Exception{try(Cursor c=getReadableDatabase().rawQuery("SELECT payload FROM references_data WHERE package_name=?",new String[]{pkg})){return c.moveToFirst()?new JSONObject(c.getString(0)):new JSONObject();}}
     private void history(String pkg,JSONObject value){ContentValues v=new ContentValues();v.put("package_name",pkg);v.put("timestamp_ms",System.currentTimeMillis());v.put("payload",value.toString());getWritableDatabase().insertOrThrow("history",null,v);}
     private void saveReference(String pkg,JSONObject r){ContentValues v=new ContentValues();v.put("package_name",pkg);v.put("payload",r.toString());getWritableDatabase().insertWithOnConflict("references_data",null,v,SQLiteDatabase.CONFLICT_REPLACE);}
-    public void scan(){
-        if(!busy.compareAndSet(false,true))return;error="";
-        new Thread(()->{try{collect();}catch(Exception e){error="Inventaire interrompu : "+e.getClass().getSimpleName()+". Dernier relevé complet conservé.";}finally{busy.set(false);ApkEvidence.get(context).request();}},"journal-inventory").start();
+    public synchronized void scan(){
+        if(!busy.compareAndSet(false,true)){scanAgain.set(true);return;}error="";
+        new Thread(()->{try{collect();}catch(Exception e){error="Inventaire interrompu : "+e.getClass().getSimpleName()+". Dernier relevé complet conservé.";}finally{ApkEvidence.get(context).request();finishScan();}},"journal-inventory").start();
+    }
+    private synchronized void finishScan(){busy.set(false);if(scanAgain.getAndSet(false))scan();}
+    JSONObject inspectCurrent(String pkg)throws Exception{
+        PackageManager pm=context.getPackageManager();
+        PackageInfo info=pm.getPackageInfo(pkg,(android.os.Build.VERSION.SDK_INT>=28?PackageManager.GET_SIGNING_CERTIFICATES:PackageManager.GET_SIGNATURES)|PackageManager.GET_PERMISSIONS|PackageManager.GET_PROVIDERS|PackageManager.GET_SERVICES|PackageManager.GET_ACTIVITIES|PackageManager.GET_RECEIVERS|PackageManager.MATCH_DISABLED_COMPONENTS);
+        JSONObject app=inspect(pm,info);app.put("apk_evidence",ApkEvidence.get(context).read(pkg,app.optLong("version_code"),info.lastUpdateTime));return app;
     }
     private JSONObject permission(PackageManager pm,String name,Object granted)throws Exception{
         JSONObject p=EventStore.object("name",name,"granted",granted,"protection_level",-1,"protection","INCONNU","description","Description indisponible","revocation","INCONNU : politique de révocation non collectée");
@@ -120,7 +127,9 @@ public final class PermissionAudit extends SQLiteOpenHelper {
             }
             if(old>0)try(Cursor c=db.rawQuery("SELECT package_name FROM apps WHERE scan_id=? AND package_name NOT IN (SELECT package_name FROM apps WHERE scan_id=?)",new String[]{""+old,""+id})){while(c.moveToNext())history(c.getString(0),EventStore.object("kind","not_returned","before_scan",old,"after_scan",id,"scope","Non retourné; désinstallation non établie"));}
             ContentValues v=new ContentValues();v.put("id",id);v.put("started_ms",start);v.put("ended_ms",System.currentTimeMillis());db.insertOrThrow("scans",null,v);db.setTransactionSuccessful();
-        }finally{db.endTransaction();}try{EventStore.get(context).setAuditInventory(result);}catch(Exception e){error="Inventaire conservé; index du journal indisponible : "+e.getClass().getSimpleName();}
+        }finally{db.endTransaction();}
+        try{DefenseStore.get(context).onSnapshot(id,result);}catch(Exception e){DefenseStore.get(context).failed(e);}
+        try{EventStore.get(context).setAuditInventory(result);}catch(Exception e){error="Inventaire conservé; index du journal indisponible : "+e.getClass().getSimpleName();}
     }
     /** Minimal coherence input derived from the latest completed local PackageManager snapshot. */
     public JSONObject coherenceInventory()throws Exception{

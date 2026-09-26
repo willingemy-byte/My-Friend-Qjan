@@ -20,8 +20,10 @@ public final class MainActivity extends Activity {
     private static volatile String fileStatus="";
     private static final int AUDIT_EXPORT_REQUEST=21,AUDIT_IMPORT_REQUEST=22,AIV_EXPORT_REQUEST=23,AIV_REFERENCE_REQUEST=24,PENALTY_EXPORT_REQUEST=25,PENALTY_IMPORT_REQUEST=26,REFERENCE_EXPORT_REQUEST=27,AUDIT_FULL_EXPORT_REQUEST=28,TRACKER_EXPORT_REQUEST=29;
     private volatile String penaltyImport="";
+    private static final int DEFENSE_EXPORT_REQUEST=30;
+    private boolean defenseResumed,defenseResultHandled;
     @Override public void onCreate(Bundle state){
-        super.onCreate(state);Continuous.initialize(this);
+        super.onCreate(state);Continuous.initialize(this);DefenseMonitor.start(this);
         prepareStartup();
         reader=new WebView(this);reader.setBackgroundColor(0xFF05090D);
         reader.setOnApplyWindowInsetsListener((view,insets)->{
@@ -67,6 +69,13 @@ public final class MainActivity extends Activity {
     private volatile String journalReply="";
     private volatile int journalReplyId=0;
     public final class Bridge {
+        @JavascriptInterface public String defenseStatus(){try{return DefenseStore.get(MainActivity.this).status().put("file_status",fileStatus).put("inventory_busy",PermissionAudit.get(MainActivity.this).summary().optBoolean("busy")).toString();}catch(Exception e){return auditError(e);}}
+        @JavascriptInterface public String defensePage(String scope,int offset){try{return DefenseStore.get(MainActivity.this).page(scope,offset).toString();}catch(Exception e){return auditError(e);}}
+        @JavascriptInterface public String defenseDetail(String pkg,long before){try{return DefenseStore.get(MainActivity.this).detail(pkg,before).toString();}catch(Exception e){return auditError(e);}}
+        @JavascriptInterface public String defenseDecide(String pkg,String stamp,boolean keep){try{return DefenseStore.get(MainActivity.this).decide(pkg,stamp,keep).toString();}catch(Exception e){return auditError(e);}}
+        @JavascriptInterface public boolean defenseOpenRequested(){boolean open=getIntent().getBooleanExtra("open_defense",false);getIntent().removeExtra("open_defense");return open;}
+        @JavascriptInterface public void defenseAction(String pkg,String action,String stamp){runOnUiThread(()->{try{DefenseActions.launch(MainActivity.this,pkg,action,stamp);}catch(Exception e){Toast.makeText(MainActivity.this,e.getMessage()==null?"Action Android indisponible":e.getMessage(),Toast.LENGTH_LONG).show();}refreshDefenseReader();});}
+        @JavascriptInterface public String defenseRecover(){try{DefenseActions.recover(MainActivity.this);return DefenseStore.get(MainActivity.this).status().toString();}catch(Exception e){return auditError(e);}}
         @JavascriptInterface public int requestJournal(String args){
             int ticket=journalRequestId.incrementAndGet();
             journalReads.execute(()->{if(ticket!=journalRequestId.get())return;String result;
@@ -148,6 +157,7 @@ public final class MainActivity extends Activity {
             }else if("aiv-export".equals(command)){chooseExport(AIV_EXPORT_REQUEST,"journal-aiv-signe.jsonl","application/octet-stream");
             }else if("aiv-reference".equals(command)){startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("application/json"),AIV_REFERENCE_REQUEST);
             }else if("audit-scan".equals(command)){PermissionAudit.get(this).scan();
+            }else if("export-defense".equals(command)){chooseExport(DEFENSE_EXPORT_REQUEST,"aiv-journal-menage-v23.json","application/json");
             }else if("export-penalty".equals(command)){chooseExport(PENALTY_EXPORT_REQUEST,"aiv-bareme-observations.json","application/json");
             }else if("import-penalty".equals(command)){startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("application/json"),PENALTY_IMPORT_REQUEST);
             }else if("export-reference".equals(command)){chooseExport(REFERENCE_EXPORT_REQUEST,"aiv-reference-actuel.json","application/json");
@@ -202,6 +212,7 @@ public final class MainActivity extends Activity {
     }
     @Override protected void onActivityResult(int request,int result,Intent data){
         super.onActivityResult(request,result,data);
+        if(request==DefenseActions.UNINSTALL_REQUEST||request==DefenseActions.SETTINGS_REQUEST){try{DefenseActions.returned(this,request,result);defenseResultHandled=true;}catch(Exception e){DefenseStore.get(this).failed(e);}refreshDefenseReader();return;}
         if(request==VPN_REQUEST){
             if(result==RESULT_OK){try{startNetworkCapture();}catch(Exception e){NetworkCaptureService.lastError="Démarrage impossible : "+e.getClass().getSimpleName();}}
             else NetworkCaptureService.lastError="Capture non activée : autorisation VPN non accordée.";
@@ -229,11 +240,11 @@ public final class MainActivity extends Activity {
                 }catch(Exception e){fileStatus="Lecture interrompue : "+e.getMessage();runOnUiThread(()->Toast.makeText(this,fileStatus,Toast.LENGTH_LONG).show());}
             },"journal-import").start();return;
         }
-        if(request==TRACKER_EXPORT_REQUEST||request==REFERENCE_EXPORT_REQUEST||request==AUDIT_FULL_EXPORT_REQUEST||request==PENALTY_EXPORT_REQUEST||request==AUDIT_EXPORT_REQUEST||request==EXPORT_REQUEST||request==ANALYSIS_EXPORT_REQUEST||request==LINES_EXPORT_REQUEST||request==RECOVER_EXPORT_REQUEST||request==CORRELATION_EXPORT_REQUEST||request==LAST_EXPORT_REQUEST){
+        if(request==DEFENSE_EXPORT_REQUEST||request==TRACKER_EXPORT_REQUEST||request==REFERENCE_EXPORT_REQUEST||request==AUDIT_FULL_EXPORT_REQUEST||request==PENALTY_EXPORT_REQUEST||request==AUDIT_EXPORT_REQUEST||request==EXPORT_REQUEST||request==ANALYSIS_EXPORT_REQUEST||request==LINES_EXPORT_REQUEST||request==RECOVER_EXPORT_REQUEST||request==CORRELATION_EXPORT_REQUEST||request==LAST_EXPORT_REQUEST){
             fileStatus="Préparation d’un instantané complet…";
             new Thread(()->{try{
                 File ready;if(request==LAST_EXPORT_REQUEST)ready=savedFile("last_export");else if(request==RECOVER_EXPORT_REQUEST)ready=savedFile("recovered");
-                else ready=ExportFiles.stage(this,writer->{if(request==TRACKER_EXPORT_REQUEST)TrackerIndex.get(this).export(writer);else if(request==REFERENCE_EXPORT_REQUEST)PermissionAudit.get(this).exportReference(writer);else if(request==AUDIT_FULL_EXPORT_REQUEST)PermissionAudit.get(this).export(writer,true);else if(request==PENALTY_EXPORT_REQUEST)writer.write(PermissionAudit.get(this).penaltyConfig().toString(2));else if(request==AUDIT_EXPORT_REQUEST)PermissionAudit.get(this).export(writer);else if(request==ANALYSIS_EXPORT_REQUEST)AnomalyMonitor.get(this).export(writer);else if(request==CORRELATION_EXPORT_REQUEST){String cross=getSharedPreferences("files",0).getString("cross_analysis","");if(cross.isEmpty())throw new IOException("Comparaison indisponible");writer.write(cross);}else EventStore.get(this).export(writer,request==LINES_EXPORT_REQUEST);});
+                else ready=ExportFiles.stage(this,writer->{if(request==DEFENSE_EXPORT_REQUEST)DefenseStore.get(this).export(writer);else if(request==TRACKER_EXPORT_REQUEST)TrackerIndex.get(this).export(writer);else if(request==REFERENCE_EXPORT_REQUEST)PermissionAudit.get(this).exportReference(writer);else if(request==AUDIT_FULL_EXPORT_REQUEST)PermissionAudit.get(this).export(writer,true);else if(request==PENALTY_EXPORT_REQUEST)writer.write(PermissionAudit.get(this).penaltyConfig().toString(2));else if(request==AUDIT_EXPORT_REQUEST)PermissionAudit.get(this).export(writer);else if(request==ANALYSIS_EXPORT_REQUEST)AnomalyMonitor.get(this).export(writer);else if(request==CORRELATION_EXPORT_REQUEST){String cross=getSharedPreferences("files",0).getString("cross_analysis","");if(cross.isEmpty())throw new IOException("Comparaison indisponible");writer.write(cross);}else EventStore.get(this).export(writer,request==LINES_EXPORT_REQUEST);});
                 if(ready==null)throw new IOException("Instantané expiré; recommencer la préparation");
                 if(request!=LAST_EXPORT_REQUEST)getSharedPreferences("files",0).edit().putString("last_export",ready.getAbsolutePath()).putString("last_extension",request==LINES_EXPORT_REQUEST?"jsonl":"json").apply();
                 fileStatus=ExportFiles.copy(this,ready,uri);runOnUiThread(()->Toast.makeText(this,fileStatus,Toast.LENGTH_LONG).show());
@@ -243,8 +254,9 @@ public final class MainActivity extends Activity {
     private void chooseExport(int request,String name,String mime){try{startActivityForResult(new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(mime).putExtra(Intent.EXTRA_TITLE,name),request);}catch(Exception e){fileStatus="Sélection du fichier impossible : "+e.getClass().getSimpleName();Toast.makeText(this,fileStatus,Toast.LENGTH_LONG).show();}}
     private File savedFile(String key)throws IOException{String value=getSharedPreferences("files",0).getString(key,"");if(value.isEmpty())return null;File f=new File(value);File dir=new File(getCacheDir(),"exports");if(!f.getCanonicalPath().startsWith(dir.getCanonicalPath()+File.separator)||!f.isFile())return null;return f;}
     private boolean launchRulesApplied;
-    @Override protected void onResume(){super.onResume();if(reader!=null)reader.onResume();if(!launchRulesApplied){launchRulesApplied=true;Continuous.start(this);if(Continuous.enabled(this)&&Continuous.prefs(this).getBoolean("vpn_enabled",true)&&!Continuous.prefs(this).getBoolean("vpn_prompted",false)){Intent consent=android.net.VpnService.prepare(this);if(consent!=null){Continuous.prefs(this).edit().putBoolean("vpn_prompted",true).apply();startActivityForResult(consent,VPN_REQUEST);}}}}
+    @Override protected void onResume(){super.onResume();if(reader!=null)reader.onResume();if(defenseResumed&&!defenseResultHandled)PermissionAudit.get(this).scan();defenseResultHandled=false;defenseResumed=true;refreshDefenseReader();if(!launchRulesApplied){launchRulesApplied=true;Continuous.start(this);if(Continuous.enabled(this)&&Continuous.prefs(this).getBoolean("vpn_enabled",true)&&!Continuous.prefs(this).getBoolean("vpn_prompted",false)){Intent consent=android.net.VpnService.prepare(this);if(consent!=null){Continuous.prefs(this).edit().putBoolean("vpn_prompted",true).apply();startActivityForResult(consent,VPN_REQUEST);}}}}
+    private void refreshDefenseReader(){if(reader!=null)reader.evaluateJavascript("window.AivDefenseRefresh && window.AivDefenseRefresh()",null);}
 
     @Override protected void onPause(){if(reader!=null)reader.onPause();super.onPause();}
-    @Override protected void onDestroy(){journalReads.shutdownNow();if(reader!=null){reader.removeJavascriptInterface("JournalAndroid");reader.destroy();}super.onDestroy();}
+    @Override protected void onDestroy(){DefenseMonitor.stop(this);journalReads.shutdownNow();if(reader!=null){reader.removeJavascriptInterface("JournalAndroid");reader.destroy();}super.onDestroy();}
 }

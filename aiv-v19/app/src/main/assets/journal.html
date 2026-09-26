@@ -259,7 +259,7 @@ button,.button,[role="button"]{border-radius:14px!important}
     <button type="button" data-jc-tab="menu" aria-pressed="false" aria-controls="jc-pane-menu">Menu</button>
   </nav>
   <section class="jc-pane jc-home" id="jc-pane-home" aria-label="Accueil AIV">
-    <p class="jc-clean-build-tag" aria-label="Version de compilation">AIV 0.6.22 · PÉNALITÉS CONFIGURABLES</p>
+    <p class="jc-clean-build-tag" aria-label="Version de compilation">AIV 0.6.23 · PÉNALITÉS CONFIGURABLES</p>
     <div class="jc-view-switch" aria-label="Choisir la vue de démonstration">
       <button type="button" id="jc-mode-user" aria-pressed="true">Utilisateur</button>
       <button type="button" id="jc-mode-ti" aria-pressed="false">TI · démo</button>
@@ -1813,6 +1813,7 @@ if(typeof module!=='undefined')module.exports=PenaltyModel;
     }
     if(state.tab==='home')renderMvpHome();if(state.tab!=='journal')$('jc-total').textContent='Historique conservé · ouvrir Journal pour le consulter';if(nativeBridge){refreshAnalysisStatus();if(analysisConfig)$('jc-quiet').value=analysisConfig.quiet===false?'all':'quiet';}
     const overlay=document.getElementById('jc-startup');if(overlay)overlay.remove();root.inert=false;
+    if(nativeBridge&&nativeBridge.defenseStatus){renderDefense(true);if(nativeBridge.defenseOpenRequested&&nativeBridge.defenseOpenRequested())openDefense();}
   }
   function beginStartup(){
     if(!nativeBridge||!nativeBridge.startupStatus){finishStartup();return;}
@@ -1835,6 +1836,82 @@ if(typeof module!=='undefined')module.exports=PenaltyModel;
       catch(e){penaltyCache=null;overlay.querySelector('p').textContent='Résultats indisponibles : '+e.message;overlay.append(penaltyButton('Revenir aux paramètres',()=>{overlay.remove();root.inert=false;setTab('menu');}));}
       finally{replayingSave=false;}},60);
   },true);
+  // V23: automatic inventory/review, explicit Android actions, durable before/after dossiers.
+  let defenseOffset=0,defenseRevision='',defensePending='',defenseScope='TO_REVIEW',defensePanel=null;
+  const defenseStates={TO_REVIEW:'À examiner',KEPT:'Conservée pour cet état',DISABLED:'Désactivée selon Android',REMOVED:'Retrait confirmé dans ce profil',ARCHIVED:'Archivée par Android',NOT_RETURNED:'Absente du relevé · retrait non confirmé',BELOW_THRESHOLD:'En dessous de L4'};
+  const defenseKinds={INITIAL_REVIEW:'Dossier initial',NEW_APP:'Nouvelle application observée',APP_CHANGED:'Version ou permissions modifiées',PACKAGE_EVENT:'Événement Android',REMOVAL_OBSERVED:'Retrait observé par Android',ARCHIVAL_OBSERVED:'Archivage observé par Android',NOT_RETURNED:'Absence dans un relevé',KEEP_CHOSEN:'Application conservée',REVIEW_REQUESTED:'Réexamen demandé',ACTION_REQUESTED:'Action demandée · dossier avant action',ACTION_FAILED:'Action non exécutée',SETTINGS_FALLBACK:'Fiche Android ouverte en remplacement',SETTINGS_RETURNED:'Retour des réglages · vérification',UNINSTALL_CONFIRMED:'Désinstallation confirmée',UNINSTALL_CANCELLED:'Demande de désinstallation annulée',UNINSTALL_UNCONFIRMED:'Désinstallation non confirmée',RESULT_UNKNOWN:'Résultat inconnu · reprise demandée'};
+  function defenseRead(method,...args){const value=JSON.parse(nativeBridge[method](...args));if(value.error)throw Error(value.error);return value;}
+  function openDefense(){setTab('audit');if(defensePanel){defensePanel.open=true;renderDefense(true);defensePanel.scrollIntoView({block:'start'});}}
+  function renderDefenseDetail(pkg,before=0,append=false){
+    try{
+      const data=defenseRead('defenseDetail',pkg,before),pane=$('v23-defense-detail');if(!append)pane.replaceChildren();
+      if(!append){
+        const app=data.app,s=app.snapshot||{},a=app.assessment||{};
+        pane.append(element('h3','Dossier de ménage · '+app.label),element('p',pkg,'jc-sub'),element('p',defenseStates[app.state]||app.state),element('p',data.scope,'jc-sub'));
+        const source=s.install_source||{};
+        pane.append(element('p',`Version ${s.version_name||'?'} (${s.version_code||'?'}) · ${s.count??'?'} permissions recensées`),element('p','Installateur enregistré : '+(source.installing_package||'INCONNU')+' · initiateur : '+(source.initiating_package||'INCONNU'),'jc-sub'));
+        pane.append(element('p','Les modifications ci-dessous sont constatées entre relevés. Leur auteur et leur heure exacte ne sont pas établis.','jc-note'));
+        const raw=element('details',undefined,'ja-card');raw.append(element('summary','Dernier dossier conservé : permissions, provenance et motifs'),element('pre',JSON.stringify({application:s,evaluation:a},null,2)));pane.append(raw);
+      }
+      for(const entry of data.history||[]){
+        const item=element('details',undefined,'ja-card');item.append(element('summary',auditDate(entry.at_ms)+' · '+(defenseKinds[entry.kind]||entry.kind)));
+        const changes=entry.data?.permission_changes;
+        if(changes)for(const [key,label] of Object.entries({added:'Permissions ajoutées',removed:'Permissions retirées du relevé',granted:'Permissions devenues accordées',revoked:'Permissions devenues refusées',state_unknown:'État devenu inconnu'})){if(changes[key]?.length)item.append(element('p',label+' : '+changes[key].join(', ')));}
+        item.append(element('pre',JSON.stringify(entry.data,null,2)));pane.append(item);
+      }
+      pane.querySelector('[data-defense-more]')?.remove();
+      if((data.history||[]).length===50){const more=penaltyButton('Historique plus ancien',()=>renderDefenseDetail(pkg,data.next_before,true));more.dataset.defenseMore='true';pane.append(more);}
+      if(!append)pane.scrollIntoView({block:'start'});
+    }catch(e){$('v23-defense-detail').replaceChildren(element('p',e.message,'jc-error'));}
+  }
+  function renderDefense(force=false){
+    if(!defensePanel)return;
+    try{
+      const s=defenseRead('defenseStatus'),revision=s.revision+':'+s.pending_action+':'+s.inventory_busy+':'+s.file_status;
+      $('v23-defense-home').textContent='Ménage · '+(s.counts?.TO_REVIEW||0)+' application(s) à examiner';
+      $('v23-defense-status').textContent=(s.inventory_busy?'Inventaire en cours… ':s.scan_id?'Inventaire prêt. ':'Premier inventaire en préparation. ')+(s.watching?'Surveillance des installations active. ':'Surveillance des installations inactive. ')+(s.file_status||'');
+      $('v23-defense-coverage').textContent=s.coverage;$('v23-defense-refresh').disabled=!!s.inventory_busy;
+      $('v23-defense-pending').hidden=!s.pending_action;
+      $('v23-defense-pending-text').textContent=s.pending_action?'Action Android en attente pour '+s.pending_action+'. Après le retour, AIV vérifie le résultat.':'';
+      if(!force&&revision===defenseRevision)return;defenseRevision=revision;defensePending=s.pending_action||'';
+      const data=defenseRead('defensePage',defenseScope,defenseOffset),list=$('v23-defense-list');
+      if(defenseOffset&&!data.rows.length){defenseOffset=0;renderDefense(true);return;}list.replaceChildren();
+      for(const app of data.rows){
+        const a=app.assessment||{},card=element('article',undefined,'ja-card ja-'+(app.level===5?'gray':'red'));
+        card.append(element('h3',app.label),element('p',app.package_name,'jc-sub'),element('p',`L${app.level} · ${defenseStates[app.state]||app.state}`),element('p',`Version ${app.version_name||'?'} (${app.version_code}) · ${a.granted_high||0} droits L4/L5 accordés, ${a.denied_high||0} refusés, ${a.unknown_high||0} inconnus.`,'jc-sub'));
+        for(const reason of a.protected_reasons||[])card.append(element('p',reason,'jc-sub'));
+        const reasons=element('details');reasons.append(element('summary','Pourquoi cette application est dans le ménage ?'));
+        for(const f of a.findings||[])reasons.append(element('p',`L${f.level} · ${f.permission} · ${f.granted===true?'accordée':f.granted===false?'refusée':'état inconnu'}`),element('p',f.reason,'jc-sub'));card.append(reasons);
+        const actions=element('div',undefined,'jc-actions');
+        const launch=(label,action)=>{const b=penaltyButton(label,()=>{nativeBridge.defenseAction(app.package_name,action,app.stamp);b.disabled=true;setTimeout(()=>renderDefense(true),250);});b.disabled=!!defensePending;actions.append(b);};
+        if(app.state==='TO_REVIEW'&&a.can_request_uninstall){card.append(element('p','La désinstallation retire l’application et peut effacer ses données locales. Le dossier AIV reste conservé.','jc-sub'));launch('Désinstaller…','uninstall');}
+        if(!['REMOVED','NOT_RETURNED','ARCHIVED'].includes(app.state)){
+          launch('Autorisations et désactivation','settings');
+          for(const action of a.special_actions||[])launch(({unknown_sources:'Installation de sources inconnues',overlay:'Superposition sur les autres apps',write_settings:'Modification des paramètres système',usage:'Accès aux données d’utilisation'})[action]||action,action);
+        }
+        if(['TO_REVIEW','KEPT'].includes(app.state))actions.append(penaltyButton(app.state==='KEPT'?'Remettre à examiner':'Conserver cette application',()=>{try{defenseRead('defenseDecide',app.package_name,app.stamp,app.state!=='KEPT');renderDefense(true);}catch(e){$('v23-defense-status').textContent=e.message;}}));
+        actions.append(penaltyButton('Dossier et enquête locale',()=>renderDefenseDetail(app.package_name)));card.append(actions);list.append(card);
+      }
+      if(!data.rows.length)list.append(element('p','Aucun dossier pour ce filtre.'));
+      $('v23-defense-page').textContent=`${data.total} dossier(s) · page ${Math.floor(defenseOffset/25)+1}`;$('v23-defense-prev').disabled=defenseOffset===0;$('v23-defense-next').disabled=defenseOffset+25>=data.total;
+    }catch(e){$('v23-defense-status').textContent=e.message;}
+  }
+  if(nativeBridge&&nativeBridge.defenseStatus){
+    defensePanel=element('details',undefined,'ja-card');defensePanel.id='v23-defense';defensePanel.append(element('summary','Défense et ménage · L4 / L5'));
+    defensePanel.append(element('p','AIV examine automatiquement les applications installées et leurs changements. Choisis celles à conserver; les autres disposent des actions permises par Android.','jc-note'),element('p','Le niveau décrit une capacité. La nécessité d’une application dépend de ton usage. Les retraits demandent la confirmation Android; certains accès spéciaux doivent être retirés dans ses réglages.','jc-sub'));
+    const status=element('p');status.id='v23-defense-status';status.setAttribute('aria-live','polite');defensePanel.append(status);
+    const controls=element('div',undefined,'jc-actions'),refresh=penaltyButton('Réexaminer les applications',()=>{nativeBridge.command('audit-scan');renderDefense(true);});refresh.id='v23-defense-refresh';controls.append(refresh,penaltyButton('Exporter le journal de ménage',()=>nativeBridge.command('export-defense')));
+    const filter=element('select');filter.id='v23-defense-filter';filter.setAttribute('aria-label','Filtrer les dossiers de ménage');for(const [value,label]of Object.entries({TO_REVIEW:'À examiner',KEPT:'Conservées',HISTORY:'Retirées, archivées ou désactivées',ALL:'Tous les dossiers L4 / L5'})){const o=element('option',label);o.value=value;filter.append(o);}filter.onchange=()=>{defenseScope=filter.value;defenseOffset=0;renderDefense(true);};controls.append(filter);defensePanel.append(controls);
+    const pending=element('div',undefined,'jc-note');pending.id='v23-defense-pending';pending.hidden=true;const pendingText=element('p');pendingText.id='v23-defense-pending-text';pending.append(pendingText,penaltyButton('Vérifier après mon retour d’Android',()=>{try{defenseRead('defenseRecover');renderDefense(true);}catch(e){status.textContent=e.message;}}));defensePanel.append(pending);
+    const list=element('div');list.id='v23-defense-list';defensePanel.append(list);
+    const pagination=element('div',undefined,'jc-actions'),prev=penaltyButton('Précédents',()=>{defenseOffset=Math.max(0,defenseOffset-25);renderDefense(true);}),next=penaltyButton('Suivants',()=>{defenseOffset+=25;renderDefense(true);}),page=element('span');prev.id='v23-defense-prev';next.id='v23-defense-next';page.id='v23-defense-page';pagination.append(prev,page,next);defensePanel.append(pagination);
+    const coverage=element('p',undefined,'jc-sub');coverage.id='v23-defense-coverage';defensePanel.append(coverage);
+    const detail=element('div');detail.id='v23-defense-detail';defensePanel.append(detail);$('jc-pane-audit').prepend(defensePanel);
+    const home=penaltyButton('Ménage · inventaire en préparation',openDefense);home.id='v23-defense-home';$('jc-home-refresh').parentElement.before(home);
+    defensePanel.addEventListener('toggle',()=>{if(defensePanel.open)renderDefense(true);});
+    window.AivDefenseRefresh=()=>renderDefense(true);
+    setInterval(()=>{if(!document.hidden)renderDefense();},3000);
+  }
   beginStartup();
 
 })();
