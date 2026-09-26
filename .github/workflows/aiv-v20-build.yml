@@ -53,3 +53,10 @@ jobs:
             aiv-v19/build/AIV-0.6.20-unsigned.apk
             aiv-v19/build/AIV-0.6.20-unsigned.apk.sha256
           retention-days: 30
+
+      - name: Upload verified Android signing tool
+        uses: actions/upload-artifact@v4
+        with:
+          name: AIV-0.6.20-signing-tool
+          path: aiv-v19/.toolchain/sdk/build-tools/35.0.0/lib/apksigner.jar
+          retention-days: 30
