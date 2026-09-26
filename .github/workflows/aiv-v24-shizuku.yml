@@ -1,0 +1,80 @@
+name: AIV V24 Shizuku integration
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [aiv-v24-shizuku]
+    paths:
+      - "aiv-v19/**"
+      - ".github/workflows/aiv-v24-shizuku.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  probe-and-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Cache Android toolchain
+        uses: actions/cache@v4
+        with:
+          path: aiv-v19/.toolchain
+          key: aiv-v24-android35-ndk27d-shizuku-13.1.5
+
+      - name: Probe official Shizuku 13.1.5 artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$PWD/aiv-v19/.toolchain/shizuku"
+          mkdir -p "$ROOT"
+          BASE="https://repo1.maven.org/maven2"
+          fetch() {
+            local url="$1"
+            local out="$2"
+            curl -fL --retry 5 --retry-delay 2 --connect-timeout 30 "$url" -o "$ROOT/$out"
+          }
+          fetch "$BASE/dev/rikka/shizuku/api/13.1.5/api-13.1.5.aar" api-13.1.5.aar
+          fetch "$BASE/dev/rikka/shizuku/provider/13.1.5/provider-13.1.5.aar" provider-13.1.5.aar
+          fetch "$BASE/dev/rikka/shizuku/aidl/13.1.5/aidl-13.1.5.aar" aidl-13.1.5.aar
+          fetch "$BASE/dev/rikka/shizuku/shared/13.1.5/shared-13.1.5.aar" shared-13.1.5.aar
+          fetch "$BASE/androidx/annotation/annotation/1.3.0/annotation-1.3.0.jar" annotation-1.3.0.jar
+          echo "=== SHA256 ==="
+          sha256sum "$ROOT"/*
+          echo "=== SIZE ==="
+          stat -c '%n %s' "$ROOT"/*
+          echo "=== AAR CONTENTS ==="
+          for f in "$ROOT"/*.aar; do
+            echo "--- $f"
+            unzip -l "$f" | sed -n '1,80p'
+          done
+
+      - name: Build current AIV baseline on GitHub runner
+        working-directory: aiv-v19
+        env:
+          AIV_BUILD_MODE: unsigned
+        run: |
+          chmod +x bootstrap-clean-build.sh
+          ./bootstrap-clean-build.sh
+
+      - name: V23 regression tests
+        run: bash aiv-v19/tests/run-v23.sh
+
+      - name: Upload probe results and APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: AIV-V24-Shizuku-probe
+          path: |
+            aiv-v19/.toolchain/shizuku/*
+            aiv-v19/build/AIV-0.6.23-unsigned.apk
+            aiv-v19/build/AIV-0.6.23-unsigned.apk.sha256
+          retention-days: 14
