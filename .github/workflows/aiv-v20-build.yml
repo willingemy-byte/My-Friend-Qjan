@@ -31,7 +31,7 @@ jobs:
           path: aiv-v19/.toolchain
           key: aiv-v20-android35-ndk27d
 
-      - name: Build V20 unsigned APK
+      - name: Build fixed V20 reader APK
         working-directory: aiv-v19
         env:
           AIV_BUILD_MODE: unsigned
@@ -39,24 +39,24 @@ jobs:
           chmod +x bootstrap-clean-build.sh
           ./bootstrap-clean-build.sh
 
-      - name: Verify V20 artifact
+      - name: Verify fixed V20 artifact
         run: |
-          test -f aiv-v19/build/AIV-0.6.20-unsigned.apk
-          test -f aiv-v19/build/AIV-0.6.20-unsigned.apk.sha256
-          cat aiv-v19/build/AIV-0.6.20-unsigned.apk.sha256
+          test -f aiv-v19/build/AIV-0.6.21-unsigned.apk
+          test -f aiv-v19/build/AIV-0.6.21-unsigned.apk.sha256
+          cat aiv-v19/build/AIV-0.6.21-unsigned.apk.sha256
 
-      - name: Upload V20 APK
+      - name: Upload fixed V20 APK
         uses: actions/upload-artifact@v4
         with:
-          name: AIV-0.6.20-unsigned-test
+          name: AIV-0.6.21-unsigned-test
           path: |
-            aiv-v19/build/AIV-0.6.20-unsigned.apk
-            aiv-v19/build/AIV-0.6.20-unsigned.apk.sha256
+            aiv-v19/build/AIV-0.6.21-unsigned.apk
+            aiv-v19/build/AIV-0.6.21-unsigned.apk.sha256
           retention-days: 30
 
       - name: Upload verified Android signing tool
         uses: actions/upload-artifact@v4
         with:
-          name: AIV-0.6.20-signing-tool
+          name: AIV-0.6.21-signing-tool
           path: aiv-v19/.toolchain/sdk/build-tools/35.0.0/lib/apksigner.jar
           retention-days: 30
