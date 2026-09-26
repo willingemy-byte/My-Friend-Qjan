@@ -1890,7 +1890,9 @@ if(typeof module!=='undefined')module.exports=PenaltyModel;
     try{
       const s=defenseRead('defenseStatus'),revision=s.revision+':'+s.pending_action+':'+s.inventory_busy+':'+s.file_status;
       $('v23-defense-home').textContent='Ménage · '+(s.counts?.TO_REVIEW||0)+' application(s) à examiner';
-      $('v23-defense-status').textContent=(s.inventory_busy?'Inventaire en cours… ':s.scan_id?'Inventaire prêt. ':'Premier inventaire en préparation. ')+(s.watching?'Surveillance des installations active. ':'Surveillance des installations inactive. ')+(s.file_status||'');
+      let cleanup='';
+      try{if(nativeBridge.shizukuCleanupState){const z=JSON.parse(nativeBridge.shizukuCleanupState());cleanup=' · '+(z.status||'Shizuku')+(z.auto_pending?' · lancement auto dans moins d’une minute':'');}}catch(_){}
+      $('v23-defense-status').textContent=(s.inventory_busy?'Inventaire en cours… ':s.scan_id?'Inventaire prêt. ':'Premier inventaire en préparation. ')+(s.watching?'Surveillance des installations active. ':'Surveillance des installations inactive. ')+(s.file_status||'')+cleanup;
       $('v23-defense-coverage').textContent=s.coverage;$('v23-defense-refresh').disabled=!!s.inventory_busy;
       $('v23-defense-pending').hidden=!s.pending_action;
       $('v23-defense-pending-text').textContent=s.pending_action?'Action Android en attente pour '+s.pending_action+'. Après le retour, AIV vérifie le résultat.':'';
@@ -1921,7 +1923,10 @@ if(typeof module!=='undefined')module.exports=PenaltyModel;
     defensePanel=element('details',undefined,'ja-card');defensePanel.id='v23-defense';defensePanel.append(element('summary','Défense et ménage · L4 / L5'));
     defensePanel.append(element('p','AIV examine automatiquement les applications installées et leurs changements. Choisis celles à conserver; les autres disposent des actions permises par Android.','jc-note'),element('p','Le niveau décrit une capacité. La nécessité d’une application dépend de ton usage. Les retraits demandent la confirmation Android; certains accès spéciaux doivent être retirés dans ses réglages.','jc-sub'));
     const status=element('p');status.id='v23-defense-status';status.setAttribute('aria-live','polite');defensePanel.append(status);
-    const controls=element('div',undefined,'jc-actions'),refresh=penaltyButton('Réexaminer les applications',()=>{nativeBridge.command('audit-scan');renderDefense(true);});refresh.id='v23-defense-refresh';controls.append(refresh,penaltyButton('Exporter le journal de ménage',()=>nativeBridge.command('export-defense')));
+    const controls=element('div',undefined,'jc-actions'),refresh=penaltyButton('Réexaminer les applications',()=>{nativeBridge.command('audit-scan');renderDefense(true);});refresh.id='v23-defense-refresh';
+    const shizukuLaunch=penaltyButton('Lancer Shizuku',()=>{try{const s=JSON.parse(nativeBridge.shizukuCleanupRun());$('v23-defense-status').textContent=s.status||'Shizuku lancé';setTimeout(()=>renderDefense(true),1200);}catch(e){$('v23-defense-status').textContent=e.message;}});
+    shizukuLaunch.id='v23-shizuku-launch';
+    controls.append(shizukuLaunch,refresh,penaltyButton('Exporter le journal de ménage',()=>nativeBridge.command('export-defense')));
     const filter=element('select');filter.id='v23-defense-filter';filter.setAttribute('aria-label','Filtrer les dossiers de ménage');for(const [value,label]of Object.entries({TO_REVIEW:'À examiner',KEPT:'Conservées',HISTORY:'Retirées, archivées ou désactivées',ALL:'Tous les dossiers L4 / L5'})){const o=element('option',label);o.value=value;filter.append(o);}filter.onchange=()=>{defenseScope=filter.value;defenseOffset=0;renderDefense(true);};controls.append(filter);defensePanel.append(controls);
     const pending=element('div',undefined,'jc-note');pending.id='v23-defense-pending';pending.hidden=true;const pendingText=element('p');pendingText.id='v23-defense-pending-text';pending.append(pendingText,penaltyButton('Vérifier après mon retour d’Android',()=>{try{defenseRead('defenseRecover');renderDefense(true);}catch(e){status.textContent=e.message;}}));defensePanel.append(pending);
     const list=element('div');list.id='v23-defense-list';defensePanel.append(list);
