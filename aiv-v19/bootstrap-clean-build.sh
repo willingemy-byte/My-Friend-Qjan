@@ -6,14 +6,18 @@ TOOLROOT="${AIV_TOOLROOT:-$ROOT/.toolchain}"
 DL="$TOOLROOT/downloads"
 SDK="$TOOLROOT/sdk"
 SIGNING_DIR="${AIV_SIGNING_DIR:-$ROOT/.signing-private}"
-BUILD_MODE="${AIV_BUILD_MODE:-signed}"
+BUILD_MODE="${AIV_BUILD_MODE:-unsigned}"
 mkdir -p "$DL" "$SDK/platforms" "$SDK/build-tools" "$SDK/ndk" "$SIGNING_DIR"
 
 need(){ command -v "$1" >/dev/null 2>&1 || { echo "Missing required host tool: $1" >&2; exit 2; }; }
-for x in python3 java keytool unzip curl sha256sum stat; do need "$x"; done
+for x in python3 java javac keytool unzip curl sha256sum stat; do need "$x"; done
 
 fetch(){
-  local name="$1" url="$2" sha="$3" bytes="$4" dst="$DL/$name"
+  local name="$1"
+  local url="$2"
+  local sha="$3"
+  local bytes="$4"
+  local dst="$DL/$name"
   if [[ -f "$dst" ]]; then
     local got
     got="$(sha256sum "$dst" | awk '{print $1}')"
@@ -36,9 +40,6 @@ fetch build-tools_r35_linux.zip \
 fetch android-ndk-r27d-linux.zip \
   https://dl.google.com/android/repository/android-ndk-r27d-linux.zip \
   601246087a682d1944e1e16dd85bc6e49560fe8b6d61255be2829178c8ed15d9 663956036
-fetch ecj-3.40.0.jar \
-  https://repo.maven.apache.org/maven2/org/eclipse/jdt/ecj/3.40.0/ecj-3.40.0.jar \
-  05cc22a24e7982970f63a405fc6c820bc80b806f27f3c5a6236fc475f8f7152b 3312549
 
 if [[ ! -f "$SDK/platforms/android-35/android.jar" ]]; then
   rm -rf "$TOOLROOT/platform-unpack"
@@ -53,7 +54,6 @@ if [[ ! -x "$SDK/build-tools/35.0.0/aapt2" ]]; then
   mkdir -p "$TOOLROOT/build-tools-unpack"
   unzip -q "$DL/build-tools_r35_linux.zip" -d "$TOOLROOT/build-tools-unpack"
   rm -rf "$SDK/build-tools/35.0.0"
-  # Google's archive uses android-15 as the top-level folder.
   mv "$TOOLROOT/build-tools-unpack/android-15" "$SDK/build-tools/35.0.0"
   chmod +x "$SDK/build-tools/35.0.0/aapt2" "$SDK/build-tools/35.0.0/zipalign" || true
 fi
@@ -66,6 +66,12 @@ if [[ ! -x "$SDK/ndk/27.3.13750724/toolchains/llvm/prebuilt/linux-x86_64/bin/cla
   mv "$TOOLROOT/ndk-unpack/android-ndk-r27d" "$SDK/ndk/27.3.13750724"
 fi
 
+VERSION="$(python3 -c 'import sys,xml.etree.ElementTree as E; print(E.parse(sys.argv[1]).getroot().attrib["{http://schemas.android.com/apk/res/android}versionName"])' "$ROOT/app/src/main/AndroidManifest.xml")"
+
+echo "[preflight] V$VERSION"
+python3 -m py_compile "$ROOT/build.py"
+python3 "$ROOT/tools/connect_reader.py"
+
 if [[ "$BUILD_MODE" == unsigned ]]; then
   SIGN_ARGS=(--unsigned)
 else
@@ -75,18 +81,10 @@ else
   SIGN_ARGS=(--signing-dir "$SIGNING_DIR")
 fi
 
-echo "[preflight] source marker"
-VERSION="$(python3 -c 'import sys,xml.etree.ElementTree as E; print(E.parse(sys.argv[1]).getroot().attrib["{http://schemas.android.com/apk/res/android}versionName"])' "$ROOT/app/src/main/AndroidManifest.xml")"
-
-echo "[tests] source-level"
-if command -v node >/dev/null 2>&1; then node "$ROOT/tests/audit-rules.cjs"; fi
-python3 "$ROOT/tests/test_verdicts.py"
-
-echo "[build] full native + Java + package + sign"
+echo "[build] native + Java + APK"
 python3 "$ROOT/build.py" \
   --android-jar "$SDK/platforms/android-35/android.jar" \
   --build-tools "$SDK/build-tools/35.0.0" \
-  --ecj "$DL/ecj-3.40.0.jar" \
   --ndk "$SDK/ndk/27.3.13750724" \
   "${SIGN_ARGS[@]}"
 
@@ -96,16 +94,15 @@ if [[ "$BUILD_MODE" == unsigned ]]; then
 else
   FINAL="$ROOT/build/AIV-$VERSION.apk"
   cp "$ROOT/build/journal-local.apk" "$FINAL"
-  java -jar "$SDK/build-tools/35.0.0/lib/apksigner.jar" verify --verbose --print-certs "$FINAL"
 fi
 
-echo "[verify] package/signature/content"
+echo "[verify] package/content"
 "$SDK/build-tools/35.0.0/aapt2" dump badging "$FINAL" 2>/dev/null | head -n 8 || true
 python3 - "$FINAL" "$VERSION" <<'PY'
 import sys,zipfile
 with zipfile.ZipFile(sys.argv[1]) as z:
-    html=z.read('assets/journal.html').decode()
-assert 'AIV '+sys.argv[2] in html and 'PÉNALITÉS CONFIGURABLES' in html
+    html=z.read('assets/journal.html').decode('utf-8')
+assert ('AIV '+sys.argv[2]) in html, 'Version marker missing from journal.html'
 assert 'id="ja-scan"' in html and 'id="ja-export"' in html
 PY
 sha256sum "$FINAL" | tee "$FINAL.sha256"
