@@ -8,6 +8,7 @@ from pathlib import Path
 p=argparse.ArgumentParser()
 p.add_argument('--android-jar',required=True,type=Path)
 p.add_argument('--build-tools',required=True,type=Path)
+p.add_argument('--shizuku-dir',required=True,type=Path)
 native=p.add_mutually_exclusive_group(required=True)
 native.add_argument('--ndk',type=Path)
 native.add_argument('--reuse-native-apk',type=Path)
@@ -66,12 +67,26 @@ for abi,target in [('arm64-v8a','aarch64-linux-android26'),('x86_64','x86_64-lin
         '-o',out/'libjournalrelay.so')
 
 sources=sorted((root/'app/src/main/java').rglob('*.java'))
+depdir=build/'deps'
+if depdir.exists(): shutil.rmtree(depdir)
+depdir.mkdir(parents=True,exist_ok=True)
+dep_jars=[]
+for name in ['aidl-13.1.5.aar','shared-13.1.5.aar','api-13.1.5.aar','provider-13.1.5.aar']:
+    aar=a.shizuku_dir/name
+    if not aar.is_file(): raise SystemExit('Missing Shizuku dependency: '+str(aar))
+    out=depdir/(name+'.jar')
+    with zipfile.ZipFile(aar) as z:
+        out.write_bytes(z.read('classes.jar'))
+    dep_jars.append(out)
+annotation=a.shizuku_dir/'annotation-1.3.0.jar'
+if not annotation.is_file(): raise SystemExit('Missing AndroidX annotation dependency: '+str(annotation))
+compile_cp=os.pathsep.join(str(x) for x in dep_jars+[annotation])
 bootclasspath=os.pathsep.join([str(a.android_jar),str(a.build_tools/'core-lambda-stubs.jar')])
 run('javac','-encoding','UTF-8','-source','8','-target','8','-bootclasspath',bootclasspath,
-    '-Xlint:-deprecation','-d',classes,*sources)
+    '-classpath',compile_cp,'-Xlint:-deprecation','-d',classes,*sources)
 
 run('java','-cp',a.build_tools/'lib/d8.jar','com.android.tools.r8.D8',
-    '--min-api','26','--lib',a.android_jar,'--output',dex,*sorted(classes.rglob('*.class')))
+    '--min-api','26','--lib',a.android_jar,'--output',dex,*sorted(classes.rglob('*.class')),*dep_jars)
 
 unsigned=build/'journal-local-unsigned.apk'
 run(a.build_tools/'aapt2','link','--manifest',root/'app/src/main/AndroidManifest.xml',
