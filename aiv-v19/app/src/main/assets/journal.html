@@ -237,10 +237,84 @@ button,.button,[role="button"]{border-radius:14px!important}
 #jc-reader .ja-gray,#jc-reader [data-penalty-color="gray"]{border-color:#a6a9ad}
 #jc-reader [data-penalty-color="gray"].jc-score-ring,#jc-reader [data-penalty-color="gray"].jc-group-disc{background:#797c82}
 </style>
+<style id="aiv-ui-demo-clone-v1">
+:root{--demo-bg:#050b16;--demo-bg2:#08111f;--demo-panel:#0b1728;--demo-panel2:#0f2036;--demo-line:#1e3b5d;--demo-blue:#4fb8ff;--demo-blue2:#79d5ff;--demo-text:#f1f7ff;--demo-muted:#8fa8c2;--demo-watcher:#d46bc8}
+html,body{background:var(--demo-bg)!important;color:var(--demo-text)!important}
+body{padding:0!important;max-width:none!important}
+main{max-width:none!important;margin:0!important}
+#jc-reader{min-height:100vh;border:0!important;border-radius:0!important;background:linear-gradient(180deg,#050b16 0,#07111f 52%,#050b16 100%)!important;color:var(--demo-text)!important;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace!important;overflow:visible!important;--jc-bg:var(--demo-bg);--jc-paper:var(--demo-panel);--jc-ink:var(--demo-text);--jc-sub:var(--demo-muted);--jc-line:var(--demo-line);--jc-accent:var(--demo-blue);--jc-wash:#0b2037}
+#jc-reader *{font-family:inherit!important}
+#jc-reader .jc-top{position:sticky;top:0;z-index:900;padding:10px 14px 8px;background:#050b16f2!important;border-bottom:1px solid var(--demo-line);backdrop-filter:blur(14px)}
+#jc-reader .jc-mark{width:34px;height:34px;border-radius:7px;background:#0c2a43;color:var(--demo-blue2);border:1px solid #225276;font-size:.78rem}
+#jc-reader .jc-kicker{display:block;font-size:.62rem;letter-spacing:.16em;color:var(--demo-blue2);margin-bottom:2px}
+#jc-reader .jc-top h2{font-size:1rem;letter-spacing:.02em}
+#jc-reader .jc-top .jc-sub{font-size:.68rem;margin-top:2px}
+#jc-reader .jc-state{position:sticky;top:53px;z-index:890;padding:6px 14px;background:#07111ff0!important;border-top:0!important;border-bottom:1px solid var(--demo-line);font-size:.68rem}
+#jc-reader .jc-user-nav,#jc-reader[data-view-mode] .jc-user-nav{position:sticky!important;top:84px;z-index:880;display:flex!important;overflow-x:auto;gap:4px;padding:6px 8px!important;background:#07111ff2!important;border-top:0!important;border-bottom:1px solid var(--demo-line)!important;backdrop-filter:blur(12px)}
+#jc-reader .jc-user-nav button{flex:0 0 auto;min-height:34px!important;padding:5px 10px!important;font-size:.72rem!important;border:1px solid transparent!important;border-radius:7px!important;background:transparent!important}
+#jc-reader .jc-user-nav button[aria-pressed="true"]{background:#0c2942!important;border-color:#2e6590!important;color:#bdeaff!important;box-shadow:none!important}
+#jc-reader .jc-pane{padding:14px 12px!important;max-width:980px;margin:0 auto}
+#jc-reader button{min-height:36px!important;padding:6px 10px!important;border-radius:7px!important;font-size:.75rem!important;background:#0b1728;border-color:#27425f}
+#jc-reader input:not([type="checkbox"]),#jc-reader select,#jc-reader textarea{padding:7px 8px!important;border-radius:6px!important;font-size:.74rem!important;background:#081522!important;border-color:#27425f!important}
+#jc-reader h2{font-size:1rem!important;color:#d9efff}
+#jc-reader h3{font-size:.88rem!important;color:#d9efff}
+#jc-reader .jc-sub,#jc-reader .jc-note{font-size:.7rem!important;line-height:1.42}
+#jc-reader .jc-form,#jc-reader .jc-detail,#jc-reader .jc-flow-card,#jc-reader .ja-card,#jc-reader .jc-menu-card,#jc-reader .jc-home-app,#jc-reader .jc-home-alert,#jc-reader .jc-group-card{border-radius:8px!important;background:linear-gradient(180deg,#0b1728,#08121f)!important;border-color:#1e3b5d!important;box-shadow:none!important}
+#jc-reader .jc-form{padding:10px!important;margin:9px 0!important;gap:8px!important}
+#jc-reader .jc-toolbar{gap:8px!important;margin:10px 0!important}
+#jc-reader .jc-home-hero{padding-bottom:10px!important}
+#jc-reader .jc-score-ring{width:150px!important;height:150px!important;margin:8px auto 12px!important;filter:none!important}
+#jc-reader #jc-score-number{font-size:2.15rem!important}
+#jc-reader .jc-score-label{font-size:.62rem!important}
+#jc-reader .jc-group-rings{gap:6px!important;margin:8px auto 12px!important}
+#jc-reader .jc-group-card{padding:8px!important;gap:7px!important}
+#jc-reader .jc-group-disc{max-width:96px!important}
+#jc-reader .jp-group-number{font-size:1.25rem!important}
+#jc-reader .jp-multiplier{font-size:.8rem!important;top:-10px!important;padding:2px 6px!important;border-width:1px!important;border-radius:6px!important}
+#jc-reader .jc-home-counters{gap:5px!important;margin:9px 0!important}
+#jc-reader .jc-home-counters>div{padding:7px 5px!important;border-radius:7px!important}
+#jc-reader .jc-home-counters strong{font-size:.9rem!important}
+#jc-reader .jc-home-counters span{font-size:.58rem!important}
+#jc-reader .jc-home-title{font-size:.88rem!important}
+#jc-reader .jc-home-sub{font-size:.68rem!important}
+#jc-reader .jc-event{margin:3px 0!important;border:1px solid #19334f!important;border-radius:7px!important;background:#081522!important}
+#jc-reader .jc-event button{padding:8px 9px!important;grid-template-columns:minmax(0,1fr) auto!important}
+#jc-reader .jc-event-main{gap:2px!important}
+#jc-reader .jc-event-time{color:#7e9ab6;font-size:.62rem}
+#jc-reader .jc-event-route{font-size:.76rem;font-weight:650!important;color:#edf7ff}
+#jc-reader .jc-event-summary{font-size:.66rem;color:#9db2c8}
+#jc-reader .jc-chip{font-size:.58rem;padding:2px 5px;border-radius:5px;background:#0c2236}
+#jc-reader .jc-detail{padding:10px!important;margin:8px 0!important}
+#jc-reader .jc-fields{grid-template-columns:110px minmax(0,1fr)!important;gap:4px 10px!important;margin:8px 0!important;font-size:.69rem}
+#jc-reader .jc-fields-summary{grid-template-columns:80px minmax(0,1fr)!important}
+#jc-reader .jc-fields dt{color:#7fa1c0}
+#jc-reader .jc-fields dd{color:#f1f7ff}
+#jc-reader .jc-technical{margin-top:6px;border-top:1px solid #1b3854}
+#jc-reader .jc-technical>summary,#jc-reader .jc-raw-json>summary{font-size:.66rem;color:#86a9c8;padding:8px 0!important;min-height:0!important}
+#jc-reader .jc-raw-json pre{font-size:.58rem;line-height:1.35;max-height:240px;overflow:auto;background:#030810;border-color:#16324f}
+#jc-reader .jc-tools-toggle{position:fixed;right:0;top:43%;z-index:950;border-radius:8px 0 0 8px!important;background:#0d2740!important;border-color:#2a628f!important;color:#bdeaff!important;writing-mode:vertical-rl;transform:rotate(180deg);padding:10px 6px!important}
+#jc-reader .jc-tools-drawer{position:fixed;top:0;right:0;bottom:0;z-index:1200;width:min(300px,82vw);padding:14px;background:#07111ff8;border-left:1px solid #2c5578;box-shadow:-18px 0 50px #0008;overflow:auto}
+#jc-reader .jc-tools-drawer[hidden]{display:none!important}
+#jc-reader .jc-tools-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;color:#bdeaff}
+#jc-reader .jc-tools-drawer>button:not(#jc-tools-close){display:block;width:100%;margin:5px 0;text-align:left;background:#0a1a2b}
+#jc-reader .jc-tools-close{font-size:1.1rem!important}
+#jc-reader .jc-back-top{position:fixed;right:12px;bottom:14px;z-index:930;width:38px;height:38px;padding:0!important;border-radius:50%!important;background:#0d2740!important;border-color:#2a628f!important;color:#bdeaff!important}
+#jc-reader [data-menu-target="anomalies"],#jc-reader #jc-pane-anomalies{border-color:#6d346b!important;background:#08121f!important}
+#jc-reader #jc-pane-anomalies h2,#jc-reader #jc-pane-anomalies h3{color:#e99de3!important;text-shadow:none!important}
+@media(max-width:600px){
+  #jc-reader .jc-state{top:53px}
+  #jc-reader .jc-user-nav,#jc-reader[data-view-mode] .jc-user-nav{top:84px}
+  #jc-reader .jc-pane{padding:10px 8px!important}
+  #jc-reader .jc-fields,#jc-reader .jc-fields-summary{grid-template-columns:1fr!important}
+  #jc-reader .jc-fields dd{margin-bottom:5px!important}
+  #jc-reader[data-view-mode] .jc-group-card{display:grid!important;grid-template-columns:92px minmax(0,1fr)!important;padding:9px!important;gap:5px 10px!important}
+  #jc-reader .jc-group-card>.jc-group-disc{width:88px!important;height:88px!important}
+}
+</style>
 <div id="jc-reader" lang="fr">
   <header class="jc-top">
     <div class="jc-mark" aria-hidden="true">AIV</div>
-    <div><h2>Journal du cellulaire</h2><p class="jc-sub">Les échanges, leurs sources, leurs détails.</p></div>
+    <div class="jc-brand-copy"><span class="jc-kicker">ALL IN VISIBLE</span><h2>Console locale</h2><p class="jc-sub">Qui a fait quoi, à qui, quand.</p></div>
   </header>
   <div class="jc-state"><span class="jc-label">Collecte du téléphone non connectée</span><span id="jc-total" class="jc-count">0 événement importé</span></div>
   <nav class="jc-tabs" aria-label="Vues du journal">
@@ -254,12 +328,27 @@ button,.button,[role="button"]{border-radius:14px!important}
 <button type="button" id="aiv-tab" data-jc-tab="decisions" aria-pressed="false" aria-controls="jc-pane-decisions">Décisions</button><button type="button" data-jc-tab="references" aria-pressed="false" aria-controls="jc-pane-references">Référentiels</button>
     <button type="button" data-jc-tab="sources" aria-pressed="false" aria-controls="jc-pane-sources">Sources</button>
   </nav>
-  <nav class="jc-user-nav" aria-label="Navigation utilisateur">
+  <nav class="jc-user-nav" aria-label="Navigation principale">
     <button type="button" data-jc-tab="home" aria-pressed="true" aria-controls="jc-pane-home">Accueil</button>
-    <button type="button" data-jc-tab="menu" aria-pressed="false" aria-controls="jc-pane-menu">Menu</button>
+    <button type="button" data-jc-tab="journal" aria-pressed="false" aria-controls="jc-pane-journal">Journal</button>
+    <button type="button" data-jc-tab="audit" aria-pressed="false" aria-controls="jc-pane-audit">Applications</button>
+    <button type="button" data-jc-tab="menu" aria-pressed="false" aria-controls="jc-pane-menu">Paramètres</button>
   </nav>
+  <button type="button" id="jc-tools-toggle" class="jc-tools-toggle" aria-expanded="false" aria-controls="jc-tools-drawer">Outils</button>
+  <aside id="jc-tools-drawer" class="jc-tools-drawer" hidden aria-label="Outils secondaires">
+    <div class="jc-tools-head"><strong>Outils AIV</strong><button type="button" id="jc-tools-close" aria-label="Fermer les outils">×</button></div>
+    <button type="button" data-drawer-target="flows">Flux</button>
+    <button type="button" data-drawer-target="anomalies">Anomalies</button>
+    <button type="button" data-drawer-target="decisions">Décisions</button>
+    <button type="button" data-drawer-target="penalty">Règles / Barème</button>
+    <button type="button" data-drawer-target="references">Référentiels</button>
+    <button type="button" data-drawer-target="diagnostic">Diagnostic</button>
+    <button type="button" data-drawer-target="permissions">Permissions</button>
+    <button type="button" data-drawer-target="sources">Sources</button>
+  </aside>
+  <button type="button" id="jc-back-top" class="jc-back-top" aria-label="Revenir en haut">↑</button>
   <section class="jc-pane jc-home" id="jc-pane-home" aria-label="Accueil AIV">
-    <p class="jc-clean-build-tag" aria-label="Version de compilation">AIV 0.6.27 · PÉNALITÉS CONFIGURABLES</p>
+    <p class="jc-clean-build-tag" aria-label="Version de compilation">AIV 0.6.27 · UI DEMO CLONE V1</p>
     <div class="jc-view-switch" aria-label="Choisir la vue de démonstration">
       <button type="button" id="jc-mode-user" aria-pressed="true">Utilisateur</button>
       <button type="button" id="jc-mode-ti" aria-pressed="false">TI · démo</button>
@@ -647,17 +736,31 @@ main{max-width:1120px}
     const pane=$('jc-detail'); pane.replaceChildren(); const event=state.events.find(e=>e.key===state.selected); pane.hidden=!event; if(!event)return;
     const heading=element('div',undefined,'jc-row jc-between');heading.append(element('h3','Détail de l’événement'));
     const close=element('button','Fermer');close.type='button';close.onclick=()=>{const key=state.selected;state.selected=null;renderDetail();const trigger=Array.from($('jc-events').querySelectorAll('button')).find(b=>b.dataset.key===key);if(trigger)trigger.focus();};heading.append(close);pane.append(heading);
-    const source=state.sources.find(s=>s.id===event.sourceId);const fields=element('dl',undefined,'jc-fields');
+    const source=state.sources.find(s=>s.id===event.sourceId);const fields=element('dl',undefined,'jc-fields jc-fields-summary');
     const groupLabel=typeof AuditRules!=='undefined'?({android:'Android · UID non attribuable',system:'Système · paquet identifié',user:'Utilisateur · paquet identifié'}[AuditRules.eventGroup(event)]||'Non classé'):'Non déterminé';
-    const pairs=[['Heure source',event.timestamp||'Non renseignée'],['Tri chronologique',event.time!==null?'Horodatage avec fuseau reconnu':'Heure non normalisée : ordre temporel non établi'],['Groupe de journal',groupLabel],['Application / acteur',event.actor],['Action',event.action],['Destination / ressource',event.destination],['Connexion',event.transportRaw||'Non renseignée'],['Sens',event.direction],['Protocole',event.protocol],['Port',event.port],['Volume déclaré',event.bytes],['Résultat',event.result],['Source déclarée',event.declaredSource],[nativeBridge?'Stockage local':'Fichier importé',source?source.name:'Inconnu'],['Statut de lecture',nativeBridge?(['trafic','dns'].includes(event.original.category)?'Métadonnées reçues du VPN local et enregistrées dans la base privée':'État communiqué par Android et enregistré dans la base privée'):'Événement rapporté par le fichier; non vérifié sur le téléphone']];if(event.note)pairs.push(['Détails',event.note]);
-    for(const [label,value]of pairs)fields.append(element('dt',label),element('dd',value));pane.append(fields); nativeDetailExtras(pane,event); aivEventExtras(pane,event); if(nativeBridge&&event.original.source==='ConnectivityManager.onLinkPropertiesChanged')pane.append(element('p','Paramètres réseau reçus : premier relevé ou mise à jour. Un changement de DNS est signalé dans Anomalies seulement après comparaison de deux relevés du même réseau.','jc-note'));
-    const raw=element('details');raw.append(element('summary','Données originales'),element('pre',JSON.stringify(event.original,null,2)));pane.append(raw);
+    const pairs=[['Quand',event.timestamp||timeText(event)],['Qui',event.actor],['Vers qui / quoi',event.destination],['Action',event.action],['Volume',event.bytes||'Non mesuré'],['Résultat',event.result||'Observé']];
+    for(const [label,value]of pairs)fields.append(element('dt',label),element('dd',value||'Non renseigné'));pane.append(fields);
+    nativeDetailExtras(pane,event); aivEventExtras(pane,event);
+    const technical=element('details',undefined,'jc-technical');
+    const technicalBody=element('div',undefined,'jc-technical-body');
+    const technicalFields=element('dl',undefined,'jc-fields');
+    const technicalPairs=[['Classement',groupLabel],['Connexion',event.transportRaw||event.transport||'Non renseignée'],['Sens',event.direction],['Protocole',event.protocol],['Port',event.port],['Source déclarée',event.declaredSource],[nativeBridge?'Stockage local':'Fichier importé',source?source.name:'Inconnu']];
+    for(const [label,value]of technicalPairs)technicalFields.append(element('dt',label),element('dd',value||'Non renseigné'));
+    technicalBody.append(technicalFields);
+    const raw=element('details',undefined,'jc-raw-json');raw.append(element('summary','JSON brut'),element('pre',JSON.stringify(event.original,null,2)));technicalBody.append(raw);
+    technical.append(element('summary','Détails techniques'),technicalBody);pane.append(technical);
   }
   function renderRows(rows) {
     const list=$('jc-events');list.replaceChildren();
     for(const event of rows) {
       const li=element('li',undefined,'jc-event'),button=element('button');button.type='button';button.dataset.key=event.key;button.setAttribute('aria-label',event.actor+' : '+event.action+'. Voir les détails.');
-      const main=element('span',undefined,'jc-event-main');main.append(element('span',timeText(event),'jc-sub jc-count'),element('strong',event.actor+' · '+event.action),element('span',(nativeBridge?(event.original.category==='trafic'?'Destination contactée : ':event.original.category==='dns'?'Nom recherché : ':'Ressource : '):'')+event.destination,'jc-sub'));button.append(main,element('span',event.transport,'jc-chip'));
+      const main=element('span',undefined,'jc-event-main');
+      main.append(
+        element('span',timeText(event),'jc-event-time jc-count'),
+        element('strong',event.actor+' → '+(event.destination||'destination inconnue'),'jc-event-route'),
+        element('span',[event.action,event.bytes?String(event.bytes):'',event.result||''].filter(Boolean).join(' · '),'jc-event-summary')
+      );
+      button.append(main,element('span',event.transport,'jc-chip'));
       button.onclick=()=>{state.selected=event.key;renderDetail();$('jc-detail').scrollIntoView({block:'nearest'});};li.append(button);list.append(li);
     }
   }
@@ -699,6 +802,12 @@ main{max-width:1120px}
     const uncertain=events.filter(e=>e.time===null).length;message(events.length+' événements ajoutés.'+(uncertain?' '+uncertain+' avec une heure non normalisée.':''));
   }
   root.querySelectorAll('[data-jc-tab]').forEach(btn=>btn.addEventListener('click',()=>setTab(btn.dataset.jcTab)));
+  const toolsDrawer=$('jc-tools-drawer'),toolsToggle=$('jc-tools-toggle');
+  const closeTools=()=>{toolsDrawer.hidden=true;toolsToggle.setAttribute('aria-expanded','false');};
+  toolsToggle.onclick=()=>{toolsDrawer.hidden=!toolsDrawer.hidden;toolsToggle.setAttribute('aria-expanded',String(!toolsDrawer.hidden));};
+  $('jc-tools-close').onclick=closeTools;
+  toolsDrawer.querySelectorAll('[data-drawer-target]').forEach(btn=>btn.onclick=()=>{closeTools();setTab(btn.dataset.drawerTarget);window.scrollTo({top:0,behavior:'smooth'});});
+  $('jc-back-top').onclick=()=>window.scrollTo({top:0,behavior:'smooth'});
   $('jc-see-bixby').onclick=()=>setTab('permissions');
   $('jc-import-toggle').onclick=()=>{const form=$('jc-import-form');form.hidden=!form.hidden;$('jc-import-toggle').setAttribute('aria-expanded',String(!form.hidden));};
   $('jc-paste-submit').onclick=()=>{try{ingest($('jc-paste').value,'Texte collé '+(state.sources.length+1));}catch(e){message(e.message,true);}};
