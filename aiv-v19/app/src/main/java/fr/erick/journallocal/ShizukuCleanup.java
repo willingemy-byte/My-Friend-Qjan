@@ -182,7 +182,7 @@ public final class ShizukuCleanup {
     private static File snapshotFile(Context c){return new File(c.getFilesDir(),"aiv-shizuku-cleanup-last.json");}
     private static void writeSnapshot(Context c,JSONObject value)throws IOException{
         File target=snapshotFile(c),tmp=new File(target.getParentFile(),target.getName()+".tmp");
-        try(FileOutputStream out=new FileOutputStream(tmp)){out.write(value.toString(2).getBytes(StandardCharsets.UTF_8));out.getFD().sync();}
+        try(FileOutputStream out=new FileOutputStream(tmp)){out.write(value.toString().getBytes(StandardCharsets.UTF_8));out.getFD().sync();}
         if(!tmp.renameTo(target)){try(InputStream in=new FileInputStream(tmp);OutputStream out=new FileOutputStream(target)){byte[] b=new byte[8192];int n;while((n=in.read(b))!=-1)out.write(b,0,n);}tmp.delete();}
     }
     private static String readAll(File f)throws IOException{try(InputStream in=new FileInputStream(f)){return readAll(in);}}
