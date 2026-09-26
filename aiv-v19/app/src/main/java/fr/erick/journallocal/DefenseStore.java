@@ -95,7 +95,7 @@ public final class DefenseStore extends SQLiteOpenHelper {
         if(names.contains("android.permission.SYSTEM_ALERT_WINDOW"))actions.put("overlay");
         if(names.contains("android.permission.WRITE_SETTINGS"))actions.put("write_settings");
         if(names.contains("android.permission.PACKAGE_USAGE_STATS"))actions.put("usage");
-        boolean autoCleanupSafe=uid>=0&&uid%100000>=10000&&uidPackages!=null&&uidPackages.length()==1&&!protectedRole;
+        boolean autoCleanupSafe=uid>=0&&uid%100000>=10000&&uidPackages!=null&&uidPackages.length()==1&&!protectedRole&&!app.optBoolean("system_app");
         if(names.contains("android.permission.MANAGE_EXTERNAL_STORAGE"))actions.put("manage_external_storage");
         return EventStore.object("level",level,"findings",findings,"granted_high",active,"denied_high",denied,"unknown_high",unknown,
             "protected_reasons",reasons,"special_actions",actions,"auto_cleanup_safe",autoCleanupSafe,
