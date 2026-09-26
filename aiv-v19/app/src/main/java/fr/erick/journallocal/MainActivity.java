@@ -151,7 +151,7 @@ public final class MainActivity extends Activity {
         }catch(Exception e){return EventStore.object("error",e.getMessage()).toString();}}
         @JavascriptInterface public void command(String command){runOnUiThread(()->handleCommand(command));}
         @JavascriptInterface public String analysisSummary(){try{
-            JSONObject s=AnomalyMonitor.get(MainActivity.this).summary();
+            org.json.JSONObject s=AnomalyMonitor.get(MainActivity.this).summary();
             boolean recalculating=s.optBoolean("recalculating");
             if(recalculating)cleanupRecalcSeen=true;
             else if(cleanupRecalcSeen){cleanupRecalcSeen=false;ShizukuCleanup.requestOrRun();}
