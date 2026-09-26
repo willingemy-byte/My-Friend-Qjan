@@ -49,7 +49,7 @@ public final class ShizukuCleanup {
 
     public static String status(){return status;}
 
-    public static JSONObject state(Context c){
+    public static JSONObject state(Context c)throws Exception{
         JSONObject out=EventStore.object("status",status,"running",running);
         try{
             boolean binder=Shizuku.pingBinder();
