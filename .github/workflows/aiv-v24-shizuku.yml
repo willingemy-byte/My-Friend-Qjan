@@ -2,11 +2,6 @@ name: AIV V24 Shizuku integration
 
 on:
   workflow_dispatch:
-  push:
-    branches: [aiv-v24-shizuku]
-    paths:
-      - "aiv-v19/**"
-      - ".github/workflows/aiv-v24-shizuku.yml"
 
 permissions:
   contents: read
