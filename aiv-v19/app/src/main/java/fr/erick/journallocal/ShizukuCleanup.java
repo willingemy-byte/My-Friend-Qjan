@@ -25,20 +25,20 @@ public final class ShizukuCleanup {
     private static final Pattern PERMISSION=Pattern.compile("[A-Za-z0-9_]+(?:\\.[A-Za-z0-9_]+)+");
     private static final Pattern OP=Pattern.compile("[A-Z0-9_]+");
     private static volatile boolean running;
-    private static volatile String status="En attente de Shizuku";
+    private static volatile boolean pending;
+    private static volatile String status="En attente de l’inventaire";
     private static volatile Activity activity;
 
-    private static final Shizuku.OnBinderReceivedListener BINDER_LISTENER=()->requestOrRun();
+    private static final Shizuku.OnBinderReceivedListener BINDER_LISTENER=()->{if(pending)attemptRun();};
     private static final Shizuku.OnRequestPermissionResultListener PERMISSION_LISTENER=(requestCode,grantResult)->{
-        if(requestCode==REQUEST_CODE&&grantResult==PackageManager.PERMISSION_GRANTED)runAsync();
-        else if(requestCode==REQUEST_CODE)status="Autorisation Shizuku refusée";
+        if(requestCode==REQUEST_CODE&&grantResult==PackageManager.PERMISSION_GRANTED&&pending)runAsync();
+        else if(requestCode==REQUEST_CODE){pending=false;status="Autorisation Shizuku refusée";}
     };
 
     public static synchronized void attach(Activity a){
         activity=a;
         Shizuku.addBinderReceivedListenerSticky(BINDER_LISTENER);
         Shizuku.addRequestPermissionResultListener(PERMISSION_LISTENER);
-        requestOrRun();
     }
 
     public static synchronized void detach(){
@@ -50,7 +50,7 @@ public final class ShizukuCleanup {
     public static String status(){return status;}
 
     public static JSONObject state(Context c)throws Exception{
-        JSONObject out=EventStore.object("status",status,"running",running);
+        JSONObject out=EventStore.object("status",status,"running",running,"pending",pending);
         try{
             boolean binder=Shizuku.pingBinder();
             out.put("binder",binder);
@@ -65,21 +65,33 @@ public final class ShizukuCleanup {
     }
 
     public static void requestOrRun(){
+        pending=true;
+        status="Préparation du nettoyage Shizuku";
+        attemptRun();
+    }
+
+    private static void attemptRun(){
         Activity a=activity;
-        if(a==null)return;
+        if(a==null){pending=false;status="Activité Android indisponible";return;}
+        if(android.os.Looper.myLooper()!=android.os.Looper.getMainLooper()){
+            a.runOnUiThread(ShizukuCleanup::attemptRun);
+            return;
+        }
         try{
+            if(!pending)return;
             if(!Shizuku.pingBinder()){status="Shizuku non démarré — démarre Shizuku puis relance le nettoyage";return;}
-            if(Shizuku.isPreV11()){status="Version Shizuku non prise en charge";return;}
+            if(Shizuku.isPreV11()){pending=false;status="Version Shizuku non prise en charge";return;}
             if(Shizuku.checkSelfPermission()==PackageManager.PERMISSION_GRANTED){runAsync();return;}
-            if(Shizuku.shouldShowRequestPermissionRationale()){status="Autorisation Shizuku requise";return;}
+            if(Shizuku.shouldShowRequestPermissionRationale()){pending=false;status="Autorisation Shizuku requise";return;}
             status="Demande d’autorisation Shizuku";
             Shizuku.requestPermission(REQUEST_CODE);
-        }catch(Throwable t){status="Shizuku indisponible : "+t.getClass().getSimpleName();}
+        }catch(Throwable t){pending=false;status="Shizuku indisponible : "+t.getClass().getSimpleName();}
     }
 
     private static synchronized void runAsync(){
         Activity a=activity;
         if(a==null||running)return;
+        pending=false;
         running=true;
         status="Nettoyage Shizuku en cours";
         new Thread(()->{
