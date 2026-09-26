@@ -6,6 +6,8 @@
 **/*.keystore
 **/*.pem
 **/*.p12
+**/password.txt
+**/.signing-private/
 **/*.apk
 **/local.properties
 **/build/
