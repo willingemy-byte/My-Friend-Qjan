@@ -1,4 +1,4 @@
-name: AIV V26 Shizuku build
+name: AIV V27 Shizuku build
 
 on:
   workflow_dispatch:
@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 jobs:
-  build-v26:
+  build-v27:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
@@ -29,9 +29,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: aiv-v19/.toolchain
-          key: aiv-v26-android35-ndk27d-shizuku-13.1.5
+          key: aiv-v27-android35-ndk27d-shizuku-13.1.5
 
-      - name: Build AIV 0.6.26 unsigned
+      - name: Build AIV 0.6.27 unsigned
         working-directory: aiv-v19
         env:
           AIV_BUILD_MODE: unsigned
@@ -42,22 +42,22 @@ jobs:
       - name: Regression tests
         run: bash aiv-v19/tests/run-v23.sh
 
-      - name: Verify V26 package
+      - name: Verify V27 package
         shell: bash
         run: |
           set -euo pipefail
-          test -s aiv-v19/build/AIV-0.6.26-unsigned.apk
-          test -s aiv-v19/build/AIV-0.6.26-unsigned.apk.sha256
-          grep -q 'android:versionName="0.6.26"' aiv-v19/app/src/main/AndroidManifest.xml
+          test -s aiv-v19/build/AIV-0.6.27-unsigned.apk
+          test -s aiv-v19/build/AIV-0.6.27-unsigned.apk.sha256
+          grep -q 'android:versionName="0.6.27"' aiv-v19/app/src/main/AndroidManifest.xml
           grep -q 'rikka.shizuku.ShizukuProvider' aiv-v19/app/src/main/AndroidManifest.xml
           grep -q 'class ShizukuCleanup' aiv-v19/app/src/main/java/fr/erick/journallocal/ShizukuCleanup.java
-          sha256sum -c aiv-v19/build/AIV-0.6.26-unsigned.apk.sha256
+          sha256sum -c aiv-v19/build/AIV-0.6.27-unsigned.apk.sha256
 
-      - name: Upload AIV V26 unsigned APK
+      - name: Upload AIV V27 unsigned APK
         uses: actions/upload-artifact@v4
         with:
-          name: AIV-0.6.26-unsigned
+          name: AIV-0.6.27-unsigned
           path: |
-            aiv-v19/build/AIV-0.6.26-unsigned.apk
-            aiv-v19/build/AIV-0.6.26-unsigned.apk.sha256
+            aiv-v19/build/AIV-0.6.27-unsigned.apk
+            aiv-v19/build/AIV-0.6.27-unsigned.apk.sha256
           retention-days: 14
