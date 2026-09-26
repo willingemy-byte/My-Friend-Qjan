@@ -1,18 +1,18 @@
-name: AIV V24 Shizuku build
+name: AIV V25 Shizuku build
 
 on:
   workflow_dispatch:
   push:
-    branches: [aiv-v24-shizuku]
+    branches: [aiv-v25-shizuku]
     paths:
       - "aiv-v19/**"
-      - ".github/workflows/aiv-v24-shizuku.yml"
+      - ".github/workflows/aiv-v25-shizuku.yml"
 
 permissions:
   contents: read
 
 jobs:
-  build-v24:
+  build-v25:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
@@ -29,9 +29,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: aiv-v19/.toolchain
-          key: aiv-v24-android35-ndk27d-shizuku-13.1.5
+          key: aiv-v25-android35-ndk27d-shizuku-13.1.5
 
-      - name: Build AIV 0.6.24 unsigned
+      - name: Build AIV 0.6.25 unsigned
         working-directory: aiv-v19
         env:
           AIV_BUILD_MODE: unsigned
@@ -42,22 +42,22 @@ jobs:
       - name: Regression tests
         run: bash aiv-v19/tests/run-v23.sh
 
-      - name: Verify V24 package
+      - name: Verify V25 package
         shell: bash
         run: |
           set -euo pipefail
-          test -s aiv-v19/build/AIV-0.6.24-unsigned.apk
-          test -s aiv-v19/build/AIV-0.6.24-unsigned.apk.sha256
-          grep -q 'android:versionName="0.6.24"' aiv-v19/app/src/main/AndroidManifest.xml
+          test -s aiv-v19/build/AIV-0.6.25-unsigned.apk
+          test -s aiv-v19/build/AIV-0.6.25-unsigned.apk.sha256
+          grep -q 'android:versionName="0.6.25"' aiv-v19/app/src/main/AndroidManifest.xml
           grep -q 'rikka.shizuku.ShizukuProvider' aiv-v19/app/src/main/AndroidManifest.xml
           grep -q 'class ShizukuCleanup' aiv-v19/app/src/main/java/fr/erick/journallocal/ShizukuCleanup.java
-          sha256sum -c aiv-v19/build/AIV-0.6.24-unsigned.apk.sha256
+          sha256sum -c aiv-v19/build/AIV-0.6.25-unsigned.apk.sha256
 
-      - name: Upload AIV V24 unsigned APK
+      - name: Upload AIV V25 unsigned APK
         uses: actions/upload-artifact@v4
         with:
-          name: AIV-0.6.24-unsigned
+          name: AIV-0.6.25-unsigned
           path: |
-            aiv-v19/build/AIV-0.6.24-unsigned.apk
-            aiv-v19/build/AIV-0.6.24-unsigned.apk.sha256
+            aiv-v19/build/AIV-0.6.25-unsigned.apk
+            aiv-v19/build/AIV-0.6.25-unsigned.apk.sha256
           retention-days: 14
