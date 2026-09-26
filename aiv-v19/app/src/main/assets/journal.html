@@ -360,6 +360,14 @@ button,.button,[role="button"]{border-radius:14px!important}
     <p class="jc-sub" style="margin-top:12px">Analyse automatique sur ce téléphone, à partir des événements conservés. Chaque signalement explique sa règle et montre ses sources.</p>
     <p id="jc-analysis-progress" class="jc-sub" role="status" style="margin-top:12px">État de l’analyse…</p>
     <p id="jc-analysis-coverage" class="jc-sub" style="margin-top:8px"></p>
+    <div id="jc-shizuku-cleanup" class="jc-form" style="margin-top:12px">
+      <strong>Nettoyage automatique L4/L5</strong>
+      <p id="jc-shizuku-status" class="jc-sub" role="status">État Shizuku…</p>
+      <div class="jc-actions">
+        <button type="button" id="jc-shizuku-run" class="jc-primary">Retirer les permissions L4/L5</button>
+        <button type="button" id="jc-shizuku-restore">Restaurer le dernier nettoyage</button>
+      </div>
+    </div>
     <div class="jc-toolbar">
       <label>Vue<select id="jc-analysis-kind"><option value="anomaly">Anomalies et diagnostics</option><option value="trace">Traces de l’enquête</option></select></label>
       <label class="jc-check"><input id="jc-analysis-unread" type="checkbox">À lire uniquement</label>
@@ -842,6 +850,17 @@ main{max-width:1120px}
   function analysisCall(method,...args){const value=JSON.parse(nativeBridge[method](...args));if(value.error)throw new Error(value.error);return value;}
   function analysisMessage(text,error=false){const box=$('jc-analysis-message');box.textContent=text;box.className=error?'jc-error':'jc-status';box.hidden=false;}
   function analysisTime(ms){return ms?new Date(ms).toLocaleString('fr-CA'):'Heure non renseignée';}
+  function refreshShizukuCleanup(){
+    if(!nativeBridge||!nativeBridge.shizukuCleanupState||!$('jc-shizuku-status'))return;
+    try{
+      const s=JSON.parse(nativeBridge.shizukuCleanupState());
+      const access=s.authorized?'autorisé':(s.binder?'autorisation requise':'Shizuku non démarré');
+      const count=Number(s.candidates);
+      $('jc-shizuku-status').textContent=(s.status||'État inconnu')+' · '+access+(count>=0?' · '+count+' app(s) L4/L5 admissible(s)':'');
+      $('jc-shizuku-run').disabled=Boolean(s.running);
+      $('jc-shizuku-restore').disabled=Boolean(s.running);
+    }catch(e){$('jc-shizuku-status').textContent='État Shizuku indisponible : '+e.message;}
+  }
   function refreshAnalysisStatus(){
     if(!nativeBridge)return;
     try{
@@ -907,6 +926,8 @@ main{max-width:1120px}
     $('jc-analysis-unread').onchange=()=>{analysisPage=0;analysisSelected=null;$('jc-analysis-detail').hidden=true;renderAnalysis();};
     $('jc-analysis-prev').onclick=()=>{analysisPage--;renderAnalysis();};$('jc-analysis-next').onclick=()=>{analysisPage++;renderAnalysis();};
     $('jc-analysis-export').onclick=()=>nativeBridge.command('export-analysis');
+    $('jc-shizuku-run').onclick=()=>{try{nativeBridge.shizukuCleanupRun();refreshShizukuCleanup();setTimeout(refreshShizukuCleanup,1200);}catch(e){analysisMessage(e.message,true);}};
+    $('jc-shizuku-restore').onclick=()=>{try{const r=JSON.parse(nativeBridge.shizukuCleanupRestore());analysisMessage(r.error||('Restauration terminée : '+(r.restored||0)+' restauré(s), '+(r.failed||0)+' échec(s).'),Boolean(r.error));refreshShizukuCleanup();}catch(e){analysisMessage(e.message,true);}};
     $('jc-analysis-retry').onclick=()=>{try{analysisCall('analysisChange','retry','');refreshAnalysisStatus();}catch(e){analysisMessage(e.message,true);}};
     $('jc-analysis-settings').addEventListener('toggle',()=>{
       if(!$('jc-analysis-settings').open){renderAnalysis();return;}
