@@ -48,6 +48,7 @@ public final class MainActivity extends Activity {
         }catch(Exception e){new AlertDialog.Builder(this).setTitle("Lecteur indisponible").setMessage(e.getClass().getSimpleName()).setPositiveButton("Fermer",(d,w)->finish()).show();}
     }
     private volatile String startupState="Calcul en cours", startupResult="", startupError="";
+    private volatile boolean cleanupRecalcSeen=false;
     private void prepareStartup(){
         new Thread(()->{
             try{
@@ -93,6 +94,8 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public void startupRetry(){if("Erreur".equals(startupState)){startupError="";startupState="Calcul en cours";prepareStartup();}}
         @JavascriptInterface public String startupData(){return startupResult;}
         @JavascriptInterface public String shizukuCleanupStatus(){return ShizukuCleanup.status();}
+        @JavascriptInterface public String shizukuCleanupState(){try{return ShizukuCleanup.state(MainActivity.this).toString();}catch(Exception e){return auditError(e);}}
+        @JavascriptInterface public String shizukuCleanupRun(){try{ShizukuCleanup.requestOrRun();return ShizukuCleanup.state(MainActivity.this).toString();}catch(Exception e){return auditError(e);}}
         @JavascriptInterface public String shizukuCleanupRestore(){try{return ShizukuCleanup.restore(MainActivity.this).toString();}catch(Exception e){return auditError(e);}}
 
         @JavascriptInterface public String aivSummary(){try{return AivStore.summary(MainActivity.this).put("file_status",fileStatus).toString();}catch(Exception e){return auditError(e);}}
@@ -147,7 +150,13 @@ public final class MainActivity extends Activity {
             org.json.JSONObject event=events.getJSONObject(0),result=DiagnosticStore.get(MainActivity.this).compare(event);getSharedPreferences("files",0).edit().putString("cross_analysis",EventStore.object("schema","journal-cross-analysis/1","source_event",event,"cross_analysis",result).toString()).apply();return result.toString();
         }catch(Exception e){return EventStore.object("error",e.getMessage()).toString();}}
         @JavascriptInterface public void command(String command){runOnUiThread(()->handleCommand(command));}
-        @JavascriptInterface public String analysisSummary(){try{return AnomalyMonitor.get(MainActivity.this).summary().toString();}catch(Exception e){return EventStore.object("error","Lecture de l’analyse impossible : "+e.getClass().getSimpleName()).toString();}}
+        @JavascriptInterface public String analysisSummary(){try{
+            JSONObject s=AnomalyMonitor.get(MainActivity.this).summary();
+            boolean recalculating=s.optBoolean("recalculating");
+            if(recalculating)cleanupRecalcSeen=true;
+            else if(cleanupRecalcSeen){cleanupRecalcSeen=false;ShizukuCleanup.requestOrRun();}
+            return s.toString();
+        }catch(Exception e){return EventStore.object("error","Lecture de l’analyse impossible : "+e.getClass().getSimpleName()).toString();}}
         @JavascriptInterface public String analysisPage(String kind,boolean unread,int offset){try{return AnomalyMonitor.get(MainActivity.this).page(kind,unread,offset).toString();}catch(Exception e){return EventStore.object("error","Lecture des signalements impossible : "+e.getClass().getSimpleName()).toString();}}
         @JavascriptInterface public String analysisEvidence(long id){try{return AnomalyMonitor.get(MainActivity.this).evidence(id).toString();}catch(Exception e){return EventStore.object("error","Événements sources indisponibles : "+e.getClass().getSimpleName()).toString();}}
         @JavascriptInterface public String analysisChange(String action,String value){try{return AnomalyMonitor.get(MainActivity.this).change(action,value).toString();}catch(Exception e){return EventStore.object("error",e instanceof IllegalArgumentException?e.getMessage():"Action d’analyse impossible : "+e.getClass().getSimpleName()).toString();}}
