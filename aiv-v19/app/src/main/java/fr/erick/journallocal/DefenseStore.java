@@ -95,8 +95,11 @@ public final class DefenseStore extends SQLiteOpenHelper {
         if(names.contains("android.permission.SYSTEM_ALERT_WINDOW"))actions.put("overlay");
         if(names.contains("android.permission.WRITE_SETTINGS"))actions.put("write_settings");
         if(names.contains("android.permission.PACKAGE_USAGE_STATS"))actions.put("usage");
+        boolean autoCleanupSafe=uid>=0&&uid%100000>=10000&&uidPackages!=null&&uidPackages.length()==1&&!protectedRole;
+        if(names.contains("android.permission.MANAGE_EXTERNAL_STORAGE"))actions.put("manage_external_storage");
         return EventStore.object("level",level,"findings",findings,"granted_high",active,"denied_high",denied,"unknown_high",unknown,
-            "protected_reasons",reasons,"special_actions",actions,"can_request_uninstall",DefenseRules.mayRequestUninstall(level,app.optBoolean("enabled",true),app.optBoolean("system_app"),uid,uidPackages==null?0:uidPackages.length(),protectedRole),
+            "protected_reasons",reasons,"special_actions",actions,"auto_cleanup_safe",autoCleanupSafe,
+            "can_request_uninstall",DefenseRules.mayRequestUninstall(level,app.optBoolean("enabled",true),app.optBoolean("system_app"),uid,uidPackages==null?0:uidPackages.length(),protectedRole),
             "necessity","À décider par l’utilisateur; désinstallable ne signifie pas inutile.","special_access_state","Non vérifié pour les autres applications");
     }
     private void log(String pkg,String kind,JSONObject data) throws Exception {
@@ -155,6 +158,17 @@ public final class DefenseStore extends SQLiteOpenHelper {
         try(Cursor c=getReadableDatabase().rawQuery("SELECT * FROM apps WHERE "+where+" ORDER BY level DESC,label COLLATE NOCASE,pkg LIMIT 25 OFFSET ?",new String[]{""+Math.max(0,offset)})){while(c.moveToNext()){JSONObject r=row(c),snapshot=r.getJSONObject("snapshot");r.remove("snapshot");r.remove("kept_stamp");r.put("version_name",snapshot.opt("version_name")).put("version_code",snapshot.optLong("version_code"));rows.put(r);}}
         return EventStore.object("rows",rows,"total",total,"offset",Math.max(0,offset));
     }
+    synchronized JSONArray automaticCandidates() throws Exception {
+        JSONArray out=new JSONArray();
+        try(Cursor c=getReadableDatabase().rawQuery("SELECT payload,assessment FROM apps WHERE level>=4 AND state IN ('TO_REVIEW','KEPT') ORDER BY level DESC,label COLLATE NOCASE,pkg",null)){
+            while(c.moveToNext()){
+                JSONObject app=new JSONObject(c.getString(0)),assessment=new JSONObject(c.getString(1));
+                if(assessment.optBoolean("auto_cleanup_safe"))out.put(EventStore.object("app",app,"assessment",assessment));
+            }
+        }
+        return out;
+    }
+
     public synchronized JSONObject detail(String pkg,long before) throws Exception {
         JSONObject row=row(pkg);JSONArray history=new JSONArray();long next=0;
         try(Cursor c=getReadableDatabase().rawQuery("SELECT id,at_ms,kind,payload FROM journal WHERE pkg=? AND id<? ORDER BY id DESC LIMIT 50",new String[]{pkg,""+(before>0?before:Long.MAX_VALUE)})){
