@@ -71,15 +71,17 @@ public final class MainActivity extends Activity {
         new Thread(()->{
             try{
                 PermissionAudit audit=PermissionAudit.get(this);
-                startupState="Inventaire des applications et permissions";
-                audit.scan();
-                long until=android.os.SystemClock.elapsedRealtime()+600000;
-                while(audit.summary().optBoolean("busy") && android.os.SystemClock.elapsedRealtime()<until)Thread.sleep(150);
-                if(audit.summary().optBoolean("busy"))throw new IOException("Inventaire toujours en cours. Réessayer dans un instant.");
+                org.json.JSONObject summary=audit.summary();
+                if(summary.optLong("scan_id",0L)<=0L){
+                    startupState="Premier inventaire des applications et permissions";
+                    audit.scan();
+                    long until=android.os.SystemClock.elapsedRealtime()+600000;
+                    while(audit.summary().optBoolean("busy") && android.os.SystemClock.elapsedRealtime()<until)Thread.sleep(150);
+                    if(audit.summary().optBoolean("busy"))throw new IOException("Inventaire toujours en cours. Réessayer dans un instant.");
+                }else startupState="Chargement du dernier inventaire";
                 startupState="Préparation de la référence";
                 startupResult=audit.penaltyData().toString();
-                startupState="Prêt · Shizuku automatique dans 60 secondes";
-                scheduleShizukuCleanup();
+                startupState="Prêt";
                 AnomalyMonitor.request(this);TrackerIndex.get(this).request();ApkEvidence.get(this).request();
             }catch(Exception e){startupError=e.getMessage()==null?e.getClass().getSimpleName():e.getMessage();startupState="Erreur";}
         },"aiv-initialisation").start();
