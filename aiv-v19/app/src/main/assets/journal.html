@@ -156,6 +156,40 @@ body{padding:0!important;margin:0!important;max-width:none!important}
 }
 </style>
 
+
+<style id="aiv-v33-mobile-fixes">
+/* V33: mobile table/toolbar/navigation fixes after Samsung device test. */
+#jc-reader.v32-ui .v32-table-head{position:static!important;top:auto!important;z-index:auto!important}
+#jc-reader.v32-ui .v32-table-wrap{position:relative!important;overflow-x:auto!important;overflow-y:visible!important}
+#jc-reader.v32-ui .v32-table-row{position:relative!important}
+#jc-reader.v32-ui .jc-toolbar{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:9px!important;align-items:end!important}
+#jc-reader.v32-ui .jc-toolbar>label{min-width:0!important;width:auto!important}
+#jc-reader.v32-ui .jc-toolbar>label.jc-wide{grid-column:1/-1!important}
+#jc-reader.v32-ui .jc-toolbar input,#jc-reader.v32-ui .jc-toolbar select{width:100%!important;min-width:0!important;max-width:100%!important;box-sizing:border-box!important}
+#jc-reader.v32-ui #jc-filter-area .jc-row.jc-between{gap:10px!important;align-items:end!important;flex-wrap:wrap!important}
+#jc-reader.v32-ui #jc-filter-area .jc-row.jc-between>label{min-width:145px!important;flex:1 1 145px!important}
+#jc-reader.v32-ui #jc-pane-anomalies>.jc-actions:first-child{display:none!important}
+#jc-reader.v32-ui #jc-series{display:none!important}
+#jc-reader.v32-ui .v33-controlbar{max-width:980px;margin:0 auto;padding:8px 10px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;background:#06111b;border-bottom:1px solid rgba(88,184,255,.16)}
+#jc-reader.v32-ui .v33-live{display:flex;align-items:center;gap:10px;min-width:0;overflow-x:auto;scrollbar-width:none}
+#jc-reader.v32-ui .v33-live::-webkit-scrollbar{display:none}
+#jc-reader.v32-ui .v33-state{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;font-size:.64rem;color:#afbdcb}
+#jc-reader.v32-ui .v33-state i{width:8px;height:8px;border-radius:50%;background:#596a7d;box-shadow:none}
+#jc-reader.v32-ui .v33-state.ok i{background:#65df70;box-shadow:0 0 10px rgba(101,223,112,.65)}
+#jc-reader.v32-ui .v33-state.warn i{background:#f3d65a;box-shadow:0 0 8px rgba(243,214,90,.35)}
+#jc-reader.v32-ui .v33-resume{min-height:34px!important;border-radius:999px!important;padding:5px 11px!important;font-size:.65rem!important;font-weight:850!important;white-space:nowrap!important}
+#jc-reader.v32-ui .v33-resume.running{border-color:#35634c!important;color:#91e4a0!important;background:#0b2118!important}
+#jc-reader.v32-ui .v33-shizuku-note{font-size:.63rem;color:#aab8c9;margin-top:6px}
+@media(max-width:600px){
+  #jc-reader.v32-ui .jc-toolbar{grid-template-columns:1fr!important}
+  #jc-reader.v32-ui .jc-toolbar>label.jc-wide{grid-column:auto!important}
+  #jc-reader.v32-ui .v33-controlbar{grid-template-columns:1fr!important}
+  #jc-reader.v32-ui .v33-resume{width:100%!important}
+  #jc-reader.v32-ui .v32-table{min-width:900px!important}
+  #jc-reader.v32-ui .v32-table-head>span,#jc-reader.v32-ui .v32-cell{padding:8px 9px!important}
+}
+</style>
+
 </head><body><main><style>
 #jc-reader { --jc-bg:light-dark(#fbfcfc,#151a1b); --jc-ink:light-dark(#202b2c,#edf4f2); --jc-sub:light-dark(#506565,#b4c6c4); --jc-line:light-dark(#d6e2df,#364845); --jc-accent:light-dark(#096558,#81dbc4); --jc-wash:light-dark(#e9f5f0,#223c35); --jc-paper:light-dark(#ffffff,#1c2425); --jc-warn:light-dark(#8c570f,#f3c680); --jc-danger:light-dark(#a32336,#ffadb8); color:var(--jc-ink); background:var(--jc-bg); border:1px solid var(--jc-line); border-radius:18px; font-family:system-ui,sans-serif; overflow-wrap:anywhere; color-scheme:light dark; }
 #jc-reader * { box-sizing:border-box; }
@@ -2338,6 +2372,69 @@ if(typeof module!=='undefined')module.exports=PenaltyModel;
   // Refresh live views while they are visible. Tracker matching stays local/offline.
   let v32Head=0;setInterval(()=>{if(document.hidden||!nativeBridge?.journalHead)return;try{const h=Number(nativeBridge.journalHead());if(h>v32Head){const changed=v32Head>0;v32Head=h;if(changed&&state.tab==='journal'){state.page=0;nativeAnchor=0;renderNative();}if(changed&&state.tab==='flows'){flowBefore=0;renderFlows(false);}}}catch(e){}},2500);
   const v32OldMvp=renderMvpHome;renderMvpHome=function(){try{v32RenderHome();}catch(e){v32OldMvp();}};
+
+
+
+  // V33 Samsung fixes: independent Flux/Anomalies pages, real liveness, responsive filters.
+  (function(){
+    try{
+      const oldSeries=document.getElementById('jc-series');
+      const flows=document.getElementById('jc-pane-flows');
+      const anomalies=document.getElementById('jc-pane-anomalies');
+      if(flows&&flows.parentElement!==root) anomalies.before(flows);
+      if(oldSeries) oldSeries.remove();
+      if(anomalies){
+        for(const node of [...anomalies.children]){
+          if(node.classList?.contains('jc-actions')){
+            const labels=[...node.querySelectorAll('button')].map(b=>b.textContent.trim());
+            if(labels.includes('Signalements')&&labels.includes('Séries liées')) node.remove();
+          }
+        }
+      }
+
+      let bar=document.getElementById('v33-controlbar');
+      if(!bar){
+        bar=element('div',undefined,'v33-controlbar');bar.id='v33-controlbar';
+        const live=element('div',undefined,'v33-live');
+        const mk=(id,label)=>{const x=element('span',undefined,'v33-state');x.id=id;x.append(element('i'),document.createTextNode(label));live.append(x);return x;};
+        mk('v33-collector','Journal');mk('v33-vpn','Connexions');mk('v33-watcher','Analyse / corrélation');
+        const resume=element('button','Relancer la collecte complète','v33-resume');resume.type='button';resume.id='v33-resume';
+        resume.onclick=()=>{if(!nativeBridge)return;resume.disabled=true;resume.textContent='Relance…';nativeBridge.command('resume-all');setTimeout(()=>{v33RefreshLive();resume.disabled=false;},1400);};
+        bar.append(live,resume);
+        root.querySelector('.jc-user-nav')?.after(bar);
+      }
+
+      window.v33RefreshLive=function(){
+        if(!nativeBridge?.continuousStatus)return;
+        try{
+          const st=JSON.parse(nativeBridge.continuousStatus());
+          const set=(id,ok,warn,title)=>{const n=document.getElementById(id);if(!n)return;n.classList.toggle('ok',!!ok);n.classList.toggle('warn',!ok&&!!warn);n.title=title||'';};
+          set('v33-collector',st.collector,st.enabled,'Collecteur journal : '+(st.collector?'actif':st.enabled?'demandé mais non actif':'arrêté'));
+          set('v33-vpn',st.vpn,st.vpn_starting,'Capture VPN : '+(st.vpn?'active':st.vpn_starting?'démarrage':'inactive')+(st.vpn_error?' · '+st.vpn_error:''));
+          set('v33-watcher',st.watcher&&st.analysis&&st.vpn,(st.watcher||st.analysis)&&!st.vpn,'Analyse : '+(st.watcher&&st.analysis?'active':'inactive')+' · VPN '+(st.vpn?'actif':'inactif')+(st.watcher_operation?' · '+st.watcher_operation:''));
+          const resume=document.getElementById('v33-resume');
+          if(resume){
+            const full=!!(st.collector&&st.vpn&&st.watcher&&st.analysis);
+            resume.classList.toggle('running',full);
+            resume.textContent=full?'Collecte complète active':'Relancer la collecte complète';
+          }
+          const calc=document.querySelector('#v32-calc .v32-dot'),corr=document.querySelector('#v32-corr .v32-dot');
+          if(calc) calc.className='v32-dot '+(st.collector&&st.vpn?'on':(st.collector||st.vpn_starting?'wait':''));
+          if(corr) corr.className='v32-dot '+(st.watcher&&st.analysis&&st.vpn?'on':(st.watcher||st.analysis?'wait':''));
+        }catch(e){}
+      };
+      v33RefreshLive();setInterval(v33RefreshLive,2200);
+
+      // Override V32 status so a green dot means the underlying service is truly alive.
+      v32Status=function(){v33RefreshLive();};
+
+      const sh=document.getElementById('jc-shizuku-cleanup');
+      if(sh&&!document.getElementById('v33-shizuku-note')){
+        const note=element('p','Le bouton Shizuku ne lance pas un inventaire. Il retire les droits admissibles; l’inventaire est recalculé seulement si un droit a réellement changé.','v33-shizuku-note');
+        note.id='v33-shizuku-note';sh.append(note);
+      }
+    }catch(e){}
+  })();
 
 
   beginStartup();
