@@ -305,6 +305,37 @@ button{touch-action:manipulation}
 .json-actions button{min-height:38px;border-radius:11px;border:1px solid #386985;background:#0d2638;color:#cceaff;padding:7px 11px;font-size:.7rem}
 #json-output{width:100%;min-height:240px;margin-top:10px;border-radius:12px;border:1px solid #294b65;background:#050d15;color:#d9e5f2;padding:10px;font:600 .66rem/1.45 ui-monospace,SFMono-Regular,Menlo,monospace}
 
+
+/* Final prototype tables */
+.actionbar{display:flex;gap:7px;overflow-x:auto;margin:0 0 9px;scrollbar-width:none}
+.actionbar::-webkit-scrollbar{display:none}
+.actionbar button{flex:0 0 auto;min-height:34px;border-radius:999px;border:1px solid #315b78;background:#0a1d2c;color:#cfe6f7;padding:5px 11px;font-size:.67rem;font-weight:800}
+.actionbar button.primary{background:#123450;border-color:#4c8bb4;color:#dff3ff}
+.actionbar button.warn{border-color:#725f2e;color:#f4d673;background:#221d0f}
+.actionbar button.violet{border-color:#74408d;color:#e6b9ff;background:#1e1027}
+.table-controls{display:grid;grid-template-columns:minmax(130px,1fr) auto auto;gap:6px;margin:0 0 9px}
+.table-controls input,.table-controls select{min-width:0;min-height:36px;border-radius:10px;border:1px solid #284b67;background:#07131f;color:var(--text);padding:6px 8px;font-size:.68rem}
+.data-table-frame{border:1px solid #203d56;border-radius:15px;background:#07111c;overflow:visible}
+.data-head-scroll{position:sticky;top:var(--header-stack-height,108px);z-index:35;overflow:hidden;background:#0f2234;border-bottom:1px solid #315672}
+.data-body-scroll{overflow-x:auto;overscroll-behavior-x:contain;border-radius:0 0 14px 14px}
+.data-table{min-width:var(--min-width,1080px);border-right:1px solid rgba(80,117,153,.28)}
+.data-row{display:grid;grid-template-columns:var(--cols);align-items:center}
+.data-head{background:#0f2234;color:#cfe2f5;font-size:.64rem;font-weight:850;text-transform:uppercase;letter-spacing:.04em}
+.data-head>div,.data-cell{padding:7px 8px;border-right:1px solid rgba(80,117,153,.18);min-width:0}
+.data-row.data{min-height:43px;border-bottom:1px solid rgba(76,107,137,.2);background:#08141f}
+.data-row.data:nth-child(even){background:#0a1724}
+.data-row.data:last-child{border-bottom:0}
+.data-cell{font-size:.7rem;color:#d5dfeb;overflow-wrap:anywhere}
+.data-cell button{width:100%;min-height:30px;padding:4px 5px;text-align:left;border:0;border-radius:7px;background:transparent;color:inherit}
+.data-cell button:active{background:#10263a}
+.badge-a{display:inline-flex;align-items:center;justify-content:center;min-width:29px;height:22px;padding:0 6px;border:1px solid currentColor;border-radius:999px;font-size:.6rem;font-weight:900;margin-right:6px}
+.inline-app{display:flex;align-items:center;gap:5px;white-space:nowrap}
+.muted{color:var(--muted)}
+.table-status{display:flex;gap:7px;align-items:center;margin:8px 1px 0;color:#7f95aa;font-size:.64rem}
+.table-status .dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 10px rgba(101,223,112,.45)}
+.toast{position:fixed;left:50%;bottom:72px;z-index:80;transform:translate(-50%,10px);max-width:min(88vw,520px);padding:9px 12px;border-radius:11px;border:1px solid #315b78;background:#071521;color:#dcecff;font-size:.68rem;opacity:0;pointer-events:none;transition:.18s}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+
 @media(max-width:600px){
   .topbar{grid-template-columns:auto 1fr auto;min-height:68px;padding-inline:10px}
   .nominal{font-size:.6rem;margin:0}
@@ -339,6 +370,7 @@ button{touch-action:manipulation}
     <nav class="nav" aria-label="Navigation prototype">
       <button class="active" data-page="home">Présentation</button>
       <button data-page="journal">Journal</button>
+      <button data-page="flows">Flux</button>
       <button data-page="anomalies">Anomalies</button>
       <button data-page="apps">Applications</button>
       <button data-page="settings">Paramètres</button>
@@ -411,37 +443,98 @@ button{touch-action:manipulation}
     <section class="page" id="page-journal">
       <div class="frame">
         <div class="frame-title">
-          <div><span class="demo-tag">prototype tableau</span><h2 style="margin-top:7px">Journal local</h2></div>
-          <p>Défilement horizontal<br>+ filtres par cellule</p>
+          <div><span class="demo-tag">journal</span><h2 style="margin-top:7px">Journal local</h2></div>
+          <p>temps réel · historique</p>
         </div>
-        <p class="journal-note">Le tableau dépasse volontairement la largeur du téléphone. Glisse horizontalement pour changer de colonnes. Touche une application, un UID, une destination ou un tracker pour filtrer.</p>
-        <div class="filterbar">
-          <input id="journal-search" type="search" placeholder="Chercher : app, UID, IP, tracker…">
-          <select id="journal-level" aria-label="Filtrer par niveau"><option value="">Tous les A</option><option>A1</option><option>A2</option><option>A3</option><option>A4</option><option>A5</option></select>
-          <select id="journal-kind" aria-label="Filtrer par type"><option value="">Tous</option><option value="tracker">Tracker</option><option value="first_seen">First seen</option><option value="shizuku">Shizuku</option></select>
+        <div class="actionbar">
+          <button class="primary" data-action="journal-refresh">↻ Actualiser</button>
+          <button data-action="collector-start">▶ Relancer la collecte</button>
+          <button data-action="journal-export">Exporter</button>
         </div>
-
-        <div class="table-frame">
-          <div class="table-head-scroll" id="journal-head-scroll" aria-label="Colonnes du journal">
-            <div class="journal-table">
-              <div class="tr th" id="journal-columns">
-                <div>Heure</div><div>Application</div><div>UID</div><div>Événement</div><div>Destination / permission</div><div>Tracker / SDK</div><div>État</div>
-              </div>
+        <div class="table-controls">
+          <input id="journal-search" type="search" placeholder="App, UID, IP, tracker…">
+          <select id="journal-level"><option value="">Tous A</option><option>A1</option><option>A2</option><option>A3</option><option>A4</option><option>A5</option></select>
+          <select id="journal-kind"><option value="">Tous</option><option value="tracker">Tracker</option><option value="first_seen">First seen</option><option value="shizuku">Shizuku</option></select>
+        </div>
+        <div class="data-table-frame">
+          <div class="data-head-scroll" data-sync-head="journal">
+            <div class="data-table" style="--cols:112px 190px 78px 160px 215px 155px 125px;--min-width:1040px">
+              <div class="data-row data-head"><div>Heure</div><div>Application</div><div>UID</div><div>Événement</div><div>Destination / permission</div><div>Tracker / SDK</div><div>État</div></div>
             </div>
           </div>
-          <div class="table-scroll" id="journal-body-scroll">
-            <div class="journal-table">
-              <div id="journal-body"></div>
-            </div>
+          <div class="data-body-scroll" data-sync-body="journal">
+            <div class="data-table" style="--cols:112px 190px 78px 160px 215px 155px 125px;--min-width:1040px"><div id="journal-body"></div></div>
           </div>
         </div>
         <div class="pagination"><button>← Plus récent</button><span>Page 1 / 8</span><button>Plus ancien →</button></div>
+        <div class="table-status"><span class="dot"></span><span>Collecte : prête · Actualiser recharge la tête du journal.</span></div>
       </div>
-      <p class="prototype-foot">Ligne Shizuku reprise du journal fourni dans la conversation. Les autres lignes servent uniquement à tester l’apparence et les filtres.</p>
     </section>
 
-    <section class="page" id="page-anomalies"><div class="frame"><div class="frame-title"><h2>Anomalies</h2><p>sera basé sur le même tableau horizontal</p></div><p class="journal-note">Cette page n’est pas encore maquettée : elle réutilisera le langage visuel du Journal.</p></div></section>
-    <section class="page" id="page-apps"><div class="frame"><div class="frame-title"><h2>Applications</h2><p>liste + actions rapides</p></div><p class="journal-note">La fiche application gardera les actions directes vers les réglages Android et les états de révocation.</p></div></section>
+    <section class="page" id="page-flows">
+      <div class="frame">
+        <div class="frame-title"><div><span class="demo-tag">flux</span><h2 style="margin-top:7px">Flux réseau</h2></div><p>DNS · SNI · IP · volume</p></div>
+        <div class="actionbar">
+          <button class="primary" data-action="flows-refresh">↻ Actualiser</button>
+          <button data-action="tracker-resume">▶ Reprendre l’analyse</button>
+          <button data-action="flows-export">Exporter</button>
+        </div>
+        <div class="table-controls">
+          <input id="flow-search" type="search" placeholder="App, domaine, IP, tracker…">
+          <select><option>Tous réseaux</option><option>TCP</option><option>UDP</option><option>DNS</option></select>
+          <select><option>Tous</option><option>First seen</option><option>Tracker</option></select>
+        </div>
+        <div class="data-table-frame">
+          <div class="data-head-scroll" data-sync-head="flows"><div class="data-table" style="--cols:105px 175px 75px 100px 205px 190px 145px 95px;--min-width:1090px"><div class="data-row data-head"><div>Heure</div><div>Application</div><div>UID</div><div>Transport</div><div>IP / port</div><div>DNS / SNI</div><div>Tracker</div><div>Volume</div></div></div></div>
+          <div class="data-body-scroll" data-sync-body="flows"><div class="data-table" style="--cols:105px 175px 75px 100px 205px 190px 145px 95px;--min-width:1090px" id="flows-body"></div></div>
+        </div>
+        <div class="pagination"><button>← Plus récent</button><span>Page 1 / 6</span><button>Plus ancien →</button></div>
+      </div>
+    </section>
+
+    <section class="page" id="page-anomalies">
+      <div class="frame">
+        <div class="frame-title"><div><span class="demo-tag">watcher</span><h2 style="margin-top:7px">Anomalies & corrélations</h2></div><p>signaux · preuves · état</p></div>
+        <div class="actionbar">
+          <button class="primary" data-action="analysis-refresh">↻ Actualiser</button>
+          <button data-action="analysis-resume">▶ Reprendre l’analyse</button>
+          <button data-action="analysis-export">Exporter</button>
+        </div>
+        <div class="table-controls">
+          <input type="search" placeholder="App, signal, destination…">
+          <select><option>Tous niveaux</option><option>A5</option><option>A4</option><option>A3</option></select>
+          <select><option>Tous</option><option>Non lus</option><option>Corrélés</option></select>
+        </div>
+        <div class="data-table-frame">
+          <div class="data-head-scroll" data-sync-head="anomalies"><div class="data-table" style="--cols:105px 185px 135px 210px 195px 115px 105px;--min-width:1050px"><div class="data-row data-head"><div>Heure</div><div>Application</div><div>Type</div><div>Signal</div><div>Preuve / contexte</div><div>État</div><div>Niveau</div></div></div></div>
+          <div class="data-body-scroll" data-sync-body="anomalies"><div class="data-table" style="--cols:105px 185px 135px 210px 195px 115px 105px;--min-width:1050px" id="anomaly-body"></div></div>
+        </div>
+        <div class="pagination"><button>← Plus récent</button><span>Page 1 / 4</span><button>Plus ancien →</button></div>
+      </div>
+    </section>
+
+    <section class="page" id="page-apps">
+      <div class="frame">
+        <div class="frame-title"><div><span class="demo-tag">inventaire</span><h2 style="margin-top:7px">Applications & autorisations</h2></div><p>Android · Système · Utilisateur</p></div>
+        <div class="actionbar">
+          <button class="primary" data-action="inventory-refresh">↻ Actualiser l’inventaire</button>
+          <button class="violet" data-action="shizuku-run">▶ Lancer Shizuku A4/A5</button>
+          <button data-action="shizuku-restore">↶ Restaurer</button>
+          <button data-action="apps-export">Exporter</button>
+        </div>
+        <div class="table-controls">
+          <input type="search" placeholder="Nom, package, permission…">
+          <select><option>Toutes catégories</option><option>Android</option><option>Système</option><option>Utilisateur</option></select>
+          <select><option>Tous A</option><option>A5</option><option>A4</option><option>A3</option><option>A2</option><option>A1</option></select>
+        </div>
+        <div class="data-table-frame">
+          <div class="data-head-scroll" data-sync-head="apps"><div class="data-table" style="--cols:220px 135px 95px 115px 145px 120px 115px;--min-width:1040px"><div class="data-row data-head"><div>Application</div><div>Catégorie</div><div>UID</div><div>Niveau</div><div>Permissions</div><div>Trackers</div><div>Action</div></div></div></div>
+          <div class="data-body-scroll" data-sync-body="apps"><div class="data-table" style="--cols:220px 135px 95px 115px 145px 120px 115px;--min-width:1040px" id="apps-body"></div></div>
+        </div>
+        <div class="pagination"><button>← Précédent</button><span>Page 1 / 12</span><button>Suivant →</button></div>
+        <div class="table-status"><span class="dot"></span><span>Shizuku : prêt à lancer le nettoyage admissible et à vérifier le résultat réel après chaque tentative.</span></div>
+      </div>
+    </section>
     <section class="page" id="page-settings">
       <div class="frame">
         <div class="frame-title"><div><span class="demo-tag">paramètres</span><h2 style="margin-top:7px">Configuration guidée</h2></div><p>Formulaire → JSON</p></div>
@@ -485,6 +578,7 @@ button{touch-action:manipulation}
     </section>
   </main>
   <button class="back-top" id="back-top" aria-label="Remonter en haut">↑</button>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
 </div>
 
 <script>
@@ -533,71 +627,87 @@ document.querySelectorAll('.group-card').forEach(card=>card.addEventListener('cl
 }));
 
 const journalRows=[
-  {
-    time:'16:16:18.303',app:'Shizuku',uid:'—',event:'CLEANUP_PERMISSION',
-    target:'android.permission.WRITE_SECURE_SETTINGS',tracker:'—',state:'still_granted',level:'A5'
-  },
-  {
-    time:'16:15:02.901',app:'Application exemple',uid:'10260',event:'Connexion TLS',
-    target:'api.example.net:443',tracker:'Tracker exemple',state:'FIRST_SEEN',level:'A4'
-  },
-  {
-    time:'16:14:48.200',app:'Application exemple',uid:'10260',event:'DNS',
-    target:'metrics.example.net',tracker:'SDK exemple',state:'observé',level:'A3'
-  },
-  {
-    time:'16:12:11.020',app:'Service exemple',uid:'1000',event:'Flux réseau',
-    target:'142.250.0.1:443',tracker:'—',state:'non attribuable',level:'A5'
-  },
-  {
-    time:'16:10:39.447',app:'Application locale',uid:'10432',event:'Lecture locale',
-    target:'Aucune destination réseau',tracker:'—',state:'normal',level:'A1'
-  }
+  {time:'16:16:18.303',app:'Shizuku',uid:'—',event:'CLEANUP_PERMISSION',target:'android.permission.WRITE_SECURE_SETTINGS',tracker:'—',state:'still_granted',level:'A5'},
+  {time:'16:15:02.901',app:'Application exemple',uid:'10260',event:'Connexion TLS',target:'api.example.net:443',tracker:'Tracker exemple',state:'FIRST_SEEN',level:'A4'},
+  {time:'16:14:48.200',app:'Application exemple',uid:'10260',event:'DNS',target:'metrics.example.net',tracker:'SDK exemple',state:'observé',level:'A3'},
+  {time:'16:12:11.020',app:'Service exemple',uid:'1000',event:'Flux réseau',target:'142.250.0.1:443',tracker:'—',state:'non attribuable',level:'A5'},
+  {time:'16:10:39.447',app:'Application locale',uid:'10432',event:'Lecture locale',target:'Aucune destination réseau',tracker:'—',state:'normal',level:'A1'}
 ];
-const body=document.getElementById('journal-body'),search=document.getElementById('journal-search');
-const levelSelect=document.getElementById('journal-level'),kindSelect=document.getElementById('journal-kind');
-function levelBadge(level){
-  const span=document.createElement('span');span.className='mini-level';span.textContent=level;span.style.color=tone[level];return span;
+const tone={A1:'#65df70',A2:'#f3d65a',A3:'#f7a34f',A4:'#ff636e',A5:'#d065ff'};
+function aBadge(level){const x=document.createElement('span');x.className='badge-a';x.textContent=level;x.style.color=tone[level]||'#9fc9e5';return x}
+function cell(text,buttonText){
+  const c=document.createElement('div');c.className='data-cell';
+  if(buttonText){const b=document.createElement('button');b.textContent=text;b.onclick=()=>{const q=document.getElementById('journal-search');if(q){q.value=text;renderJournal();}};c.append(b)}
+  else c.textContent=text;
+  return c;
 }
+const journalBody=document.getElementById('journal-body'),search=document.getElementById('journal-search'),levelSelect=document.getElementById('journal-level'),kindSelect=document.getElementById('journal-kind');
 function renderJournal(){
-  const q=search.value.trim().toLowerCase(),level=levelSelect.value,kind=kindSelect.value;body.replaceChildren();
-  const rows=journalRows.filter(r=>{
-    if(q&&!Object.values(r).join(' ').toLowerCase().includes(q))return false;
-    if(level&&r.level!==level)return false;
-    if(kind==='tracker'&&r.tracker==='—')return false;
-    if(kind==='first_seen'&&r.state!=='FIRST_SEEN')return false;
-    if(kind==='shizuku'&&r.app!=='Shizuku')return false;
-    return true;
-  });
-  for(const r of rows){
-    const tr=document.createElement('div');tr.className='tr data';tr.dataset.level=r.level;
-    const time=document.createElement('div');time.className='td time';time.textContent=r.time;tr.append(time);
-
-    const appTd=document.createElement('div');appTd.className='td app-cell';appTd.append(levelBadge(r.level));
-    const appButton=document.createElement('button');appButton.textContent=r.app;appButton.addEventListener('click',()=>{search.value=r.app;renderJournal();});appTd.append(appButton);tr.append(appTd);
-
-    const values=[
-      {text:r.uid,filter:r.uid!=='—'?r.uid:''},
-      {text:r.event},
-      {text:r.target,filter:r.target},
-      {text:r.tracker,filter:r.tracker!=='—'?r.tracker:'',tracker:r.tracker!=='—'},
-      {text:r.state}
-    ];
-    for(const item of values){
-      const td=document.createElement('div');td.className='td';
-      if(item.filter){
-        const b=document.createElement('button');b.textContent=item.text;if(item.tracker)b.className='tracker';
-        b.addEventListener('click',()=>{search.value=item.filter;renderJournal();});td.append(b);
-      }else td.textContent=item.text;
-      tr.append(td);
-    }
-    body.append(tr);
+  const q=search.value.trim().toLowerCase(),level=levelSelect.value,kind=kindSelect.value;journalBody.replaceChildren();
+  for(const r of journalRows.filter(r=>(!q||Object.values(r).join(' ').toLowerCase().includes(q))&&(!level||r.level===level)&&(!kind||(kind==='tracker'&&r.tracker!=='—')||(kind==='first_seen'&&r.state==='FIRST_SEEN')||(kind==='shizuku'&&r.app==='Shizuku')))){
+    const row=document.createElement('div');row.className='data-row data';
+    row.append(cell(r.time));
+    const app=cell('');app.classList.add('inline-app');app.append(aBadge(r.level));const b=document.createElement('button');b.textContent=r.app;b.onclick=()=>{search.value=r.app;renderJournal()};app.append(b);row.append(app);
+    row.append(cell(r.uid,r.uid!=='—'),cell(r.event),cell(r.target,true),cell(r.tracker,r.tracker!=='—'),cell(r.state));journalBody.append(row);
   }
 }
-search.addEventListener('input',renderJournal);
-levelSelect.addEventListener('change',renderJournal);
-kindSelect.addEventListener('change',renderJournal);
-renderJournal();
+search.addEventListener('input',renderJournal);levelSelect.addEventListener('change',renderJournal);kindSelect.addEventListener('change',renderJournal);renderJournal();
+
+const flowRows=[
+  ['16:15:02','Application exemple','10260','TCP','34.120.12.8:443','api.example.net','Tracker exemple','84 KB','A4'],
+  ['16:14:48','Application exemple','10260','DNS','8.8.8.8:53','metrics.example.net','SDK exemple','2 KB','A3'],
+  ['16:12:11','Service exemple','1000','TCP','142.250.0.1:443','—','—','1.4 MB','A5'],
+  ['16:10:39','Application locale','10432','UDP','224.0.0.251:5353','local','—','4 KB','A1']
+];
+const flowsBody=document.getElementById('flows-body');
+for(const r of flowRows){const row=document.createElement('div');row.className='data-row data';r.slice(0,8).forEach((v,i)=>{if(i===1){const c=cell('');c.classList.add('inline-app');c.append(aBadge(r[8]),document.createTextNode(v));row.append(c)}else row.append(cell(v))});flowsBody.append(row)}
+
+const anomalyRows=[
+  ['16:15:02','Application exemple','FIRST_SEEN','Nouvelle destination + tracker','api.example.net / Tracker exemple','Nouveau','A4'],
+  ['16:12:11','Service exemple','ATTRIBUTION','UID système non attribuable','UID 1000 · trafic TLS','À revoir','A5'],
+  ['16:08:55','Application réseau','VOLUME','Volume supérieur à l’habitude','312 MB / fenêtre 5 min','Corrélé','A4'],
+  ['15:59:13','Application locale','PERMISSION','Permission sensible observée','WRITE_SETTINGS','Connu','A3']
+];
+const anomalyBody=document.getElementById('anomaly-body');
+for(const r of anomalyRows){const row=document.createElement('div');row.className='data-row data';r.forEach((v,i)=>{if(i===1){const c=cell('');c.classList.add('inline-app');c.append(aBadge(r[6]),document.createTextNode(v));row.append(c)}else if(i!==6)row.append(cell(v))});const lvl=cell('');lvl.append(aBadge(r[6]));row.append(lvl);anomalyBody.append(row)}
+
+const appRows=[
+  ['Shizuku','Utilisateur','10481','A5','8 sensibles','0','Réglages'],
+  ['Samsung Notes','Système','10084','A5','12 sensibles','0','Réglages'],
+  ['Application exemple','Utilisateur','10260','A4','6 sensibles','2','Réglages'],
+  ['Service Android','Android','1000','A5','18 sensibles','—','Détail'],
+  ['Application locale','Utilisateur','10432','A1','3 visibles','0','Réglages']
+];
+const appsBody=document.getElementById('apps-body');
+for(const r of appRows){const row=document.createElement('div');row.className='data-row data';r.forEach((v,i)=>{if(i===0){const c=cell('');c.classList.add('inline-app');c.append(aBadge(r[3]),document.createTextNode(v));row.append(c)}else if(i===3){const c=cell('');c.append(aBadge(v));row.append(c)}else if(i===6){const c=cell('');const b=document.createElement('button');b.textContent=v;b.style.color='#9ed5ff';c.append(b);row.append(c)}else row.append(cell(v))});appsBody.append(row)}
+
+// Horizontal header/body synchronization for every table.
+document.querySelectorAll('[data-sync-body]').forEach(body=>{
+  const key=body.dataset.syncBody,head=document.querySelector('[data-sync-head="'+key+'"]');
+  body.addEventListener('scroll',()=>{if(head)head.scrollLeft=body.scrollLeft},{passive:true});
+});
+
+function showToast(message){
+  const t=document.getElementById('toast');t.textContent=message;t.classList.add('show');clearTimeout(showToast.timer);showToast.timer=setTimeout(()=>t.classList.remove('show'),1900);
+}
+document.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click',()=>{
+  const labels={
+    'journal-refresh':'Journal actualisé · dernière page rechargée.',
+    'collector-start':'Collecte continue relancée.',
+    'journal-export':'Export du journal.',
+    'flows-refresh':'Flux actualisés.',
+    'tracker-resume':'Analyse tracker reprise.',
+    'flows-export':'Export des flux.',
+    'analysis-refresh':'Anomalies actualisées.',
+    'analysis-resume':'Analyse AIV reprise.',
+    'analysis-export':'Export des anomalies.',
+    'inventory-refresh':'Inventaire des permissions relancé.',
+    'shizuku-run':'Nettoyage Shizuku A4/A5 lancé.',
+    'shizuku-restore':'Restauration du dernier nettoyage demandée.',
+    'apps-export':'Export de l’inventaire.'
+  };
+  showToast(labels[b.dataset.action]||'Action déclenchée.');
+}));
 
 // Settings sub-pages and local JSON preview.
 const settingsButtons=[...document.querySelectorAll('[data-settings]')];
@@ -627,10 +737,6 @@ function updateStickyStack(){
 updateStickyStack();
 new ResizeObserver(updateStickyStack).observe(headerStack);
 window.addEventListener('resize',updateStickyStack,{passive:true});
-
-const journalHeadScroll=document.getElementById('journal-head-scroll');
-const journalBodyScroll=document.getElementById('journal-body-scroll');
-journalBodyScroll.addEventListener('scroll',()=>{journalHeadScroll.scrollLeft=journalBodyScroll.scrollLeft;},{passive:true});
 
 const backTop=document.getElementById('back-top');
 window.addEventListener('scroll',()=>backTop.classList.toggle('show',window.scrollY>180),{passive:true});
