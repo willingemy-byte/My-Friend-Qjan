@@ -62,15 +62,15 @@ body{padding:0!important;margin:0!important;max-width:none!important}
 #jc-reader.v32-ui .v32-logo{width:46px;height:46px;border-radius:15px;display:grid;place-items:center;font-weight:900;font-size:1.15rem;letter-spacing:-.05em;color:var(--v32-blue);border:1.5px solid rgba(88,184,255,.72);background:linear-gradient(145deg,rgba(88,184,255,.08),rgba(255,255,255,.015))}
 #jc-reader.v32-ui .v32-brand{font-size:1.08rem;font-weight:900;letter-spacing:.08em;color:var(--v32-blue);white-space:nowrap}
 #jc-reader.v32-ui .v32-engine{display:grid;gap:4px;font-size:.66rem;color:#c2ccd8}
-#jc-reader.v32-ui .v32-engine span{display:flex;align-items:center;gap:7px}
+#jc-reader.v32-ui .v32-engine button{display:flex;align-items:center;gap:7px;min-height:28px!important;padding:4px 8px!important;border-radius:999px!important;background:#08131f!important;border:1px solid #243f56!important;color:#c2ccd8!important;font-size:inherit!important}
 #jc-reader.v32-ui .v32-dot{width:8px;height:8px;border-radius:50%;background:#627386;box-shadow:none}
 #jc-reader.v32-ui .v32-dot.on{background:var(--v32-green);box-shadow:0 0 12px rgba(101,223,112,.7)}
 #jc-reader.v32-ui .v32-dot.wait{background:var(--v32-yellow);box-shadow:0 0 10px rgba(243,214,90,.35)}
-#jc-reader.v32-ui .jc-user-nav{position:static!important;top:auto!important;z-index:auto!important;display:flex!important;gap:6px!important;overflow-x:auto!important;padding:7px 10px!important;background:rgba(4,8,14,.96)!important;border-bottom:1px solid rgba(88,184,255,.16)!important;scrollbar-width:none!important}
+#jc-reader.v32-ui .jc-user-nav{position:sticky!important;top:var(--v32-top-h)!important;z-index:55!important;display:flex!important;gap:6px!important;overflow-x:auto!important;padding:7px 10px!important;background:rgba(4,8,14,.96)!important;border-bottom:1px solid rgba(88,184,255,.16)!important;scrollbar-width:none!important}
 #jc-reader.v32-ui .jc-user-nav::-webkit-scrollbar{display:none}
 #jc-reader.v32-ui .jc-user-nav button{flex:0 0 auto!important;min-width:auto!important;min-height:34px!important;padding:5px 11px!important;border-radius:999px!important;border:1px solid #2b5674!important;background:#091925!important;color:#b6c3d1!important;font-size:.72rem!important;font-weight:800!important}
 #jc-reader.v32-ui .jc-user-nav button[aria-pressed="true"]{color:#04101b!important;background:linear-gradient(180deg,#6fc8ff,#53b8f5)!important;border-color:#72ccff!important;box-shadow:0 8px 22px rgba(88,184,255,.13)!important}
-#jc-reader.v32-ui .jc-pane{max-width:980px!important;margin:0 auto!important;padding:14px 10px 36px!important}
+#jc-reader.v32-ui .jc-pane{max-width:980px!important;margin:0 auto!important;padding:14px 10px 36px!important;scroll-margin-top:calc(var(--v32-top-h) + 48px)}
 #jc-reader.v32-ui button,#jc-reader.v32-ui input,#jc-reader.v32-ui select,#jc-reader.v32-ui textarea{font-family:inherit!important}
 #jc-reader.v32-ui button{border-color:#315b78!important;background:#0a1d2c!important;color:#cfe6f7!important}
 #jc-reader.v32-ui button.jc-primary{background:#123450!important;border-color:#4c8bb4!important;color:#dff3ff!important}
@@ -95,7 +95,7 @@ body{padding:0!important;margin:0!important;max-width:none!important}
 .v32-level-count{font-size:.69rem;font-weight:850;color:var(--tone);font-variant-numeric:tabular-nums}
 .v32-groups{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
 .v32-group{min-height:105px!important;padding:9px 7px!important;border-radius:14px!important;text-align:left!important;background:linear-gradient(160deg,rgba(88,184,255,.07),rgba(8,18,29,.96) 48%)!important}
-.v32-group[aria-pressed="true"]{border-color:#62bfff!important;box-shadow:0 0 0 1px rgba(88,184,255,.2)}
+.v32-group[aria-pressed="true"]{background:linear-gradient(160deg,rgba(88,184,255,.07),rgba(8,18,29,.96) 48%)!important;border-color:#62bfff!important;box-shadow:0 0 0 2px rgba(88,184,255,.34)!important;color:inherit!important}
 .v32-group-icon{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;border:1px solid #3a7096;color:#7ac9ff;font-weight:900;background:#0c1d2d;margin-bottom:5px}
 .v32-group strong{display:block;font-size:.72rem!important}.v32-group span{display:block;color:var(--v32-muted);font-size:.59rem;line-height:1.22;margin-top:4px}.v32-group em{display:block;color:#8ecfff;font-size:.6rem;font-style:normal;margin-top:5px}
 .v32-apps{display:grid;gap:6px;margin-top:9px}
@@ -107,7 +107,7 @@ body{padding:0!important;margin:0!important;max-width:none!important}
 .v32-table-wrap{overflow-x:auto;border:1px solid #203d56;border-radius:14px;background:#07111c;overscroll-behavior-x:contain}
 .v32-table{min-width:1040px;border-right:1px solid rgba(80,117,153,.28)}
 .v32-table-head,.v32-table-row{display:grid;grid-template-columns:112px 190px 78px 160px 215px 155px 125px;align-items:center}
-.v32-table-head{position:sticky;top:var(--v32-top-h);z-index:45;background:#0f2234;color:#cfe2f5;border-bottom:1px solid #315672;font-size:.64rem;font-weight:850;text-transform:uppercase;letter-spacing:.04em}
+.v32-table-head{position:relative;top:auto;z-index:2;background:#0f2234;color:#cfe2f5;border-bottom:1px solid #315672;font-size:.64rem;font-weight:850;text-transform:uppercase;letter-spacing:.04em}
 .v32-table-head>span,.v32-cell{padding:7px 8px;border-right:1px solid rgba(80,117,153,.18);min-width:0}
 .v32-table-row{min-height:43px;border-bottom:1px solid rgba(76,107,137,.2);background:#08141f}
 .v32-table-row:nth-child(even){background:#0a1724}.v32-table-row:last-child{border-bottom:0}
@@ -154,6 +154,23 @@ body{padding:0!important;margin:0!important;max-width:none!important}
   .v32-level-copy strong{font-size:.75rem!important}.v32-level-copy span{font-size:.61rem}
   .v32-groups{grid-template-columns:repeat(3,minmax(0,1fr))}
 }
+
+#jc-reader.v32-ui .jp-multiplier,
+#jc-reader.v32-ui .jp-app-multiplier,
+#jc-reader.v32-ui .jp-group-number,
+#jc-reader.v32-ui .jc-score-ring,
+#jc-reader.v32-ui .jc-group-disc,
+#jc-reader.v32-ui #jc-score-number,
+#jc-reader.v32-ui #jc-score-label,
+#jc-reader.v32-ui #jc-home-alert,
+#jc-reader.v32-ui #jc-home-counters,
+#jc-reader.v32-ui #jc-home-app-list,
+#jc-reader.v32-ui #jc-home-list-title,
+#jc-reader.v32-ui #jc-home-search,
+#jc-reader.v32-ui #jc-home-more,
+#jc-reader.v32-ui #jc-home-note,
+#jc-reader.v32-ui #jc-refresh-status{display:none!important}
+
 </style>
 
 </head><body><main><style>
@@ -522,7 +539,7 @@ body{padding:0!important;margin:0!important;max-width:none!important}
     <p id="jc-analysis-progress" class="jc-sub" role="status" style="margin-top:12px">État de l’analyse…</p>
     <p id="jc-analysis-coverage" class="jc-sub" style="margin-top:8px"></p>
     <div id="jc-shizuku-cleanup" class="jc-form" style="margin-top:12px">
-      <strong>Nettoyage automatique L4/L5</strong>
+      <strong>Nettoyage Shizuku L4/L5</strong>
       <p id="jc-shizuku-status" class="jc-sub" role="status">État Shizuku…</p>
       <div class="jc-actions">
         <button type="button" id="jc-shizuku-run" class="jc-primary">Retirer les permissions L4/L5</button>
@@ -1980,7 +1997,6 @@ if(typeof module!=='undefined')module.exports=PenaltyModel;
     if(tab==='menu')refreshContinuous();
     if(tab==='menu')for(const name of ['penalty','references'])$('jc-pane-'+name).hidden=false;
     if(tab==='journal')renderJournal();
-    if(tab==='anomalies')renderFlows(false);
     nav.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.jcTab===tab||(tab==='flows'&&b.dataset.jcTab==='anomalies'))));
   };
   // Both modes describe this phone; no simulated percentages mixed into real data.
@@ -1989,17 +2005,7 @@ if(typeof module!=='undefined')module.exports=PenaltyModel;
   renderUserHome=function(){if(nativeBridge&&nativeBridge.penaltyData)renderPenaltyHome();else{
     $('jc-score-number').textContent='—';$('jc-home-title').textContent='Ouvrir AIV depuis son icône Android';$('jc-home-sub').textContent='Ce lecteur n’a pas accès au journal du téléphone. Aucune donnée locale n’est remplacée.';$('jc-total').textContent='Journal local non accessible dans ce lecteur';
   }};
-  // Linked series are computed on entry, without a separate linking action.
-  const flows=$('jc-pane-flows'),anomalies=$('jc-pane-anomalies');
-  const series=element('div');series.id='jc-series';series.hidden=true;anomalies.append(series);series.append(flows);
-  const singleNodes=[...anomalies.children].filter(n=>n!==series);
-  const tabs=element('div',undefined,'jc-actions');
-  const single=penaltyButton('Signalements',()=>{singleNodes.forEach(n=>n.hidden=false);series.hidden=true;single.setAttribute('aria-pressed','true');linked.setAttribute('aria-pressed','false');renderAnalysis();});
-  const linked=penaltyButton('Séries liées',()=>{singleNodes.forEach(n=>n.hidden=true);series.hidden=false;flows.hidden=false;single.setAttribute('aria-pressed','false');linked.setAttribute('aria-pressed','true');});
-  tabs.append(single,linked);anomalies.prepend(tabs);single.setAttribute('aria-pressed','true');
-  const baseTab=setTab;setTab=function(tab){if(tab==='flows'){baseTab('anomalies');linked.click();return;}baseTab(tab);if(tab==='anomalies'){flows.hidden=false;if(!series.hidden)singleNodes.forEach(n=>n.hidden=true);}};
-  $('jf-status').before(element('p','Rapprochements automatiques dans la fenêtre affichée. Une destination commune ne prouve ni transfert entre applications ni cause d’un plantage.','jc-sub'));
-  const analysisRefresh=penaltyButton('Actualiser',()=>{renderAnalysis();renderFlows(false);});tabs.append(analysisRefresh);
+  // V32.1: Flux and Anomalies are independent pages. Legacy linked-series router removed.
   function finishStartup(input){
     if(input){
       const raw=penaltyRead('penaltyConfig');
@@ -2143,9 +2149,12 @@ if(typeof module!=='undefined')module.exports=PenaltyModel;
     top.replaceChildren();
     top.append(element('div','AIV','v32-logo'),element('div','ALL IN VISIBLE','v32-brand'));
     const engine=element('div',undefined,'v32-engine');
-    const calc=element('span');calc.append(element('i',undefined,'v32-dot'),document.createTextNode('Calcul'));
-    const corr=element('span');corr.append(element('i',undefined,'v32-dot'),document.createTextNode('Corrélation'));
-    calc.id='v32-calc';corr.id='v32-corr';engine.append(calc,corr);top.append(engine);
+    const calc=element('button');calc.type='button';calc.append(element('i',undefined,'v32-dot'),document.createTextNode('Collecte'));
+    const corr=element('button');corr.type='button';corr.append(element('i',undefined,'v32-dot'),document.createTextNode('Corrélation'));
+    calc.id='v32-calc';corr.id='v32-corr';
+    calc.onclick=()=>{try{const st=JSON.parse(nativeBridge.continuousStatus());nativeBridge.command(st.collector?'stop':'start');setTimeout(v32Status,900);}catch(e){}};
+    corr.onclick=()=>{try{const st=JSON.parse(nativeBridge.continuousStatus());nativeBridge.command(st.analysis?'aiv-stop':'aiv-start');setTimeout(v32Status,900);}catch(e){}};
+    engine.append(calc,corr);top.append(engine);
     const resize=()=>document.documentElement.style.setProperty('--v32-top-h',top.getBoundingClientRect().height+'px');
     resize();if(window.ResizeObserver)new ResizeObserver(resize).observe(top);else addEventListener('resize',resize);
   }
@@ -2154,8 +2163,8 @@ if(typeof module!=='undefined')module.exports=PenaltyModel;
     try{
       const s=JSON.parse(nativeBridge.continuousStatus?nativeBridge.continuousStatus():nativeBridge.status());
       const c=$('v32-calc')?.querySelector('.v32-dot'),r=$('v32-corr')?.querySelector('.v32-dot');
-      if(c)c.className='v32-dot '+((s.collector||s.running||s.enabled!==false)?'on':'wait');
-      if(r)r.className='v32-dot '+(s.analysis?'on':'wait');
+      if(c)c.className='v32-dot '+(s.collector?'on':'');
+      if(r)r.className='v32-dot '+(s.analysis?'on':'');
     }catch(e){}
   }
   function v32InstallNav(){
@@ -2235,6 +2244,14 @@ if(typeof module!=='undefined')module.exports=PenaltyModel;
   function v32FilterJournal(value){
     if(!value)return;$('jc-search').value=value;state.page=0;state.selected=null;nativeAnchor=0;renderJournal();
   }
+  function v32EnsureCollectionControls(){
+    const actions=$('jc-export')?.parentElement;if(!actions||$('v32-collect-toggle'))return;
+    const collect=penaltyButton('Collecte',()=>{try{const st=JSON.parse(nativeBridge.continuousStatus());nativeBridge.command(st.collector?'stop':'start');setTimeout(()=>{v32Status();renderNative();},900);}catch(e){}});
+    collect.id='v32-collect-toggle';
+    const vpn=penaltyButton('Connexions apps',()=>{try{const st=JSON.parse(nativeBridge.continuousStatus());nativeBridge.command(st.vpn?'capture-off':'capture-on');setTimeout(()=>{v32Status();renderNative();},900);}catch(e){}});
+    vpn.id='v32-vpn-toggle';
+    actions.prepend(collect,vpn);
+  }
   function v32EnsureJournalTable(){
     const list=$('jc-events');if(list.closest('.v32-table-wrap'))return;
     const wrap=element('div',undefined,'v32-table-wrap'),table=element('div',undefined,'v32-table'),head=element('div',undefined,'v32-table-head');
@@ -2242,6 +2259,7 @@ if(typeof module!=='undefined')module.exports=PenaltyModel;
     list.parentElement.insertBefore(wrap,list);wrap.append(table);table.append(head,list);
   }
   renderRows=function(rows){
+    v32EnsureCollectionControls();
     v32EnsureJournalTable();const list=$('jc-events');list.replaceChildren();
     for(const event of rows){
       const raw=event.original||{},d=raw.details||{},app=v32AppForRaw(raw),level=v32Exposure(app),trackers=v32TrackerFor(event),uid=d.uid??raw.uid;
