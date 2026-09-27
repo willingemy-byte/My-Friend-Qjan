@@ -633,7 +633,7 @@ const journalRows=[
   {time:'16:12:11.020',app:'Service exemple',uid:'1000',event:'Flux réseau',target:'142.250.0.1:443',tracker:'—',state:'non attribuable',level:'A5'},
   {time:'16:10:39.447',app:'Application locale',uid:'10432',event:'Lecture locale',target:'Aucune destination réseau',tracker:'—',state:'normal',level:'A1'}
 ];
-const tone={A1:'#65df70',A2:'#f3d65a',A3:'#f7a34f',A4:'#ff636e',A5:'#d065ff'};
+
 function aBadge(level){const x=document.createElement('span');x.className='badge-a';x.textContent=level;x.style.color=tone[level]||'#9fc9e5';return x}
 function cell(text,buttonText){
   const c=document.createElement('div');c.className='data-cell';
