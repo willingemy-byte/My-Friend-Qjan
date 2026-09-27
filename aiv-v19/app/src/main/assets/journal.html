@@ -349,10 +349,10 @@ footer{width:min(100%,1120px);margin:0 auto;padding:15px 12px calc(18px + env(sa
     </article>
   </div>
 </section>
-</main>
 
 <footer><span>ALL IN VISIBLE · Interface issue du démonstrateur original</span><span class="mono">Données locales · Android</span></footer>
 <button class="back-top" id="back-top" type="button" aria-label="Revenir en haut">↑</button>
+<span id="ja-scan" hidden></span><span id="ja-export" hidden></span>
 
 <script>
 (function(){
@@ -362,6 +362,8 @@ var $=function(id){return document.getElementById(id);};
 var currentView='architecture';
 var journalRows=[];
 var anomalyRows=[];
+const system=new Set(['WRITE_SETTINGS','WRITE_SECURE_SETTINGS','GRANT_RUNTIME_PERMISSIONS','REVOKE_RUNTIME_PERMISSIONS','ADJUST_RUNTIME_PERMISSIONS_POLICY','MANAGE_APP_OPS_MODES','UPDATE_APP_OPS_STATS','INSTALL_PACKAGES','DELETE_PACKAGES','CLEAR_APP_USER_DATA','CHANGE_COMPONENT_ENABLED_STATE','SET_PREFERRED_APPLICATIONS','FORCE_STOP_PACKAGES','MANAGE_USERS','CREATE_USERS','INTERACT_ACROSS_USERS','INTERACT_ACROSS_USERS_FULL','MANAGE_DEVICE_ADMINS','MANAGE_PROFILE_AND_DEVICE_OWNERS','MANAGE_DEVICE_POLICY_RUNTIME_PERMISSIONS','MANAGE_DEVICE_POLICY_APPS_CONTROL','SYSTEM_ALERT_WINDOW']);
+const autonomous=new Set(['RECEIVE_BOOT_COMPLETED','READ_LOGS','READ_PHONE_STATE','PACKAGE_USAGE_STATS']);
 
 function num(v){return Number(v||0).toLocaleString('fr-CA');}
 function text(v,fallback){return v===null||v===undefined||v===''?(fallback||'—'):String(v);}
@@ -400,6 +402,16 @@ function refreshTop(){
   $('top-status').textContent=active?'Collecte locale active':'Collecte locale en attente';
   $('status-dot').style.background=active?'var(--green)':'var(--amber)';
 }
+
+  function penaltySnapshot(input,settings){
+    const stable=x=>Array.isArray(x)?x.map(stable):x&&typeof x==='object'?Object.fromEntries(Object.keys(x).sort().map(k=>[k,stable(x[k])])):x;
+    const identity=JSON.stringify(stable({engine:'aiv-penalty/0.6.22-exposure-1',apps:input.apps,references:input.references,policy:settings.policy}));
+    if(nativeBridge.calculationLoad){const saved=penaltyRead('calculationLoad',identity);if(saved.cached&&saved.result?.schema==='aiv-penalty-result/2')return {...saved.result,scan_id:input.scan_id};}
+    const result=PenaltyModel.evaluate(input,settings.policy);
+    if(nativeBridge.calculationSave){try{penaltyRead('calculationSave',identity,JSON.stringify(result));}catch(e){penaltyStatus('Calcul terminé; instantané non enregistré : '+e.message);}}
+    return result;
+  }
+  function penaltyLoad(force=false){ return force; }
 
 function refreshArchitecture(){
   refreshTop();
@@ -557,7 +569,8 @@ window.AivDefenseRefresh=function(){
   if(currentView==='faisabilite')refreshSettings();
 };
 
-refreshArchitecture();
+function beginStartup(){refreshArchitecture();}
+beginStartup();
 setInterval(function(){
   if(document.hidden)return;
   refreshTop();
@@ -565,5 +578,4 @@ setInterval(function(){
 },4000);
 })();
 </script>
-</body>
-</html>
+</main></body></html>
