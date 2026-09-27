@@ -129,6 +129,16 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public String aivPage(String filter,long before){try{return AivStore.page(MainActivity.this,filter,before).toString();}catch(Exception e){return auditError(e);}}
         @JavascriptInterface public String aivDetail(long eventId){try{return AivStore.detail(MainActivity.this,eventId).toString();}catch(Exception e){return auditError(e);}}
         @JavascriptInterface public void aivConfigure(String value){runOnUiThread(()->new AlertDialog.Builder(MainActivity.this).setTitle("Enregistrer cette règle AIV ?").setMessage(value.length()>32768?"Configuration trop longue":value).setNegativeButton("Annuler",null).setPositiveButton("Enregistrer",(d,w)->new Thread(()->{try{MainEngine.configure(MainActivity.this,value);}catch(Exception e){AivStore.error="Règle refusée : "+e.getMessage();}},"aiv-policy").start()).show());}
+        @JavascriptInterface public void aivConfigureBatch(String value){runOnUiThread(()->{
+            try{
+                final org.json.JSONArray rules=new org.json.JSONArray(value);
+                if(rules.length()<1||rules.length()>6)throw new IllegalArgumentException("1 à 6 règles attendues");
+                new AlertDialog.Builder(MainActivity.this).setTitle("Appliquer les règles AIV ?").setMessage(rules.length()+" règle(s) seront versionnées dans le journal local.").setNegativeButton("Annuler",null).setPositiveButton("Appliquer",(d,w)->new Thread(()->{
+                    try{for(int i=0;i<rules.length();i++)MainEngine.configure(MainActivity.this,rules.getJSONObject(i).toString());}
+                    catch(Exception e){AivStore.error="Règles refusées : "+e.getMessage();}
+                },"aiv-policy-batch").start()).show();
+            }catch(Exception e){Toast.makeText(MainActivity.this,e.getMessage()==null?"Configuration invalide":e.getMessage(),Toast.LENGTH_LONG).show();}
+        });}
 
         @JavascriptInterface public String coherenceRefresh(){try{return CoherenceRefresh.trigger(MainActivity.this).toString();}catch(Exception e){return auditError(e);}}
         @JavascriptInterface public String coherenceStatus(){try{return CoherenceRefresh.status(MainActivity.this).toString();}catch(Exception e){return auditError(e);}}
