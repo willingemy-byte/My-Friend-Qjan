@@ -107,7 +107,7 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public String journalResult(int ticket){return ticket==journalReplyId?journalReply:ticket<journalRequestId.get()?"{\"cancelled\":true}":"";}
 
         @JavascriptInterface public long journalHead(){return EventStore.get(MainActivity.this).latestId();}
-        @JavascriptInterface public String continuousStatus(){return EventStore.object("enabled",Continuous.enabled(MainActivity.this),"collector",RecorderService.running,"vpn",NetworkCaptureService.running,"analysis",WatcherService.analysisActive,"vpn_error",NetworkCaptureService.lastError,"error",EventStore.lastError).toString();}
+        @JavascriptInterface public String continuousStatus(){return EventStore.object("enabled",Continuous.enabled(MainActivity.this),"collector",RecorderService.running,"vpn",NetworkCaptureService.running,"vpn_starting",NetworkCaptureService.starting,"watcher",WatcherService.running,"analysis",WatcherService.analysisActive,"watcher_operation",WatcherService.operation,"vpn_error",NetworkCaptureService.lastError,"error",EventStore.lastError).toString();}
         @JavascriptInterface public String startupStatus(){return EventStore.object("state",startupState,"ready",!startupResult.isEmpty(),"error",startupError).toString();}
         @JavascriptInterface public void startupRetry(){if("Erreur".equals(startupState)){startupError="";startupState="Calcul en cours";prepareStartup();}}
         @JavascriptInterface public String startupData(){return startupResult;}
@@ -215,6 +215,16 @@ public final class MainActivity extends Activity {
             }else if("export-audit-full".equals(command)){chooseExport(AUDIT_FULL_EXPORT_REQUEST,"journal-autorisations-historique.json","application/json");
             }else if("export-audit".equals(command)){chooseExport(AUDIT_EXPORT_REQUEST,"journal-autorisations.json","application/json");
             }else if("import-audit".equals(command)){startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("application/json"),AUDIT_IMPORT_REQUEST);
+            }else if("resume-all".equals(command)){
+                Continuous.prefs(this).edit().putBoolean("enabled",true).putBoolean("vpn_enabled",true).putBoolean("analysis_enabled",true).apply();
+                EventStore.lastError="";NetworkCaptureService.lastError="";
+                Continuous.start(this);
+                if(Build.VERSION.SDK_INT>=33&&checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},NOTIFICATION_REQUEST);
+                else if(!RecorderService.running)startCollector();
+                if(!WatcherService.analysisActive)WatcherService.start(this);
+                Intent consent=android.net.VpnService.prepare(this);
+                if(consent!=null)startActivityForResult(consent,VPN_REQUEST);
+                else if(!NetworkCaptureService.running&&!NetworkCaptureService.starting)startNetworkCapture();
             }else if("start".equals(command)){
                 Continuous.prefs(this).edit().putBoolean("enabled",true).apply();Continuous.start(this);EventStore.lastError="";
                 if(Build.VERSION.SDK_INT>=33&&checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},NOTIFICATION_REQUEST);
