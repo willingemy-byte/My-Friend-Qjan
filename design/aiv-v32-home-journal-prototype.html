@@ -463,7 +463,41 @@ button{touch-action:manipulation}
             </div>
           </div>
           <div class="data-body-scroll" data-sync-body="journal">
-            <div class="data-table" style="--cols:112px 190px 78px 160px 215px 155px 125px;--min-width:1040px"><div id="journal-body"></div></div>
+            <div class="data-table" style="--cols:112px 190px 78px 160px 215px 155px 125px;--min-width:1040px"><div id="journal-body">
+  <div class="data-row data" data-search="shizuku cleanup_permission android.permission.write_secure_settings still_granted a5">
+    <div class="data-cell">16:16:18.303</div>
+    <div class="data-cell inline-app"><span class="badge-a" style="color:#d065ff">A5</span><button data-filter="Shizuku">Shizuku</button></div>
+    <div class="data-cell">—</div><div class="data-cell">CLEANUP_PERMISSION</div>
+    <div class="data-cell"><button data-filter="android.permission.WRITE_SECURE_SETTINGS">android.permission.WRITE_SECURE_SETTINGS</button></div>
+    <div class="data-cell">—</div><div class="data-cell">still_granted</div>
+  </div>
+  <div class="data-row data" data-search="application exemple 10260 connexion tls api.example.net tracker exemple first_seen a4">
+    <div class="data-cell">16:15:02.901</div>
+    <div class="data-cell inline-app"><span class="badge-a" style="color:#ff636e">A4</span><button data-filter="Application exemple">Application exemple</button></div>
+    <div class="data-cell"><button data-filter="10260">10260</button></div><div class="data-cell">Connexion TLS</div>
+    <div class="data-cell"><button data-filter="api.example.net">api.example.net:443</button></div>
+    <div class="data-cell"><button data-filter="Tracker exemple">Tracker exemple</button></div><div class="data-cell">FIRST_SEEN</div>
+  </div>
+  <div class="data-row data" data-search="application exemple 10260 dns metrics.example.net sdk exemple observé a3">
+    <div class="data-cell">16:14:48.200</div>
+    <div class="data-cell inline-app"><span class="badge-a" style="color:#f7a34f">A3</span><button data-filter="Application exemple">Application exemple</button></div>
+    <div class="data-cell"><button data-filter="10260">10260</button></div><div class="data-cell">DNS</div>
+    <div class="data-cell"><button data-filter="metrics.example.net">metrics.example.net</button></div>
+    <div class="data-cell"><button data-filter="SDK exemple">SDK exemple</button></div><div class="data-cell">observé</div>
+  </div>
+  <div class="data-row data" data-search="service exemple 1000 flux réseau 142.250.0.1 non attribuable a5">
+    <div class="data-cell">16:12:11.020</div>
+    <div class="data-cell inline-app"><span class="badge-a" style="color:#d065ff">A5</span><button data-filter="Service exemple">Service exemple</button></div>
+    <div class="data-cell"><button data-filter="1000">1000</button></div><div class="data-cell">Flux réseau</div>
+    <div class="data-cell"><button data-filter="142.250.0.1">142.250.0.1:443</button></div><div class="data-cell">—</div><div class="data-cell">non attribuable</div>
+  </div>
+  <div class="data-row data" data-search="application locale 10432 lecture locale aucune destination réseau normal a1">
+    <div class="data-cell">16:10:39.447</div>
+    <div class="data-cell inline-app"><span class="badge-a" style="color:#65df70">A1</span><button data-filter="Application locale">Application locale</button></div>
+    <div class="data-cell"><button data-filter="10432">10432</button></div><div class="data-cell">Lecture locale</div>
+    <div class="data-cell">Aucune destination réseau</div><div class="data-cell">—</div><div class="data-cell">normal</div>
+  </div>
+</div></div>
           </div>
         </div>
         <div class="pagination"><button>← Plus récent</button><span>Page 1 / 8</span><button>Plus ancien →</button></div>
@@ -486,7 +520,10 @@ button{touch-action:manipulation}
         </div>
         <div class="data-table-frame">
           <div class="data-head-scroll" data-sync-head="flows"><div class="data-table" style="--cols:105px 175px 75px 100px 205px 190px 145px 95px;--min-width:1090px"><div class="data-row data-head"><div>Heure</div><div>Application</div><div>UID</div><div>Transport</div><div>IP / port</div><div>DNS / SNI</div><div>Tracker</div><div>Volume</div></div></div></div>
-          <div class="data-body-scroll" data-sync-body="flows"><div class="data-table" style="--cols:105px 175px 75px 100px 205px 190px 145px 95px;--min-width:1090px" id="flows-body"></div></div>
+          <div class="data-body-scroll" data-sync-body="flows"><div class="data-table" style="--cols:105px 175px 75px 100px 205px 190px 145px 95px;--min-width:1090px" id="flows-body"><div class="data-row data"><div class="data-cell">16:15:02</div><div class="data-cell inline-app"><span class="badge-a" style="color:#ff636e">A4</span>Application exemple</div><div class="data-cell">10260</div><div class="data-cell">TCP</div><div class="data-cell">34.120.12.8:443</div><div class="data-cell">api.example.net</div><div class="data-cell">Tracker exemple</div><div class="data-cell">84 KB</div></div>
+<div class="data-row data"><div class="data-cell">16:14:48</div><div class="data-cell inline-app"><span class="badge-a" style="color:#f7a34f">A3</span>Application exemple</div><div class="data-cell">10260</div><div class="data-cell">DNS</div><div class="data-cell">8.8.8.8:53</div><div class="data-cell">metrics.example.net</div><div class="data-cell">SDK exemple</div><div class="data-cell">2 KB</div></div>
+<div class="data-row data"><div class="data-cell">16:12:11</div><div class="data-cell inline-app"><span class="badge-a" style="color:#d065ff">A5</span>Service exemple</div><div class="data-cell">1000</div><div class="data-cell">TCP</div><div class="data-cell">142.250.0.1:443</div><div class="data-cell">—</div><div class="data-cell">—</div><div class="data-cell">1.4 MB</div></div>
+<div class="data-row data"><div class="data-cell">16:10:39</div><div class="data-cell inline-app"><span class="badge-a" style="color:#65df70">A1</span>Application locale</div><div class="data-cell">10432</div><div class="data-cell">UDP</div><div class="data-cell">224.0.0.251:5353</div><div class="data-cell">local</div><div class="data-cell">—</div><div class="data-cell">4 KB</div></div></div></div>
         </div>
         <div class="pagination"><button>← Plus récent</button><span>Page 1 / 6</span><button>Plus ancien →</button></div>
       </div>
@@ -507,7 +544,10 @@ button{touch-action:manipulation}
         </div>
         <div class="data-table-frame">
           <div class="data-head-scroll" data-sync-head="anomalies"><div class="data-table" style="--cols:105px 185px 135px 210px 195px 115px 105px;--min-width:1050px"><div class="data-row data-head"><div>Heure</div><div>Application</div><div>Type</div><div>Signal</div><div>Preuve / contexte</div><div>État</div><div>Niveau</div></div></div></div>
-          <div class="data-body-scroll" data-sync-body="anomalies"><div class="data-table" style="--cols:105px 185px 135px 210px 195px 115px 105px;--min-width:1050px" id="anomaly-body"></div></div>
+          <div class="data-body-scroll" data-sync-body="anomalies"><div class="data-table" style="--cols:105px 185px 135px 210px 195px 115px 105px;--min-width:1050px" id="anomaly-body"><div class="data-row data"><div class="data-cell">16:15:02</div><div class="data-cell inline-app"><span class="badge-a" style="color:#ff636e">A4</span>Application exemple</div><div class="data-cell">FIRST_SEEN</div><div class="data-cell">Nouvelle destination + tracker</div><div class="data-cell">api.example.net / Tracker exemple</div><div class="data-cell">Nouveau</div><div class="data-cell"><span class="badge-a" style="color:#ff636e">A4</span></div></div>
+<div class="data-row data"><div class="data-cell">16:12:11</div><div class="data-cell inline-app"><span class="badge-a" style="color:#d065ff">A5</span>Service exemple</div><div class="data-cell">ATTRIBUTION</div><div class="data-cell">UID système non attribuable</div><div class="data-cell">UID 1000 · trafic TLS</div><div class="data-cell">À revoir</div><div class="data-cell"><span class="badge-a" style="color:#d065ff">A5</span></div></div>
+<div class="data-row data"><div class="data-cell">16:08:55</div><div class="data-cell inline-app"><span class="badge-a" style="color:#ff636e">A4</span>Application réseau</div><div class="data-cell">VOLUME</div><div class="data-cell">Volume supérieur à l’habitude</div><div class="data-cell">312 MB / fenêtre 5 min</div><div class="data-cell">Corrélé</div><div class="data-cell"><span class="badge-a" style="color:#ff636e">A4</span></div></div>
+<div class="data-row data"><div class="data-cell">15:59:13</div><div class="data-cell inline-app"><span class="badge-a" style="color:#f7a34f">A3</span>Application locale</div><div class="data-cell">PERMISSION</div><div class="data-cell">Permission sensible observée</div><div class="data-cell">WRITE_SETTINGS</div><div class="data-cell">Connu</div><div class="data-cell"><span class="badge-a" style="color:#f7a34f">A3</span></div></div></div></div>
         </div>
         <div class="pagination"><button>← Plus récent</button><span>Page 1 / 4</span><button>Plus ancien →</button></div>
       </div>
@@ -529,7 +569,11 @@ button{touch-action:manipulation}
         </div>
         <div class="data-table-frame">
           <div class="data-head-scroll" data-sync-head="apps"><div class="data-table" style="--cols:220px 135px 95px 115px 145px 120px 115px;--min-width:1040px"><div class="data-row data-head"><div>Application</div><div>Catégorie</div><div>UID</div><div>Niveau</div><div>Permissions</div><div>Trackers</div><div>Action</div></div></div></div>
-          <div class="data-body-scroll" data-sync-body="apps"><div class="data-table" style="--cols:220px 135px 95px 115px 145px 120px 115px;--min-width:1040px" id="apps-body"></div></div>
+          <div class="data-body-scroll" data-sync-body="apps"><div class="data-table" style="--cols:220px 135px 95px 115px 145px 120px 115px;--min-width:1040px" id="apps-body"><div class="data-row data"><div class="data-cell inline-app"><span class="badge-a" style="color:#d065ff">A5</span>Shizuku</div><div class="data-cell">Utilisateur</div><div class="data-cell">10481</div><div class="data-cell"><span class="badge-a" style="color:#d065ff">A5</span></div><div class="data-cell">8 sensibles</div><div class="data-cell">0</div><div class="data-cell"><button>Réglages</button></div></div>
+<div class="data-row data"><div class="data-cell inline-app"><span class="badge-a" style="color:#d065ff">A5</span>Samsung Notes</div><div class="data-cell">Système</div><div class="data-cell">10084</div><div class="data-cell"><span class="badge-a" style="color:#d065ff">A5</span></div><div class="data-cell">12 sensibles</div><div class="data-cell">0</div><div class="data-cell"><button>Réglages</button></div></div>
+<div class="data-row data"><div class="data-cell inline-app"><span class="badge-a" style="color:#ff636e">A4</span>Application exemple</div><div class="data-cell">Utilisateur</div><div class="data-cell">10260</div><div class="data-cell"><span class="badge-a" style="color:#ff636e">A4</span></div><div class="data-cell">6 sensibles</div><div class="data-cell">2</div><div class="data-cell"><button>Réglages</button></div></div>
+<div class="data-row data"><div class="data-cell inline-app"><span class="badge-a" style="color:#d065ff">A5</span>Service Android</div><div class="data-cell">Android</div><div class="data-cell">1000</div><div class="data-cell"><span class="badge-a" style="color:#d065ff">A5</span></div><div class="data-cell">18 sensibles</div><div class="data-cell">—</div><div class="data-cell"><button>Détail</button></div></div>
+<div class="data-row data"><div class="data-cell inline-app"><span class="badge-a" style="color:#65df70">A1</span>Application locale</div><div class="data-cell">Utilisateur</div><div class="data-cell">10432</div><div class="data-cell"><span class="badge-a" style="color:#65df70">A1</span></div><div class="data-cell">3 visibles</div><div class="data-cell">0</div><div class="data-cell"><button>Réglages</button></div></div></div></div>
         </div>
         <div class="pagination"><button>← Précédent</button><span>Page 1 / 12</span><button>Suivant →</button></div>
         <div class="table-status"><span class="dot"></span><span>Shizuku : prêt à lancer le nettoyage admissible et à vérifier le résultat réel après chaque tentative.</span></div>
@@ -582,165 +626,106 @@ button{touch-action:manipulation}
 </div>
 
 <script>
-const pages=[...document.querySelectorAll('.page')];
-document.querySelectorAll('.nav button').forEach(button=>{
-  button.addEventListener('click',()=>{
-    document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b===button));
-    pages.forEach(p=>p.classList.toggle('active',p.id==='page-'+button.dataset.page));
-    window.scrollTo({top:0,behavior:'smooth'});
-  });
-});
+(function(){
+  var pages=document.querySelectorAll('.page');
+  var navButtons=document.querySelectorAll('.nav button');
+  var i;
 
-const demoApps={
-  android:[
-    {name:'UID 1000 / Android',pkg:'attribution non unique',level:'A5'},
-    {name:'Service système exemple',pkg:'com.android.example',level:'A4'},
-    {name:'Composant non attribué',pkg:'UID partagé',level:'A3'}
-  ],
-  system:[
-    {name:'Application système exemple',pkg:'com.vendor.system',level:'A5'},
-    {name:'Service préinstallé exemple',pkg:'com.vendor.service',level:'A4'},
-    {name:'Outil système exemple',pkg:'com.vendor.tool',level:'A2'}
-  ],
-  user:[
-    {name:'Application utilisateur exemple',pkg:'com.example.user',level:'A3'},
-    {name:'Application locale exemple',pkg:'com.example.local',level:'A1'},
-    {name:'Application réseau exemple',pkg:'com.example.net',level:'A4'}
-  ]
-};
-const tone={A1:'#65df70',A2:'#f3d65a',A3:'#f7a34f',A4:'#ff636e',A5:'#d065ff'};
-document.querySelectorAll('.group-card').forEach(card=>card.addEventListener('click',()=>{
-  const group=card.dataset.group;
-  document.querySelectorAll('.group-card').forEach(c=>c.setAttribute('aria-pressed',String(c===card)));
-  const panel=document.getElementById('app-panel'),list=document.getElementById('app-list');
-  panel.hidden=false;
-  document.getElementById('app-panel-title').textContent={android:'Android',system:'Système',user:'Utilisateur'}[group];
-  list.replaceChildren();
-  for(const app of demoApps[group]){
-    const row=document.createElement('div');row.className='app-row';
-    const info=document.createElement('div');info.innerHTML='<strong>'+app.name+'</strong><small>'+app.pkg+'</small>';
-    const pill=document.createElement('span');pill.className='level-pill';pill.textContent=app.level;pill.style.color=tone[app.level];
-    const action=document.createElement('button');action.className='quick';action.textContent='Réglages';action.title='Dans l’APK, ce bouton ouvrira la page Android pertinente.';
-    row.append(pill,info,action);list.append(row);
+  function showPage(name){
+    for(i=0;i<pages.length;i++) pages[i].classList.toggle('active',pages[i].id==='page-'+name);
+    for(i=0;i<navButtons.length;i++) navButtons[i].classList.toggle('active',navButtons[i].getAttribute('data-page')===name);
+    window.scrollTo(0,0);
   }
-  panel.scrollIntoView({behavior:'smooth',block:'nearest'});
-}));
-
-const journalRows=[
-  {time:'16:16:18.303',app:'Shizuku',uid:'—',event:'CLEANUP_PERMISSION',target:'android.permission.WRITE_SECURE_SETTINGS',tracker:'—',state:'still_granted',level:'A5'},
-  {time:'16:15:02.901',app:'Application exemple',uid:'10260',event:'Connexion TLS',target:'api.example.net:443',tracker:'Tracker exemple',state:'FIRST_SEEN',level:'A4'},
-  {time:'16:14:48.200',app:'Application exemple',uid:'10260',event:'DNS',target:'metrics.example.net',tracker:'SDK exemple',state:'observé',level:'A3'},
-  {time:'16:12:11.020',app:'Service exemple',uid:'1000',event:'Flux réseau',target:'142.250.0.1:443',tracker:'—',state:'non attribuable',level:'A5'},
-  {time:'16:10:39.447',app:'Application locale',uid:'10432',event:'Lecture locale',target:'Aucune destination réseau',tracker:'—',state:'normal',level:'A1'}
-];
-
-function aBadge(level){const x=document.createElement('span');x.className='badge-a';x.textContent=level;x.style.color=tone[level]||'#9fc9e5';return x}
-function cell(text,buttonText){
-  const c=document.createElement('div');c.className='data-cell';
-  if(buttonText){const b=document.createElement('button');b.textContent=text;b.onclick=()=>{const q=document.getElementById('journal-search');if(q){q.value=text;renderJournal();}};c.append(b)}
-  else c.textContent=text;
-  return c;
-}
-const journalBody=document.getElementById('journal-body'),search=document.getElementById('journal-search'),levelSelect=document.getElementById('journal-level'),kindSelect=document.getElementById('journal-kind');
-function renderJournal(){
-  const q=search.value.trim().toLowerCase(),level=levelSelect.value,kind=kindSelect.value;journalBody.replaceChildren();
-  for(const r of journalRows.filter(r=>(!q||Object.values(r).join(' ').toLowerCase().includes(q))&&(!level||r.level===level)&&(!kind||(kind==='tracker'&&r.tracker!=='—')||(kind==='first_seen'&&r.state==='FIRST_SEEN')||(kind==='shizuku'&&r.app==='Shizuku')))){
-    const row=document.createElement('div');row.className='data-row data';
-    row.append(cell(r.time));
-    const app=cell('');app.classList.add('inline-app');app.append(aBadge(r.level));const b=document.createElement('button');b.textContent=r.app;b.onclick=()=>{search.value=r.app;renderJournal()};app.append(b);row.append(app);
-    row.append(cell(r.uid,r.uid!=='—'),cell(r.event),cell(r.target,true),cell(r.tracker,r.tracker!=='—'),cell(r.state));journalBody.append(row);
+  for(i=0;i<navButtons.length;i++){
+    navButtons[i].onclick=function(){showPage(this.getAttribute('data-page'));};
   }
-}
-search.addEventListener('input',renderJournal);levelSelect.addEventListener('change',renderJournal);kindSelect.addEventListener('change',renderJournal);renderJournal();
 
-const flowRows=[
-  ['16:15:02','Application exemple','10260','TCP','34.120.12.8:443','api.example.net','Tracker exemple','84 KB','A4'],
-  ['16:14:48','Application exemple','10260','DNS','8.8.8.8:53','metrics.example.net','SDK exemple','2 KB','A3'],
-  ['16:12:11','Service exemple','1000','TCP','142.250.0.1:443','—','—','1.4 MB','A5'],
-  ['16:10:39','Application locale','10432','UDP','224.0.0.251:5353','local','—','4 KB','A1']
-];
-const flowsBody=document.getElementById('flows-body');
-for(const r of flowRows){const row=document.createElement('div');row.className='data-row data';r.slice(0,8).forEach((v,i)=>{if(i===1){const c=cell('');c.classList.add('inline-app');c.append(aBadge(r[8]),document.createTextNode(v));row.append(c)}else row.append(cell(v))});flowsBody.append(row)}
-
-const anomalyRows=[
-  ['16:15:02','Application exemple','FIRST_SEEN','Nouvelle destination + tracker','api.example.net / Tracker exemple','Nouveau','A4'],
-  ['16:12:11','Service exemple','ATTRIBUTION','UID système non attribuable','UID 1000 · trafic TLS','À revoir','A5'],
-  ['16:08:55','Application réseau','VOLUME','Volume supérieur à l’habitude','312 MB / fenêtre 5 min','Corrélé','A4'],
-  ['15:59:13','Application locale','PERMISSION','Permission sensible observée','WRITE_SETTINGS','Connu','A3']
-];
-const anomalyBody=document.getElementById('anomaly-body');
-for(const r of anomalyRows){const row=document.createElement('div');row.className='data-row data';r.forEach((v,i)=>{if(i===1){const c=cell('');c.classList.add('inline-app');c.append(aBadge(r[6]),document.createTextNode(v));row.append(c)}else if(i!==6)row.append(cell(v))});const lvl=cell('');lvl.append(aBadge(r[6]));row.append(lvl);anomalyBody.append(row)}
-
-const appRows=[
-  ['Shizuku','Utilisateur','10481','A5','8 sensibles','0','Réglages'],
-  ['Samsung Notes','Système','10084','A5','12 sensibles','0','Réglages'],
-  ['Application exemple','Utilisateur','10260','A4','6 sensibles','2','Réglages'],
-  ['Service Android','Android','1000','A5','18 sensibles','—','Détail'],
-  ['Application locale','Utilisateur','10432','A1','3 visibles','0','Réglages']
-];
-const appsBody=document.getElementById('apps-body');
-for(const r of appRows){const row=document.createElement('div');row.className='data-row data';r.forEach((v,i)=>{if(i===0){const c=cell('');c.classList.add('inline-app');c.append(aBadge(r[3]),document.createTextNode(v));row.append(c)}else if(i===3){const c=cell('');c.append(aBadge(v));row.append(c)}else if(i===6){const c=cell('');const b=document.createElement('button');b.textContent=v;b.style.color='#9ed5ff';c.append(b);row.append(c)}else row.append(cell(v))});appsBody.append(row)}
-
-// Horizontal header/body synchronization for every table.
-document.querySelectorAll('[data-sync-body]').forEach(body=>{
-  const key=body.dataset.syncBody,head=document.querySelector('[data-sync-head="'+key+'"]');
-  body.addEventListener('scroll',()=>{if(head)head.scrollLeft=body.scrollLeft},{passive:true});
-});
-
-function showToast(message){
-  const t=document.getElementById('toast');t.textContent=message;t.classList.add('show');clearTimeout(showToast.timer);showToast.timer=setTimeout(()=>t.classList.remove('show'),1900);
-}
-document.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click',()=>{
-  const labels={
-    'journal-refresh':'Journal actualisé · dernière page rechargée.',
-    'collector-start':'Collecte continue relancée.',
-    'journal-export':'Export du journal.',
-    'flows-refresh':'Flux actualisés.',
-    'tracker-resume':'Analyse tracker reprise.',
-    'flows-export':'Export des flux.',
-    'analysis-refresh':'Anomalies actualisées.',
-    'analysis-resume':'Analyse AIV reprise.',
-    'analysis-export':'Export des anomalies.',
-    'inventory-refresh':'Inventaire des permissions relancé.',
-    'shizuku-run':'Nettoyage Shizuku A4/A5 lancé.',
-    'shizuku-restore':'Restauration du dernier nettoyage demandée.',
-    'apps-export':'Export de l’inventaire.'
+  var demoApps={
+    android:[['A5','UID 1000 / Android','attribution non unique'],['A4','Service système exemple','com.android.example'],['A3','Composant non attribué','UID partagé']],
+    system:[['A5','Application système exemple','com.vendor.system'],['A4','Service préinstallé exemple','com.vendor.service'],['A2','Outil système exemple','com.vendor.tool']],
+    user:[['A3','Application utilisateur exemple','com.example.user'],['A1','Application locale exemple','com.example.local'],['A4','Application réseau exemple','com.example.net']]
   };
-  showToast(labels[b.dataset.action]||'Action déclenchée.');
-}));
+  var tone={A1:'#65df70',A2:'#f3d65a',A3:'#f7a34f',A4:'#ff636e',A5:'#d065ff'};
+  var cards=document.querySelectorAll('.group-card');
+  for(i=0;i<cards.length;i++){
+    cards[i].onclick=function(){
+      var group=this.getAttribute('data-group'),panel=document.getElementById('app-panel'),list=document.getElementById('app-list');
+      var j,row,info,pill,action;
+      for(j=0;j<cards.length;j++) cards[j].setAttribute('aria-pressed',cards[j]===this?'true':'false');
+      panel.hidden=false;document.getElementById('app-panel-title').textContent={android:'Android',system:'Système',user:'Utilisateur'}[group];
+      list.innerHTML='';
+      for(j=0;j<demoApps[group].length;j++){
+        row=document.createElement('div');row.className='app-row';
+        pill=document.createElement('span');pill.className='level-pill';pill.textContent=demoApps[group][j][0];pill.style.color=tone[demoApps[group][j][0]];
+        info=document.createElement('div');info.innerHTML='<strong>'+demoApps[group][j][1]+'</strong><small>'+demoApps[group][j][2]+'</small>';
+        action=document.createElement('button');action.className='quick';action.textContent='Réglages';
+        row.appendChild(pill);row.appendChild(info);row.appendChild(action);list.appendChild(row);
+      }
+      panel.scrollIntoView(false);
+    };
+  }
 
-// Settings sub-pages and local JSON preview.
-const settingsButtons=[...document.querySelectorAll('[data-settings]')];
-function showSettings(name){
-  settingsButtons.forEach(b=>b.classList.toggle('active',b.dataset.settings===name));
-  document.querySelectorAll('.settings-pane').forEach(p=>p.classList.toggle('active',p.id==='settings-'+name));
-  if(name==='json')generateJson();
-}
-settingsButtons.forEach(b=>b.addEventListener('click',()=>showSettings(b.dataset.settings)));
-function generateJson(){
-  const a=[...document.querySelectorAll('#a-rules .rule-row')].map((row,i)=>({id:'A'+(i+1),enabled:row.querySelector('input[type="checkbox"]').checked,label:row.querySelector('input[type="text"]').value})).filter(x=>x.enabled);
-  const r=[...document.querySelectorAll('#r-rules .rule-row')].map((row,i)=>{
-    const select=row.querySelector('select');
-    return {id:'R'+(i+1),enabled:row.querySelector('input[type="checkbox"]').checked,label:select.options[select.selectedIndex].text,trigger:select.value};
-  }).filter(x=>x.enabled);
-  document.getElementById('json-output').value=JSON.stringify({schema:'aiv-ui-rules-prototype/1',authorizations:a,rules:r},null,2);
-}
-document.querySelectorAll('[data-go-json]').forEach(b=>b.addEventListener('click',()=>showSettings('json')));
-document.getElementById('generate-json').addEventListener('click',generateJson);
-generateJson();
+  var search=document.getElementById('journal-search'),level=document.getElementById('journal-level'),kind=document.getElementById('journal-kind');
+  function filterJournal(){
+    var q=(search.value||'').toLowerCase(),rows=document.querySelectorAll('#journal-body .data-row'),j,text,ok;
+    for(j=0;j<rows.length;j++){
+      text=(rows[j].getAttribute('data-search')||rows[j].textContent||'').toLowerCase();
+      ok=!q||text.indexOf(q)>=0;
+      if(level.value) ok=ok&&text.indexOf(level.value.toLowerCase())>=0;
+      if(kind.value==='tracker') ok=ok&&text.indexOf('tracker')>=0;
+      if(kind.value==='first_seen') ok=ok&&text.indexOf('first_seen')>=0;
+      if(kind.value==='shizuku') ok=ok&&text.indexOf('shizuku')>=0;
+      rows[j].style.display=ok?'grid':'none';
+    }
+  }
+  search.oninput=filterJournal;level.onchange=filterJournal;kind.onchange=filterJournal;
+  var filterButtons=document.querySelectorAll('[data-filter]');
+  for(i=0;i<filterButtons.length;i++) filterButtons[i].onclick=function(){search.value=this.getAttribute('data-filter');filterJournal();};
 
-// Only the main header stays. Controls scroll away; the table category row stays against the header.
-const headerStack=document.getElementById('header-stack');
-function updateStickyStack(){
-  document.documentElement.style.setProperty('--header-stack-height',headerStack.getBoundingClientRect().height+'px');
-}
-updateStickyStack();
-new ResizeObserver(updateStickyStack).observe(headerStack);
-window.addEventListener('resize',updateStickyStack,{passive:true});
+  var settingsButtons=document.querySelectorAll('[data-settings]');
+  function showSettings(name){
+    var panes=document.querySelectorAll('.settings-pane'),j;
+    for(j=0;j<settingsButtons.length;j++) settingsButtons[j].classList.toggle('active',settingsButtons[j].getAttribute('data-settings')===name);
+    for(j=0;j<panes.length;j++) panes[j].classList.toggle('active',panes[j].id==='settings-'+name);
+    if(name==='json') generateJson();
+  }
+  for(i=0;i<settingsButtons.length;i++) settingsButtons[i].onclick=function(){showSettings(this.getAttribute('data-settings'));};
 
-const backTop=document.getElementById('back-top');
-window.addEventListener('scroll',()=>backTop.classList.toggle('show',window.scrollY>180),{passive:true});
-backTop.addEventListener('click',()=>window.scrollTo({top:0,behavior:'smooth'}));
+  function generateJson(){
+    var out={schema:'aiv-ui-rules-prototype/1',authorizations:[],rules:[]},rows=document.querySelectorAll('#a-rules .rule-row'),j,c,input,select;
+    for(j=0;j<rows.length;j++){c=rows[j].querySelector('input[type="checkbox"]');input=rows[j].querySelector('input[type="text"]');if(c.checked)out.authorizations.push({id:'A'+(j+1),enabled:true,label:input.value});}
+    rows=document.querySelectorAll('#r-rules .rule-row');
+    for(j=0;j<rows.length;j++){c=rows[j].querySelector('input[type="checkbox"]');select=rows[j].querySelector('select');if(c.checked)out.rules.push({id:'R'+(j+1),enabled:true,label:select.options[select.selectedIndex].text,trigger:select.value});}
+    document.getElementById('json-output').value=JSON.stringify(out,null,2);
+  }
+  var goJson=document.querySelectorAll('[data-go-json]');
+  for(i=0;i<goJson.length;i++)goJson[i].onclick=function(){showSettings('json');};
+  document.getElementById('generate-json').onclick=generateJson;generateJson();
+
+  function syncTables(){
+    var bodies=document.querySelectorAll('[data-sync-body]'),j,key,head;
+    for(j=0;j<bodies.length;j++){
+      (function(body){
+        key=body.getAttribute('data-sync-body');head=document.querySelector('[data-sync-head="'+key+'"]');
+        body.onscroll=function(){if(head)head.scrollLeft=body.scrollLeft;};
+      })(bodies[j]);
+    }
+  }
+  syncTables();
+
+  var header=document.getElementById('header-stack');
+  function sizeHeader(){document.documentElement.style.setProperty('--header-stack-height',header.offsetHeight+'px');}
+  sizeHeader();window.onresize=sizeHeader;
+
+  var toast=document.getElementById('toast');
+  function notify(message){toast.textContent=message;toast.classList.add('show');setTimeout(function(){toast.classList.remove('show');},1600);}
+  var actions=document.querySelectorAll('[data-action]');
+  for(i=0;i<actions.length;i++)actions[i].onclick=function(){notify(this.textContent.replace(/^\s*[↻▶↶]\s*/,'')+' · prototype');};
+
+  var back=document.getElementById('back-top');
+  window.onscroll=function(){back.classList.toggle('show',window.pageYOffset>180);};
+  back.onclick=function(){window.scrollTo(0,0);};
+})();
 </script>
 </body>
 </html>
