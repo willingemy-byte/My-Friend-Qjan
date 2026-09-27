@@ -152,8 +152,12 @@ public final class ShizukuCleanup {
         }
         snapshot.put("finished_ms",System.currentTimeMillis()).put("attempted",attempted).put("changed",changed).put("failed",failed).put("skipped",skipped);
         writeSnapshot(c,snapshot);
-        PermissionAudit.get(c).scan();
-        status="Nettoyage terminé : "+changed+" droit(s) retiré(s) sur "+attempted+" tentative(s), "+failed+" échec(s), "+candidateCount+" app(s) admissible(s)";
+        if(changed>0){
+            status="Nettoyage terminé : "+changed+" droit(s) retiré(s) · actualisation de l’inventaire";
+            PermissionAudit.get(c).scan();
+        }else{
+            status="Nettoyage terminé : aucun droit modifié; inventaire inchangé";
+        }
         log(c,"CLEANUP_DONE",EventStore.object("candidates",candidateCount,"attempted",attempted,"changed",changed,"failed",failed,"skipped",skipped,"snapshot",snapshotFile(c).getAbsolutePath()));
     }
 
@@ -168,8 +172,12 @@ public final class ShizukuCleanup {
             try{ExecResult r=exec(inverse);if(r.code==0)restored++;else failed++;log(c,"CLEANUP_RESTORE",EventStore.object("package",change.optString("package"),"name",change.optString("name"),"exit",r.code,"stderr",r.err));}
             catch(Throwable t){failed++;log(c,"CLEANUP_RESTORE_ERROR",EventStore.object("package",change.optString("package"),"name",change.optString("name"),"error",t.getClass().getSimpleName()));}
         }
-        PermissionAudit.get(c).scan();
-        status="Restauration terminée : "+restored+" restauré(s), "+failed+" échec(s)";
+        if(restored>0){
+            status="Restauration terminée : "+restored+" droit(s) restauré(s) · actualisation de l’inventaire";
+            PermissionAudit.get(c).scan();
+        }else{
+            status="Restauration terminée : aucun droit restauré";
+        }
         return result.put("finished_ms",System.currentTimeMillis()).put("restored",restored).put("failed",failed);
     }
 
