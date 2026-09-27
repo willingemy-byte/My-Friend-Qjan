@@ -42,6 +42,20 @@ jobs:
       - name: Regression tests
         run: bash aiv-v19/tests/run-v23.sh
 
+      - name: Full UI regression checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'aiv-level-pie' aiv-v19/app/src/main/assets/journal.html
+          grep -q 'Règles et seuils' aiv-v19/app/src/main/assets/journal.html
+          grep -q 'Barème et formules' aiv-v19/app/src/main/assets/journal.html
+          grep -q 'jc-pagination' aiv-v19/app/src/main/assets/journal.html
+          grep -q 'jc-analysis-pagination' aiv-v19/app/src/main/assets/journal.html
+          grep -q 'jc-shizuku-run' aiv-v19/app/src/main/assets/journal.html
+          grep -q 'renderPenaltySettings' aiv-v19/app/src/main/assets/journal.html
+          grep -q 'Applications' aiv-v19/app/src/main/assets/journal.html
+          grep -q 'Référentiels' aiv-v19/app/src/main/assets/journal.html
+
       - name: Verify V30 package
         shell: bash
         run: |
