@@ -12,6 +12,111 @@ button,.button,[role="button"]{border-radius:14px!important}
 #jc-reader .ja-gray,#jc-reader [data-penalty-color="gray"]{border-color:#a6a9ad}
 #jc-reader [data-penalty-color="gray"].jc-score-ring,#jc-reader [data-penalty-color="gray"].jc-group-disc{background:#797c82}
 </style>
+
+<style id="aiv-v31-visual">
+:root{
+  --aiv-v31-bg:#050a12;--aiv-v31-panel:#0b1624;--aiv-v31-panel2:#101f31;--aiv-v31-line:#29435f;
+  --aiv-v31-text:#f2f7ff;--aiv-v31-muted:#a9bbcf;--aiv-v31-blue:#4d8fff;--aiv-v31-blue2:#78adff;
+  --aiv-v31-watch:#d94cff;--aiv-v31-green:#48d597;--aiv-v31-yellow:#f0cf5a;--aiv-v31-orange:#ff9f43;--aiv-v31-red:#ff5c6c;
+}
+html,body{background:var(--aiv-v31-bg)!important;color:var(--aiv-v31-text)!important}
+body{padding:0!important;font-size:16px!important}
+main{max-width:1120px!important;padding:0 10px 34px!important}
+#jc-reader{
+  --jc-bg:#07101b;--jc-ink:var(--aiv-v31-text);--jc-sub:var(--aiv-v31-muted);--jc-line:var(--aiv-v31-line);
+  --jc-accent:var(--aiv-v31-blue);--jc-wash:#12243b;--jc-paper:#0c1826;--jc-warn:var(--aiv-v31-yellow);--jc-danger:var(--aiv-v31-red);
+  border-color:#20364f!important;border-radius:0 0 18px 18px!important;background:#07101b!important;
+}
+#jc-reader .jc-top{
+  min-height:86px!important;padding:calc(env(safe-area-inset-top,0px) + 14px) 18px 16px!important;
+  gap:14px!important;background:linear-gradient(180deg,#09182a,#07111d)!important;border-bottom:1px solid #29435f!important;
+}
+#jc-reader .jc-top h2{font-size:1.35rem!important;line-height:1.15!important}
+#jc-reader .jc-top p{font-size:.92rem!important;color:var(--aiv-v31-muted)!important}
+#jc-reader .jc-mark{width:52px!important;height:52px!important;border-radius:14px!important;background:#112943!important;color:var(--aiv-v31-blue2)!important;font-size:1.05rem!important}
+#jc-reader button,#jc-reader select,#jc-reader input,#jc-reader textarea{font-size:.98rem!important}
+#jc-reader button{min-height:48px!important;padding:10px 14px!important;border-color:#2a4562!important}
+#jc-reader .jc-user-nav{position:sticky;top:0;z-index:30;padding:8px 6px!important;gap:4px!important;background:#07111df2!important;backdrop-filter:blur(14px)}
+#jc-reader .jc-user-nav button{min-height:46px!important;font-size:.86rem!important;font-weight:700!important}
+#jc-reader .jc-user-nav button[aria-pressed="true"]{background:#142a45!important;color:#8db9ff!important;border-color:#365f91!important}
+#jc-reader .jc-pane{padding:20px 16px!important}
+#jc-reader h2{font-size:1.38rem!important} #jc-reader h3{font-size:1.08rem!important}
+#jc-reader .jc-sub{font-size:.9rem!important;line-height:1.45!important}
+
+#jc-reader .jc-home-hero{text-align:left!important;padding-top:8px!important}
+#jc-reader .jc-home-eyebrow{color:#8db9ff!important;font-size:.78rem!important}
+#jc-reader .jc-overview-grid{display:grid;grid-template-columns:minmax(170px,44%) minmax(0,1fr);gap:18px;align-items:center;margin:8px 0 18px}
+#jc-reader .jc-score-column{display:grid;justify-items:center;gap:8px}
+#jc-reader[data-view-mode="user"] .jc-score-ring,#jc-reader .jc-score-ring{
+  width:min(42vw,210px)!important;height:min(42vw,210px)!important;margin:0!important;border:1px solid rgba(255,255,255,.08)!important;
+  box-shadow:0 12px 32px rgba(0,0,0,.26)!important;overflow:hidden!important;
+}
+#jc-reader .jc-score-ring::before,#jc-reader .jc-score-ring::after,#jc-reader .jc-group-disc::before,#jc-reader .jc-group-disc::after{display:none!important}
+#jc-reader .jc-score-inner{background:rgba(4,9,16,.68)!important;border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:8px 10px;min-width:92px;text-shadow:0 1px 3px #000}
+#jc-reader #jc-score-number{font-size:2.55rem!important;color:#fff!important;max-width:none!important}
+#jc-reader .jc-score-label{font-size:.72rem!important;color:#dce9fb!important;margin-top:4px!important}
+#jc-reader .jc-pie-caption{font-size:.78rem;color:var(--aiv-v31-muted);text-align:center}
+#jc-reader .jc-level-legend{display:grid;gap:8px}
+#jc-reader .jc-level-item{display:grid;grid-template-columns:12px auto 1fr;gap:8px;align-items:center;padding:7px 8px;border:1px solid #203852;border-radius:9px;background:#0a1623}
+#jc-reader .jc-level-dot{width:11px;height:11px;border-radius:50%}
+#jc-reader .jc-level-item strong{font-size:.82rem}
+#jc-reader .jc-level-item span:last-child{font-size:.76rem;color:var(--aiv-v31-muted);line-height:1.3}
+#jc-reader .jc-level-count{justify-self:end;color:#fff!important;font-variant-numeric:tabular-nums}
+#jc-reader .jc-group-rings{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:10px!important;max-width:760px!important;margin:16px auto 18px!important}
+#jc-reader .jc-group-card{padding:12px 8px!important;gap:8px!important;border-radius:14px!important;background:#0b1725!important}
+#jc-reader .jc-group-card>strong{font-size:.95rem!important}
+#jc-reader .jc-group-disc{width:100%!important;max-width:150px!important;aspect-ratio:1!important;margin:0!important;border:1px solid rgba(255,255,255,.08);overflow:hidden}
+#jc-reader .jc-v31-pie-center{position:relative;z-index:3;display:grid;place-items:center;align-content:center;min-width:70px;min-height:50px;padding:6px 8px;border-radius:10px;background:rgba(4,9,16,.66);color:#fff;text-shadow:0 1px 2px #000}
+#jc-reader .jc-v31-pie-center strong{font-size:1.35rem!important}
+#jc-reader .jc-v31-pie-center small{font-size:.64rem;color:#dce9fb}
+#jc-reader .jc-group-meta{font-size:.68rem!important;color:#b5c6da!important}
+#jc-reader .jc-home-title{font-size:1.15rem!important;text-align:left!important;margin-top:10px!important}
+#jc-reader .jc-home-sub{text-align:left!important;max-width:none!important}
+#jc-reader [data-penalty-color="gray"],#jc-reader .ja-gray{border-color:var(--aiv-v31-watch)!important;color:#f0b7ff!important}
+#jc-reader .jc-home-app[data-penalty-color="gray"]{border-left:4px solid var(--aiv-v31-watch)!important}
+#jc-reader .jc-home-app{font-size:.95rem!important;padding:13px!important}
+#jc-reader .jc-home-impact{font-size:.9rem!important}
+#jc-reader .jp-app-multiplier{display:none!important}
+
+#jc-reader .jc-journal-table-wrap{overflow-x:auto;border:1px solid #223a55;border-radius:12px;background:#08131f;margin-top:12px}
+#jc-reader .jc-journal-head,#jc-reader .jc-journal-row{
+  display:grid;grid-template-columns:126px minmax(170px,1.35fr) 86px minmax(180px,1.4fr) minmax(180px,1.3fr) minmax(145px,1.05fr) 96px 54px;
+  min-width:1080px;align-items:center
+}
+#jc-reader .jc-journal-head{position:sticky;top:0;z-index:4;background:#10243a;color:#cfe0f6;font-size:.73rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid #31506f}
+#jc-reader .jc-journal-head>span,#jc-reader .jc-journal-cell{padding:9px 10px;border-right:1px solid rgba(80,117,153,.22);min-width:0}
+#jc-reader .jc-journal-row{border-bottom:1px solid rgba(76,107,137,.24);background:#091522}
+#jc-reader .jc-journal-row:nth-child(even){background:#0b1826}
+#jc-reader .jc-journal-row:last-child{border-bottom:0}
+#jc-reader .jc-journal-row.jc-has-tracker{box-shadow:inset 4px 0 0 var(--aiv-v31-watch);background:linear-gradient(90deg,rgba(217,76,255,.105),#0a1724 28%)}
+#jc-reader .jc-journal-cell{font-size:.82rem;overflow-wrap:anywhere}
+#jc-reader .jc-journal-cell button{min-height:34px!important;padding:5px 7px!important;border:0!important;background:transparent!important;text-align:left;color:inherit;border-radius:7px!important;width:100%}
+#jc-reader .jc-journal-cell button:hover{background:#142942!important}
+#jc-reader .jc-journal-time{font-variant-numeric:tabular-nums;color:#b7c9dc}
+#jc-reader .jc-tracker-chip{display:inline-flex!important;align-items:center;gap:5px;width:auto!important;color:#f0b7ff!important;border:1px solid rgba(217,76,255,.48)!important;background:rgba(217,76,255,.11)!important;font-weight:800}
+#jc-reader .jc-tracker-none{color:#687f98}
+#jc-reader .jc-detail-open{font-size:1.15rem!important;text-align:center!important;color:#9fc2ff!important}
+#jc-reader .jc-pagination{position:sticky;bottom:8px;z-index:12;margin:14px auto 0;padding:10px!important;border:1px solid #2c4a68;border-radius:12px;background:#091724f2;backdrop-filter:blur(12px);justify-content:center!important}
+#jc-reader .jc-pagination button{min-width:126px}
+#jc-reader #jc-page{min-width:110px;text-align:center;font-weight:800;color:#dce9fb}
+#jc-reader #jc-shizuku-cleanup{border-color:#395b80!important;background:#0a1725!important}
+#jc-reader #jc-shizuku-run{background:#173967!important;color:#fff!important;border-color:#4d8fff!important}
+#jc-reader .jc-menu-card{min-height:110px!important;padding:16px!important}
+#jc-reader #jc-pane-penalty>#jp-controls{display:none!important}
+@media(max-width:620px){
+  #jc-reader .jc-overview-grid{grid-template-columns:46% 1fr;gap:10px}
+  #jc-reader .jc-level-item{grid-template-columns:10px auto 1fr;padding:6px}
+  #jc-reader .jc-level-item span:last-child{font-size:.67rem}
+  #jc-reader .jc-group-rings{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:6px!important}
+  #jc-reader .jc-group-card{padding:9px 4px!important}
+  #jc-reader .jc-group-disc{max-width:112px!important}
+  #jc-reader .jc-group-card>strong{font-size:.8rem!important}
+  #jc-reader .jc-group-meta{font-size:.58rem!important}
+  #jc-reader .jc-user-nav{overflow-x:auto}
+  #jc-reader .jc-user-nav button{flex:0 0 auto!important;min-width:92px}
+}
+</style>
+
 </head><body><main><style>
 #jc-reader { --jc-bg:light-dark(#fbfcfc,#151a1b); --jc-ink:light-dark(#202b2c,#edf4f2); --jc-sub:light-dark(#506565,#b4c6c4); --jc-line:light-dark(#d6e2df,#364845); --jc-accent:light-dark(#096558,#81dbc4); --jc-wash:light-dark(#e9f5f0,#223c35); --jc-paper:light-dark(#ffffff,#1c2425); --jc-warn:light-dark(#8c570f,#f3c680); --jc-danger:light-dark(#a32336,#ffadb8); color:var(--jc-ink); background:var(--jc-bg); border:1px solid var(--jc-line); border-radius:18px; font-family:system-ui,sans-serif; overflow-wrap:anywhere; color-scheme:light dark; }
 #jc-reader * { box-sizing:border-box; }
@@ -267,10 +372,22 @@ button,.button,[role="button"]{border-radius:14px!important}
     <div class="jc-mode-banner" id="jc-mode-banner"><strong>Vue utilisateur.</strong> Les valeurs affichées proviennent des données locales disponibles sur ce téléphone.</div>
     <div class="jc-home-hero">
       <div class="jc-home-eyebrow" id="jc-home-eyebrow">Écarts moyens de visibilité</div>
-      <div class="jc-score-ring jc-legacy-ring" id="jc-score-ring" role="img" aria-label="Indice de cohérence en attente de données">
-        <div class="jc-score-inner"><div class="jc-score-number" id="jc-score-number">—</div><div class="jc-score-label" id="jc-score-label">moyenne par application</div></div>
+      <div class="jc-overview-grid">
+        <div class="jc-score-column">
+          <div class="jc-score-ring jc-legacy-ring" id="jc-score-ring" role="button" tabindex="0" aria-label="Répartition globale des permissions L1 à L5">
+            <div class="jc-score-inner"><div class="jc-score-number" id="jc-score-number">—</div><div class="jc-score-label" id="jc-score-label">permissions classées</div></div>
+          </div>
+          <div class="jc-pie-caption">Téléphone complet</div>
+        </div>
+        <div class="jc-level-legend" id="jc-level-legend" aria-label="Légende des niveaux">
+          <div class="jc-level-item"><span class="jc-level-dot" style="background:#48d597"></span><strong>L1</strong><span>Visible et concordant</span><span class="jc-level-count" id="jc-l1-count">0</span></div>
+          <div class="jc-level-item"><span class="jc-level-dot" style="background:#f0cf5a"></span><strong>L2</strong><span>Moins visible / non déclaré</span><span class="jc-level-count" id="jc-l2-count">0</span></div>
+          <div class="jc-level-item"><span class="jc-level-dot" style="background:#ff9f43"></span><strong>L3</strong><span>Peut agir sans intervention immédiate</span><span class="jc-level-count" id="jc-l3-count">0</span></div>
+          <div class="jc-level-item"><span class="jc-level-dot" style="background:#ff5c6c"></span><strong>L4</strong><span>Avertissement Android / AOSP</span><span class="jc-level-count" id="jc-l4-count">0</span></div>
+          <div class="jc-level-item"><span class="jc-level-dot" style="background:#d94cff"></span><strong>L5</strong><span>Portée système ou autres applications</span><span class="jc-level-count" id="jc-l5-count">0</span></div>
+        </div>
       </div>
-      <div id="jc-group-rings" class="jc-group-rings" aria-label="Scores Android, système et utilisateur"></div>
+      <div id="jc-group-rings" class="jc-group-rings" aria-label="Répartition Android, système et utilisateur"></div>
       <h3 class="jc-home-title" id="jc-home-title">Calcul en attente de données AIV</h3>
       <p class="jc-home-sub" id="jc-home-sub">Ce chiffre documente la cohérence des observations disponibles. Ce n’est pas un verdict de sécurité.</p>
     </div>
@@ -310,7 +427,7 @@ button,.button,[role="button"]{border-radius:14px!important}
       <p class="jc-sub">Toutes les fonctions restent disponibles. L’accueil demeure simple; les outils détaillés sont rangés ici.</p>
     </div>
     <div class="jc-menu-grid">
-      <button type="button" class="jc-menu-card" data-menu-target="penalty"><strong>Barème AIV</strong><span>Multiplicateurs, couleurs, règles et import/export des observations.</span></button>
+      <button type="button" class="jc-menu-card" data-menu-target="penalty"><strong>Règles AIV</strong><span>Niveaux L1–L5, règles personnalisées et configuration avancée.</span></button>
       <button type="button" class="jc-menu-card" data-menu-target="audit"><strong>Applications</strong><span>Inventaire réel, permissions déclarées, comparaison et export journal-autorisations.json.</span></button>
       <button type="button" class="jc-menu-card" data-menu-target="journal"><strong>Journal</strong><span>Chronologie des événements et connexions observées.</span></button>
       <button type="button" class="jc-menu-card" data-menu-target="flows"><strong>Flux</strong><span>Relier directement la sortie et le retour d’une connexion, avec UID, DNS/SNI et volumes observés.</span></button>
@@ -351,8 +468,11 @@ button,.button,[role="button"]{border-radius:14px!important}
     </div>
     <div id="jc-empty" class="jc-empty"><span class="jc-empty-symbol" aria-hidden="true">0</span><h3>Prêt à recevoir ton journal</h3><p>Aucun événement du téléphone reçu. Les permissions Bixby déjà relevées sont consultables dans leur onglet.</p><button type="button" id="jc-see-bixby">Voir les permissions Bixby</button></div>
     <div id="jc-detail" class="jc-detail" hidden></div>
-    <ol id="jc-events" class="jc-events" aria-label="Événements importés"></ol>
-    <div id="jc-pagination" class="jc-pagination" hidden><button type="button" id="jc-prev">Précédent</button><span id="jc-page" class="jc-count"></span><button type="button" id="jc-next">Suivant</button></div>
+    <div class="jc-journal-table-wrap">
+      <div class="jc-journal-head" aria-hidden="true"><span>Heure</span><span>Application</span><span>UID</span><span>Événement</span><span>Destination / IP</span><span>Tracker</span><span>Réseau</span><span></span></div>
+      <ol id="jc-events" class="jc-events" aria-label="Événements importés"></ol>
+    </div>
+    <div id="jc-pagination" class="jc-pagination" hidden><button type="button" id="jc-prev">← Plus récent</button><span id="jc-page" class="jc-count"></span><button type="button" id="jc-next">Plus ancien →</button></div>
     <div id="jc-export-panel" class="jc-form" hidden><div class="jc-row jc-between"><h3>Copie du journal</h3><button type="button" id="jc-export-close">Fermer</button></div><p class="jc-sub">Si le téléchargement est bloqué ici, sélectionne et copie ce contenu pour le conserver.</p><textarea id="jc-export-text" readonly aria-label="Journal complet à copier"></textarea><button type="button" id="jc-select-export">Sélectionner le contenu</button></div>
   </section>
   <section class="jc-pane" id="jc-pane-anomalies" aria-label="Anomalies et traces observables" hidden>
@@ -361,10 +481,10 @@ button,.button,[role="button"]{border-radius:14px!important}
     <p id="jc-analysis-progress" class="jc-sub" role="status" style="margin-top:12px">État de l’analyse…</p>
     <p id="jc-analysis-coverage" class="jc-sub" style="margin-top:8px"></p>
     <div id="jc-shizuku-cleanup" class="jc-form" style="margin-top:12px">
-      <strong>Nettoyage automatique L4/L5</strong>
+      <strong>Nettoyage Shizuku L4/L5 · mode prudent</strong>
       <p id="jc-shizuku-status" class="jc-sub" role="status">État Shizuku…</p>
       <div class="jc-actions">
-        <button type="button" id="jc-shizuku-run" class="jc-primary">Retirer les permissions L4/L5</button>
+        <button type="button" id="jc-shizuku-run" class="jc-primary">Retirer les droits admissibles</button>
         <button type="button" id="jc-shizuku-restore">Restaurer le dernier nettoyage</button>
       </div>
     </div>
@@ -1772,12 +1892,95 @@ if(typeof module!=='undefined')module.exports=PenaltyModel;
   }
   const stableRows=renderRows;
   renderRows=function(rows){stableRows(rows);[...$('jc-events').children].forEach((node,i)=>{if(rows[i])appIdentity(node,rows[i].original);});};
+
+  // V31 first-pass UI: blue palette, permission pies and filterable journal table.
+  const v31LevelColors={1:'#48d597',2:'#f0cf5a',3:'#ff9f43',4:'#ff5c6c',5:'#d94cff'};
+  function v31PermissionDistribution(rows){
+    const counts={1:0,2:0,3:0,4:0,5:0};
+    for(const row of rows||[]){
+      const findings=row&&row.exposure&&Array.isArray(row.exposure.findings)?row.exposure.findings:[];
+      for(const finding of findings){const level=Number(finding.level);if(level>=1&&level<=5)counts[level]++;}
+    }
+    return {counts,total:Object.values(counts).reduce((a,b)=>a+b,0)};
+  }
+  function v31ApplyPie(node,dist){
+    if(!node)return;
+    if(!dist.total){node.style.background='#26384a';return;}
+    let at=0;const parts=[];
+    for(let level=1;level<=5;level++){const count=dist.counts[level]||0;if(!count)continue;const next=at+count/dist.total*360;parts.push(v31LevelColors[level]+' '+at+'deg '+next+'deg');at=next;}
+    node.style.background='conic-gradient('+parts.join(',')+')';
+  }
+  function v31DistributionText(dist){return [1,2,3,4,5].map(n=>'L'+n+' '+(dist.counts[n]||0)).join(' · ');}
+  const v31RenderPenaltyHome=renderPenaltyHome;
+  renderPenaltyHome=function(){
+    v31RenderPenaltyHome();
+    try{
+      const {result:r}=penaltyLoad(),ring=$('jc-score-ring'),global=v31PermissionDistribution(r.apps);
+      v31ApplyPie(ring,global);ring.dataset.penaltyColor='';ring.querySelectorAll('.jp-multiplier').forEach(n=>n.remove());
+      $('jc-score-number').textContent=penaltyNumber(global.total);$('jc-score-label').textContent='permissions classées';
+      $('jc-home-eyebrow').textContent='Répartition des permissions L1–L5';
+      $('jc-home-title').textContent='Vue globale du téléphone';
+      $('jc-home-sub').textContent=v31DistributionText(global)+' · touche Android, Système ou Utilisateur pour filtrer la liste dessous.';
+      for(let n=1;n<=5;n++){const el=$('jc-l'+n+'-count');if(el)el.textContent=penaltyNumber(global.counts[n]||0);}
+      ring.onclick=()=>{homeGroup='all';homeLimit=25;renderPenaltyHome();};ring.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();ring.click();}};
+      const holder=$('jc-group-rings');holder.replaceChildren();
+      for(const group of r.groups){
+        const rows=r.apps.filter(a=>a.group===group.id),dist=v31PermissionDistribution(rows);
+        const b=penaltyButton('',()=>{homeGroup=group.id;homeLimit=25;renderPenaltyHome();});b.className='jc-group-card';b.dataset.group=group.id;b.setAttribute('aria-pressed',String(homeGroup===group.id));
+        const disc=element('span',undefined,'jc-group-disc'),center=element('span',undefined,'jc-v31-pie-center');center.append(element('strong',penaltyNumber(dist.total)),element('small','permissions'));disc.append(center);v31ApplyPie(disc,dist);
+        b.append(element('strong',groupNames[group.id]),disc,element('span',v31DistributionText(dist),'jc-group-meta'));holder.append(b);
+      }
+      $('jc-home-list-title').textContent=(homeGroup==='all'?'Toutes les applications':groupNames[homeGroup])+' · toucher une application pour sa fiche';
+      $('jc-home-alert-title').textContent='Lecture L1–L5';
+      $('jc-home-alert-text').textContent='Les parts représentent les permissions classées dans l’inventaire actuel. L5 est violet dans cette interface; les données source et le classement restent inchangés.';
+      for(const b of $('jc-home-app-list').querySelectorAll('.jc-home-app')){
+        const a=r.apps.find(x=>x.package_name===b.dataset.package),impact=b.querySelector('.jc-home-impact');
+        if(a&&impact){const level=a.exposure?Number(a.exposure.level)||0:0;impact.textContent=level?'L'+level+' · '+(a.exposure.label||'niveau classé'):'Indéterminé';impact.style.setProperty('--home-app-color',level?v31LevelColors[level]:'#79b5dd');if(level===5)b.dataset.penaltyColor='gray';}
+      }
+    }catch(e){/* Preserve the functional V30 home if the visual projection cannot be built. */}
+  };
+
+  function v31JournalFilter(kind,value){
+    if(!value)return;state.page=0;state.selected=null;nativeAnchor=0;
+    if(kind==='app'){
+      const select=$('jc-app'),found=[...select.options].some(o=>o.value===value);
+      if(found){select.value=value;$('jc-search').value='';}else $('jc-search').value=value;
+    }else $('jc-search').value=value;
+    if(nativeBridge)renderNative();else renderJournal();
+  }
+  function v31TrackerInfo(event){
+    if(!nativeBridge||!nativeBridge.trackerMatch)return {host:'',hits:[]};
+    const raw=event.original||{},d=raw.details||{};
+    let host='',kind='TLS_SNI';
+    if(raw.category==='dns'){host=d.question||event.destination||'';kind='DNS_QUERY_ONLY';}
+    else {host=d.tls_sni||'';kind=d.ech_extension_present?'TLS_OUTER_NAME':'TLS_SNI';}
+    if(!host)return {host:'',hits:[]};
+    try{const hits=JSON.parse(nativeBridge.trackerMatch(String(host),kind));return {host,hits:Array.isArray(hits)?hits:[]};}catch(e){return {host,hits:[]};}
+  }
+  renderRows=function(rows){
+    const list=$('jc-events');list.replaceChildren();
+    for(const event of rows){
+      const raw=event.original||{},d=raw.details||{},uid=d.uid??raw.uid,tracker=v31TrackerInfo(event);
+      const li=element('li',undefined,'jc-journal-row');if(tracker.hits.length)li.classList.add('jc-has-tracker');
+      const cell=(cls)=>element('span',undefined,'jc-journal-cell '+(cls||''));
+      const time=cell('jc-journal-time');time.textContent=timeText(event);
+      const app=cell();const appButton=element('button',event.actor||'Acteur inconnu');appButton.type='button';appButton.title='Filtrer le journal sur cette application';appButton.onclick=()=>v31JournalFilter('app',event.actor);app.append(appButton);appIdentity(app,event.original);
+      const uidCell=cell();const uidButton=element('button',uid==null||Number(uid)<0?'—':'UID '+uid);uidButton.type='button';uidButton.title='Filtrer sur cet UID';uidButton.onclick=()=>v31JournalFilter('search',String(uid));uidCell.append(uidButton);
+      const action=cell();action.textContent=event.action||raw.action||'—';
+      const dest=cell();const destButton=element('button',event.destination||'—');destButton.type='button';destButton.title='Filtrer sur cette destination';destButton.onclick=()=>v31JournalFilter('search',event.destination);dest.append(destButton);
+      const trackerCell=cell();if(tracker.hits.length){for(const hit of tracker.hits.slice(0,2)){const tb=element('button',hit.name||('Tracker '+hit.tracker_id),'jc-tracker-chip');tb.type='button';tb.title='Filtrer sur l’hôte observé '+tracker.host;tb.onclick=()=>v31JournalFilter('search',tracker.host);trackerCell.append(tb);}}else trackerCell.append(element('span','—','jc-tracker-none'));
+      const network=cell();network.textContent=event.transport||'—';
+      const detail=cell();const detailButton=element('button','⋯','jc-detail-open');detailButton.type='button';detailButton.setAttribute('aria-label','Afficher le détail de cet événement');detailButton.onclick=()=>{state.selected=event.key;renderDetail();$('jc-detail').scrollIntoView({block:'nearest'});};detail.append(detailButton);
+      li.append(time,app,uidCell,action,dest,trackerCell,network,detail);list.append(li);
+    }
+  };
+
   const nav=root.querySelector('.jc-user-nav');nav.replaceChildren();
   for(const [tab,label] of [['home','Accueil'],['journal','Journal'],['anomalies','Anomalies'],['decisions','Décisions'],['audit','Applications'],['menu','Paramètres']]){
     const b=penaltyButton(label,()=>setTab(tab));b.dataset.jcTab=tab;b.setAttribute('aria-pressed',String(tab==='home'));nav.append(b);
   }
   const menu=$('jc-pane-menu');menu.replaceChildren(element('h2','Paramètres'));
-  for(const [tab,label] of [['penalty','Barème et formules'],['references','Référentiels']]){
+  for(const [tab,label] of [['penalty','Règles et JSON avancé'],['references','Référentiels']]){
     const detail=element('details'),pane=$('jc-pane-'+tab);detail.append(element('summary',label),pane);menu.append(detail);
     detail.addEventListener('toggle',()=>{if(detail.open){pane.hidden=false;if(tab==='penalty')renderPenaltySettings();else renderAivStatus();}});
   }
