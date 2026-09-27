@@ -45,14 +45,14 @@ button,input{font:inherit}
 button{touch-action:manipulation}
 .shell{width:min(100%,980px);margin:0 auto;min-height:100vh;border-inline:1px solid rgba(88,184,255,.07)}
 .header-stack{
-  position:sticky;
-  top:0;
-  z-index:50;
+  position:relative;
+  z-index:40;
   background:transparent;
 }
 .topbar{
-  position:relative;
-  z-index:1;
+  position:sticky;
+  top:0;
+  z-index:50;
   display:grid;
   grid-template-columns:auto 1fr auto;
   gap:11px;
@@ -225,7 +225,7 @@ button{touch-action:manipulation}
 }
 .table-head-scroll{
   position:sticky;
-  top:var(--header-stack-height,108px);
+  top:var(--topbar-height,72px);
   z-index:35;
   overflow:hidden;
   background:#0f2234;
@@ -316,7 +316,7 @@ button{touch-action:manipulation}
 .table-controls{display:grid;grid-template-columns:minmax(130px,1fr) auto auto;gap:6px;margin:0 0 9px}
 .table-controls input,.table-controls select{min-width:0;min-height:36px;border-radius:10px;border:1px solid #284b67;background:#07131f;color:var(--text);padding:6px 8px;font-size:.68rem}
 .data-table-frame{border:1px solid #203d56;border-radius:15px;background:#07111c;overflow:visible}
-.data-head-scroll{position:sticky;top:var(--header-stack-height,108px);z-index:35;overflow:hidden;background:#0f2234;border-bottom:1px solid #315672}
+.data-head-scroll{position:sticky;top:var(--topbar-height,72px);z-index:35;overflow:hidden;background:#0f2234;border-bottom:1px solid #315672}
 .data-body-scroll{overflow-x:auto;overscroll-behavior-x:contain;border-radius:0 0 14px 14px}
 .data-table{min-width:var(--min-width,1080px);border-right:1px solid rgba(80,117,153,.28)}
 .data-row{display:grid;grid-template-columns:var(--cols);align-items:center}
