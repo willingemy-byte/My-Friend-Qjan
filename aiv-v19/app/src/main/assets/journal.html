@@ -1700,14 +1700,15 @@ const PenaltyModel = (() => {
     }
     factors.push(F4<1n?1n:F4);
     const l5=p.multipliers.level5;factors.push(BigInt(counts[5]&&l5.mode!=='disabled'?Math.max(1,l5.mode==='fixed'?l5.fixed:linked.length):1));
-    const multiplier=factors.reduce((s,n)=>s*n,1n),points=H===null?null:BigInt(H)*multiplier;
+    // V32.1: legacy V21 multipliers are retired. A1-A5 exposure is the active model.
+    const multiplier=1n,points=H===null?null:BigInt(H);
     const ratio=H===null?null:selected.value===0?R>0?Infinity:1:R/selected.value;
     const classified=new Set(matched.map(f=>f.permission));const unclassified=[...hiddenNames].filter(n=>!classified.has(n));
     const partial=p.automatic.enabled&&H>0&&(!selected.estimated||unclassified.length>0||a.components_collected!==true);
     const color=H===null||partial&&multiplier===1n?'unknown':H===0?'green':colorFor(multiplier,1n,p);
     return {package_name:a.package_name,label:a.label || a.package_name,uid:a.uid,group:group(a),R,H,V:selected.value,layers,
       routes,unclassified,coverage_partial:partial,components_collected:a.components_collected===true,estimated:selected.estimated===true,multiplier:String(multiplier),share_factors:shareFactors,installed_count:installedCount,points:points === null ? null : points.toString(),ratio:ratio === Infinity ? '∞' : ratio,color,counts,
-      factors:factors.map(String),K:linked.length,linked,matched,excluded,version_code:a.version_code,
+      factors:['1','1','1','1'],K:linked.length,linked,matched,excluded,version_code:a.version_code,
       reason:selected.reason || '',policy_name:p.name,visibility:p.visibility,
       l5_status:counts[5] ? (linked.length ? 'Accès actif observé et relations disponibles' : 'Accès actif observé; aucune relation disponible, facteur neutre') : 'Aucun accès L5 actif confirmé',
       install_source:a.install_source || {source_available:false,reason:'Relevé ancien : refaire l’inventaire'}};
