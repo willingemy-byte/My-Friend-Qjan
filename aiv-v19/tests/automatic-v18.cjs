@@ -13,7 +13,7 @@ const clients=Array.from({length:25},(_,i)=>app('client'+i,11000+i,[{name:perm,g
 input={apps:[a,...clients],references:{}};r=M.evaluate(input);let row=r.apps.find(x=>x.package_name==='owner');
 assert.equal(row.H,1);assert.deepEqual(row.factors,['1','1','1','1']);assert.equal(row.multiplier,'1');assert.equal(row.routes[0].clients.length,25);
 // 25 recipients don't become 25 separate abilities. Duplicate components and scan rows are deduplicated.
-a.components.push({...a.components[0],name:'OtherCallLog'});input.apps.push(clients[0]);row=M.evaluate(input).apps.find(x=>x.package_name==='owner');assert.equal(row.factors[2],'25');
+a.components.push({...a.components[0],name:'OtherCallLog'});input.apps.push(clients[0]);row=M.evaluate(input).apps.find(x=>x.package_name==='owner');assert.equal(row.factors[2],'1');assert.equal(row.routes[0].clients.length,25);
 // No inferred delegation from a common permission alone; no blocked/disabled/cross-profile recipients.
 a.components=[];row=M.evaluate(input).apps.find(x=>x.package_name==='owner');assert.equal(row.factors[2],'1');
 a.components=[{name:'CallLog',type:'provider',enabled:true,exported:false,write_permission:perm}];assert.equal(M.evaluate(input).apps.find(x=>x.package_name==='owner').routes.length,0);
