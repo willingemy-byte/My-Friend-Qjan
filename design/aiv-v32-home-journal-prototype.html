@@ -50,48 +50,41 @@ button{touch-action:manipulation}
   z-index:50;
   display:grid;
   grid-template-columns:auto 1fr auto;
-  gap:14px;
+  gap:11px;
   align-items:center;
-  min-height:104px;
-  padding:calc(env(safe-area-inset-top,0px) + 15px) 18px 14px;
-  background:rgba(4,8,14,.96);
+  min-height:72px;
+  padding:calc(env(safe-area-inset-top,0px) + 8px) 14px 8px;
+  background:rgba(4,8,14,.97);
   backdrop-filter:blur(18px);
   border-bottom:1px solid rgba(88,184,255,.18);
 }
 .logo{
-  width:62px;height:62px;border-radius:20px;
+  width:46px;height:46px;border-radius:15px;
   display:grid;place-items:center;
-  font-weight:900;font-size:1.48rem;letter-spacing:-.05em;
+  font-weight:900;font-size:1.16rem;letter-spacing:-.05em;
   color:var(--blue);
-  border:2px solid rgba(88,184,255,.72);
+  border:1.5px solid rgba(88,184,255,.72);
   background:linear-gradient(145deg,rgba(88,184,255,.08),rgba(255,255,255,.015));
-  box-shadow:inset 0 0 20px rgba(88,184,255,.04),0 0 20px rgba(88,184,255,.05);
+  box-shadow:inset 0 0 18px rgba(88,184,255,.04),0 0 18px rgba(88,184,255,.05);
 }
-.brand small{
-  display:block;
-  margin-bottom:2px;
-  color:var(--blue);
-  font-weight:850;
-  letter-spacing:.11em;
-  font-size:.74rem;
-}
-.brand strong{font-size:1.31rem;line-height:1.08;letter-spacing:-.025em}
+.brand small{display:none}
+.brand strong{font-size:1.18rem;line-height:1;letter-spacing:.08em;color:var(--blue);white-space:nowrap}
 .nominal{
-  display:flex;align-items:center;gap:9px;
-  color:#c1cbd7;font-size:.92rem;white-space:nowrap;
+  display:grid;gap:4px;
+  color:#c1cbd7;font-size:.68rem;white-space:nowrap;
 }
+.status-line{display:flex;align-items:center;gap:7px}
 .nominal-dot{
-  width:12px;height:12px;border-radius:999px;background:var(--green);
-  box-shadow:0 0 16px rgba(101,223,112,.75);
+  width:8px;height:8px;border-radius:999px;background:var(--green);
+  box-shadow:0 0 12px rgba(101,223,112,.72);
 }
 .nav{
-  position:sticky;
-  top:104px;
-  z-index:45;
+  position:relative;
+  z-index:10;
   display:flex;
-  gap:8px;
+  gap:6px;
   overflow-x:auto;
-  padding:9px 12px;
+  padding:7px 10px;
   background:rgba(4,8,14,.96);
   border-bottom:1px solid rgba(88,184,255,.16);
   scrollbar-width:none;
@@ -99,12 +92,14 @@ button{touch-action:manipulation}
 .nav::-webkit-scrollbar{display:none}
 .nav button{
   flex:0 0 auto;
-  min-height:47px;
-  padding:9px 17px;
-  border-radius:15px;
+  min-height:34px;
+  padding:5px 11px;
+  border-radius:999px;
   color:#b6c3d1;
-  border:1px solid #23435d;
-  background:#07111b;
+  border:1px solid #2b5674;
+  background:#091925;
+  font-size:.72rem;
+  font-weight:760;
   cursor:pointer;
 }
 .nav button.active{
@@ -208,8 +203,8 @@ button{touch-action:manipulation}
 .app-panel-head span{font-size:.68rem;color:var(--muted)}
 .app-list{display:grid;gap:6px}
 .app-row{
-  display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:center;
-  border:1px solid #1d3449;border-radius:11px;background:#091621;padding:8px 9px;
+  display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px;align-items:center;
+  border:1px solid #1d3449;border-radius:11px;background:#091621;padding:7px 8px;
 }
 .app-row strong{font-size:.76rem}.app-row small{display:block;color:var(--muted);font-size:.64rem;margin-top:2px}
 .level-pill{
@@ -221,30 +216,26 @@ button{touch-action:manipulation}
 
 .journal-note{font-size:.74rem;color:var(--muted);line-height:1.4;margin:0 2px 10px}
 .table-frame{
-  border:1px solid #203d56;border-radius:17px;background:#07111c;overflow:hidden;
+  border:1px solid #203d56;border-radius:17px;background:#07111c;overflow:visible;
 }
-.table-scroll{overflow-x:auto;overscroll-behavior-x:contain}
-.journal-table{min-width:1160px}
+.table-scroll{overflow-x:auto;overscroll-behavior-x:contain;border-radius:16px}
+.journal-table{min-width:1040px;border-right:1px solid rgba(80,117,153,.28)}
 .tr{
   display:grid;
-  grid-template-columns:130px 170px 88px 190px 220px 170px 120px 120px;
+  grid-template-columns:112px 190px 78px 160px 215px 155px 125px;
   align-items:center;
 }
 .th{
-  position:sticky;top:0;z-index:3;
+  position:sticky;top:72px;z-index:35;
   background:#0f2234;color:#cfe2f5;border-bottom:1px solid #315672;
-  font-size:.68rem;font-weight:850;text-transform:uppercase;letter-spacing:.045em;
+  font-size:.66rem;font-weight:850;text-transform:uppercase;letter-spacing:.045em;
+  box-shadow:0 8px 18px rgba(0,0,0,.18);
 }
-.th>div,.td{padding:10px 11px;border-right:1px solid rgba(80,117,153,.18)}
-.tr.data{min-height:58px;border-bottom:1px solid rgba(76,107,137,.2);background:#08141f}
+.th>div,.td{padding:7px 9px;border-right:1px solid rgba(80,117,153,.18)}
+.tr.data{min-height:44px;border-bottom:1px solid rgba(76,107,137,.2);background:#08141f}
 .tr.data:nth-child(odd){background:#0a1724}
 .tr.data:last-child{border-bottom:0}
-.tr.data[data-level="A1"]{box-shadow:inset 4px 0 0 var(--green)}
-.tr.data[data-level="A2"]{box-shadow:inset 4px 0 0 var(--yellow)}
-.tr.data[data-level="A3"]{box-shadow:inset 4px 0 0 var(--orange)}
-.tr.data[data-level="A4"]{box-shadow:inset 4px 0 0 var(--red)}
-.tr.data[data-level="A5"]{box-shadow:inset 4px 0 0 var(--violet)}
-.td{font-size:.75rem;color:#d5dfeb;overflow-wrap:anywhere}
+.td{font-size:.72rem;color:#d5dfeb;overflow-wrap:anywhere}
 .td button{
   width:100%;min-height:36px;padding:5px 6px;text-align:left;
   border:0;border-radius:7px;background:transparent;color:inherit;cursor:pointer
@@ -253,23 +244,24 @@ button{touch-action:manipulation}
 .time{font-variant-numeric:tabular-nums;color:#aebdd0}
 .tracker{
   display:inline-flex;width:auto!important;
-  color:#f0bcff!important;
-  border:1px solid rgba(208,101,255,.48)!important;
-  background:rgba(208,101,255,.09)!important;
+  color:#cfe3f4!important;
+  border:1px solid #335d7b!important;
+  background:#0b2131!important;
   border-radius:999px!important;
-  font-size:.68rem!important;font-weight:850;
+  font-size:.66rem!important;font-weight:800;
 }
-.state-good{color:var(--green);font-weight:800}
-.state-warn{color:var(--yellow);font-weight:800}
-.state-violet{color:var(--violet);font-weight:800}
+.state-good,.state-warn,.state-violet{color:#d5dfeb;font-weight:700}
+.app-cell{display:flex;align-items:center;gap:7px}
+.mini-level{display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:22px;padding:0 6px;border:1px solid currentColor;border-radius:999px;font-size:.61rem;font-weight:900}
+
 .filterbar{
-  display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;margin-bottom:10px;
+  display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:7px;margin-bottom:10px;
 }
-.filterbar input{
-  width:100%;min-height:44px;border-radius:12px;border:1px solid #284b67;background:#07131f;color:var(--text);padding:9px 11px
+.filterbar input,.filterbar select{
+  width:100%;min-height:38px;border-radius:11px;border:1px solid #284b67;background:#07131f;color:var(--text);padding:7px 9px;font-size:.72rem
 }
 .filterbar button{
-  min-height:44px;border-radius:12px;border:1px solid #305773;background:#0a1b2a;color:#c9d9e8;padding:8px 12px
+  min-height:38px;border-radius:11px;border:1px solid #305773;background:#0a1b2a;color:#c9d9e8;padding:6px 10px;font-size:.7rem
 }
 .pagination{
   display:flex;justify-content:center;align-items:center;gap:9px;margin-top:11px;
@@ -281,12 +273,32 @@ button{touch-action:manipulation}
 .prototype-foot{
   margin-top:15px;text-align:center;color:#71869d;font-size:.65rem;line-height:1.4
 }
+
+.back-top{
+  position:fixed;right:16px;bottom:18px;z-index:60;width:44px;height:44px;border-radius:999px;
+  display:grid;place-items:center;border:1px solid #3a6d91;background:rgba(8,23,35,.95);color:#bfe4ff;
+  box-shadow:0 10px 28px rgba(0,0,0,.3);font-size:1.05rem;opacity:0;pointer-events:none;transform:translateY(8px);transition:.18s ease;
+}
+.back-top.show{opacity:1;pointer-events:auto;transform:none}
+.settings-nav{display:flex;gap:7px;overflow-x:auto;margin:-2px 0 12px;scrollbar-width:none}
+.settings-nav button{min-height:34px;border-radius:999px;border:1px solid #2b5674;background:#091925;color:#b8c8d8;padding:5px 12px;font-size:.7rem;font-weight:800}
+.settings-nav button.active{background:#102a3f;color:#9fd9ff;border-color:#4f8bb3}
+.settings-pane{display:none}.settings-pane.active{display:block}
+.form-stack{display:grid;gap:7px}
+.rule-row{display:grid;grid-template-columns:auto 48px minmax(0,1fr);gap:8px;align-items:center;border:1px solid #1f3a51;border-radius:12px;background:#081521;padding:8px}
+.rule-row strong{font-size:.72rem}.rule-row label{font-size:.65rem;color:var(--muted)}
+.rule-row input[type="text"],.rule-row select{width:100%;min-height:34px;border-radius:9px;border:1px solid #294c68;background:#07131f;color:var(--text);padding:6px 8px;font-size:.68rem}
+.toggle{width:18px;height:18px;accent-color:#58b8ff}
+.json-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
+.json-actions button{min-height:38px;border-radius:11px;border:1px solid #386985;background:#0d2638;color:#cceaff;padding:7px 11px;font-size:.7rem}
+#json-output{width:100%;min-height:240px;margin-top:10px;border-radius:12px;border:1px solid #294b65;background:#050d15;color:#d9e5f2;padding:10px;font:600 .66rem/1.45 ui-monospace,SFMono-Regular,Menlo,monospace}
+
 @media(max-width:600px){
-  .topbar{grid-template-columns:auto 1fr;min-height:98px;padding-inline:14px}
-  .nominal{grid-column:2;font-size:.72rem;margin-top:-7px}
-  .logo{width:56px;height:56px;border-radius:18px}
-  .brand strong{font-size:1.15rem}.brand small{font-size:.67rem}
-  .nav{top:98px}
+  .topbar{grid-template-columns:auto 1fr auto;min-height:68px;padding-inline:10px}
+  .nominal{font-size:.6rem;margin:0}
+  .logo{width:42px;height:42px;border-radius:14px}
+  .brand strong{font-size:.95rem;letter-spacing:.06em}
+  .nav{top:auto}
   .page{padding-inline:10px}
   .frame{padding:10px}
   .frame-title{align-items:start}
@@ -304,8 +316,11 @@ button{touch-action:manipulation}
 <div class="shell">
   <header class="topbar">
     <div class="logo">AIV</div>
-    <div class="brand"><small>ALL IN VISIBLE</small><strong>Console de supervision</strong></div>
-    <div class="nominal"><span class="nominal-dot"></span><span>Système nominal</span></div>
+    <div class="brand"><small></small><strong>ALL IN VISIBLE</strong></div>
+    <div class="nominal" aria-label="État des moteurs">
+      <span class="status-line"><span class="nominal-dot"></span><span>Calcul</span></span>
+      <span class="status-line"><span class="nominal-dot"></span><span>Corrélation</span></span>
+    </div>
   </header>
 
   <nav class="nav" aria-label="Navigation prototype">
@@ -387,16 +402,16 @@ button{touch-action:manipulation}
         </div>
         <p class="journal-note">Le tableau dépasse volontairement la largeur du téléphone. Glisse horizontalement pour changer de colonnes. Touche une application, un UID, une destination ou un tracker pour filtrer.</p>
         <div class="filterbar">
-          <input id="journal-search" type="search" placeholder="Filtrer : app, UID, destination, tracker…">
-          <button id="journal-clear">Effacer</button>
-          <button id="journal-demo">Démo</button>
+          <input id="journal-search" type="search" placeholder="Chercher : app, UID, IP, tracker…">
+          <select id="journal-level" aria-label="Filtrer par niveau"><option value="">Tous les A</option><option>A1</option><option>A2</option><option>A3</option><option>A4</option><option>A5</option></select>
+          <select id="journal-kind" aria-label="Filtrer par type"><option value="">Tous</option><option value="tracker">Tracker</option><option value="first_seen">First seen</option><option value="shizuku">Shizuku</option></select>
         </div>
 
         <div class="table-frame">
           <div class="table-scroll">
             <div class="journal-table">
-              <div class="tr th">
-                <div>Heure</div><div>Application</div><div>UID</div><div>Événement</div><div>Destination / permission</div><div>Tracker / SDK</div><div>État</div><div>Niveau</div>
+              <div class="tr th" id="journal-columns">
+                <div>Heure</div><div>Application</div><div>UID</div><div>Événement</div><div>Destination / permission</div><div>Tracker / SDK</div><div>État</div>
               </div>
               <div id="journal-body"></div>
             </div>
@@ -409,8 +424,49 @@ button{touch-action:manipulation}
 
     <section class="page" id="page-anomalies"><div class="frame"><div class="frame-title"><h2>Anomalies</h2><p>sera basé sur le même tableau horizontal</p></div><p class="journal-note">Cette page n’est pas encore maquettée : elle réutilisera le langage visuel du Journal.</p></div></section>
     <section class="page" id="page-apps"><div class="frame"><div class="frame-title"><h2>Applications</h2><p>liste + actions rapides</p></div><p class="journal-note">La fiche application gardera les actions directes vers les réglages Android et les états de révocation.</p></div></section>
-    <section class="page" id="page-settings"><div class="frame"><div class="frame-title"><h2>Paramètres</h2><p>règles + JSON avancé</p></div><p class="journal-note">Le constructeur de règles et les réglages avancés viendront après validation du design principal.</p></div></section>
+    <section class="page" id="page-settings">
+      <div class="frame">
+        <div class="frame-title"><div><span class="demo-tag">paramètres</span><h2 style="margin-top:7px">Configuration guidée</h2></div><p>Formulaire → JSON</p></div>
+        <div class="settings-nav">
+          <button class="active" data-settings="a">A · Autorisations</button>
+          <button data-settings="r">R · Règles</button>
+          <button data-settings="json">JSON</button>
+        </div>
+
+        <div class="settings-pane active" id="settings-a">
+          <p class="journal-note">Les cinq niveaux restent simples : tu modifies le libellé ou la condition, puis AIV génère le JSON.</p>
+          <div class="form-stack" id="a-rules">
+            <div class="rule-row"><input class="toggle" type="checkbox" checked><strong>A1</strong><input type="text" value="Visible dans les autorisations"></div>
+            <div class="rule-row"><input class="toggle" type="checkbox" checked><strong>A2</strong><input type="text" value="Visible dans Toutes les autorisations"></div>
+            <div class="rule-row"><input class="toggle" type="checkbox" checked><strong>A3</strong><input type="text" value="Action possible sans intervention immédiate"></div>
+            <div class="rule-row"><input class="toggle" type="checkbox" checked><strong>A4</strong><input type="text" value="Avertissement de vigilance Android / AOSP"></div>
+            <div class="rule-row"><input class="toggle" type="checkbox" checked><strong>A5</strong><input type="text" value="Portée système ou inter-applications"></div>
+          </div>
+          <div class="json-actions"><button data-go-json>Créer JSON des A</button></div>
+        </div>
+
+        <div class="settings-pane" id="settings-r">
+          <p class="journal-note">R1 à R6 : chaque règle peut être activée, configurée ou décochée. Une règle décochée ne sera pas exportée.</p>
+          <div class="form-stack" id="r-rules">
+            <div class="rule-row"><input class="toggle" type="checkbox" checked><strong>R1</strong><select><option>FIRST_SEEN</option><option>Tracker détecté</option><option>Nouvel endpoint</option></select></div>
+            <div class="rule-row"><input class="toggle" type="checkbox" checked><strong>R2</strong><select><option>Tracker détecté</option><option>FIRST_SEEN</option><option>Nouvel UID</option></select></div>
+            <div class="rule-row"><input class="toggle" type="checkbox" checked><strong>R3</strong><select><option>Nouvel endpoint</option><option>Permission A4/A5</option><option>Volume inhabituel</option></select></div>
+            <div class="rule-row"><input class="toggle" type="checkbox" checked><strong>R4</strong><select><option>Permission A4/A5</option><option>Nouvel UID</option><option>Tracker détecté</option></select></div>
+            <div class="rule-row"><input class="toggle" type="checkbox"><strong>R5</strong><select><option>Volume inhabituel</option><option>Nouvel endpoint</option><option>FIRST_SEEN</option></select></div>
+            <div class="rule-row"><input class="toggle" type="checkbox"><strong>R6</strong><select><option>Nouvel UID</option><option>Volume inhabituel</option><option>Permission A4/A5</option></select></div>
+          </div>
+          <div class="json-actions"><button data-go-json>Créer JSON des R</button></div>
+        </div>
+
+        <div class="settings-pane" id="settings-json">
+          <p class="journal-note">Aperçu généré localement à partir des formulaires cochés.</p>
+          <div class="json-actions"><button id="generate-json">Créer / actualiser le JSON</button></div>
+          <textarea id="json-output" spellcheck="false" readonly></textarea>
+        </div>
+      </div>
+    </section>
   </main>
+  <button class="back-top" id="back-top" aria-label="Remonter en haut">↑</button>
 </div>
 
 <script>
@@ -453,7 +509,7 @@ document.querySelectorAll('.group-card').forEach(card=>card.addEventListener('cl
     const info=document.createElement('div');info.innerHTML='<strong>'+app.name+'</strong><small>'+app.pkg+'</small>';
     const pill=document.createElement('span');pill.className='level-pill';pill.textContent=app.level;pill.style.color=tone[app.level];
     const action=document.createElement('button');action.className='quick';action.textContent='Réglages';action.title='Dans l’APK, ce bouton ouvrira la page Android pertinente.';
-    row.append(info,pill,action);list.append(row);
+    row.append(pill,info,action);list.append(row);
   }
   panel.scrollIntoView({behavior:'smooth',block:'nearest'});
 }));
@@ -481,23 +537,36 @@ const journalRows=[
   }
 ];
 const body=document.getElementById('journal-body'),search=document.getElementById('journal-search');
+const levelSelect=document.getElementById('journal-level'),kindSelect=document.getElementById('journal-kind');
+function levelBadge(level){
+  const span=document.createElement('span');span.className='mini-level';span.textContent=level;span.style.color=tone[level];return span;
+}
 function renderJournal(){
-  const q=search.value.trim().toLowerCase();body.replaceChildren();
-  const rows=journalRows.filter(r=>!q||Object.values(r).join(' ').toLowerCase().includes(q));
+  const q=search.value.trim().toLowerCase(),level=levelSelect.value,kind=kindSelect.value;body.replaceChildren();
+  const rows=journalRows.filter(r=>{
+    if(q&&!Object.values(r).join(' ').toLowerCase().includes(q))return false;
+    if(level&&r.level!==level)return false;
+    if(kind==='tracker'&&r.tracker==='—')return false;
+    if(kind==='first_seen'&&r.state!=='FIRST_SEEN')return false;
+    if(kind==='shizuku'&&r.app!=='Shizuku')return false;
+    return true;
+  });
   for(const r of rows){
     const tr=document.createElement('div');tr.className='tr data';tr.dataset.level=r.level;
+    const time=document.createElement('div');time.className='td time';time.textContent=r.time;tr.append(time);
+
+    const appTd=document.createElement('div');appTd.className='td app-cell';appTd.append(levelBadge(r.level));
+    const appButton=document.createElement('button');appButton.textContent=r.app;appButton.addEventListener('click',()=>{search.value=r.app;renderJournal();});appTd.append(appButton);tr.append(appTd);
+
     const values=[
-      {text:r.time,cls:'time'},
-      {text:r.app,filter:r.app},
       {text:r.uid,filter:r.uid!=='—'?r.uid:''},
       {text:r.event},
       {text:r.target,filter:r.target},
       {text:r.tracker,filter:r.tracker!=='—'?r.tracker:'',tracker:r.tracker!=='—'},
-      {text:r.state,cls:r.state==='normal'?'state-good':r.state==='still_granted'?'state-violet':'state-warn'},
-      {text:r.level,cls:'state-violet'}
+      {text:r.state}
     ];
     for(const item of values){
-      const td=document.createElement('div');td.className='td '+(item.cls||'');
+      const td=document.createElement('div');td.className='td';
       if(item.filter){
         const b=document.createElement('button');b.textContent=item.text;if(item.tracker)b.className='tracker';
         b.addEventListener('click',()=>{search.value=item.filter;renderJournal();});td.append(b);
@@ -508,9 +577,31 @@ function renderJournal(){
   }
 }
 search.addEventListener('input',renderJournal);
-document.getElementById('journal-clear').addEventListener('click',()=>{search.value='';renderJournal();});
-document.getElementById('journal-demo').addEventListener('click',()=>{search.value='Shizuku';renderJournal();});
+levelSelect.addEventListener('change',renderJournal);
+kindSelect.addEventListener('change',renderJournal);
 renderJournal();
+
+// Settings sub-pages and local JSON preview.
+const settingsButtons=[...document.querySelectorAll('[data-settings]')];
+function showSettings(name){
+  settingsButtons.forEach(b=>b.classList.toggle('active',b.dataset.settings===name));
+  document.querySelectorAll('.settings-pane').forEach(p=>p.classList.toggle('active',p.id==='settings-'+name));
+  if(name==='json')generateJson();
+}
+settingsButtons.forEach(b=>b.addEventListener('click',()=>showSettings(b.dataset.settings)));
+function generateJson(){
+  const a=[...document.querySelectorAll('#a-rules .rule-row')].map((row,i)=>({id:'A'+(i+1),enabled:row.querySelector('input[type="checkbox"]').checked,label:row.querySelector('input[type="text"]').value})).filter(x=>x.enabled);
+  const r=[...document.querySelectorAll('#r-rules .rule-row')].map((row,i)=>({id:'R'+(i+1),enabled:row.querySelector('input[type="checkbox"]').checked,trigger:row.querySelector('select').value})).filter(x=>x.enabled);
+  document.getElementById('json-output').value=JSON.stringify({schema:'aiv-ui-rules-prototype/1',authorizations:a,rules:r},null,2);
+}
+document.querySelectorAll('[data-go-json]').forEach(b=>b.addEventListener('click',()=>showSettings('json')));
+document.getElementById('generate-json').addEventListener('click',generateJson);
+generateJson();
+
+// Only the main header stays. Controls scroll away; the table category row stays against the header.
+const backTop=document.getElementById('back-top');
+window.addEventListener('scroll',()=>backTop.classList.toggle('show',window.scrollY>180),{passive:true});
+backTop.addEventListener('click',()=>window.scrollTo({top:0,behavior:'smooth'}));
 </script>
 </body>
 </html>
