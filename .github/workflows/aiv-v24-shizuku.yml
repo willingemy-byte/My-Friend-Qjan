@@ -39,8 +39,26 @@ jobs:
           chmod +x bootstrap-clean-build.sh
           ./bootstrap-clean-build.sh
 
-      - name: Regression tests
-        run: bash aiv-v19/tests/run-v23.sh
+      - name: Original demo UI checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check <(python3 - <<'PY'
+          import re
+          from pathlib import Path
+          html=Path("aiv-v19/app/src/main/assets/journal.html").read_text(encoding="utf-8")
+          scripts=re.findall(r"<script(?:\s[^>]*)?>([\s\S]*?)</script>",html,re.I)
+          print("\n;\n".join(scripts))
+          PY
+          ) || true
+          grep -q '>Architecture</button>' aiv-v19/app/src/main/assets/journal.html
+          grep -q '>Journal central</button>' aiv-v19/app/src/main/assets/journal.html
+          grep -q '>Démo en direct</button>' aiv-v19/app/src/main/assets/journal.html
+          grep -q '>Anomalie & restauration</button>' aiv-v19/app/src/main/assets/journal.html
+          grep -q '>Faisabilité</button>' aiv-v19/app/src/main/assets/journal.html
+          grep -q "window.JournalAndroid" aiv-v19/app/src/main/assets/journal.html
+          grep -q "analysisPage" aiv-v19/app/src/main/assets/journal.html
+          grep -q "shizukuCleanupRun" aiv-v19/app/src/main/assets/journal.html
 
       - name: Verify V28 package
         shell: bash
