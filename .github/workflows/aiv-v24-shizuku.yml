@@ -1,9 +1,9 @@
-name: AIV V30 Full UI build
+name: AIV V32 Android build
 
 on:
   workflow_dispatch:
   push:
-    branches: [aiv-v30-full-ui]
+    branches: [aiv-v32-android]
     paths:
       - "aiv-v19/**"
       - ".github/workflows/aiv-v24-shizuku.yml"
@@ -29,9 +29,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: aiv-v19/.toolchain
-          key: aiv-v30-android35-ndk27d-shizuku-13.1.5
+          key: aiv-v32-android35-ndk27d-shizuku-13.1.5
 
-      - name: Build AIV 0.6.30 unsigned
+      - name: Build AIV 0.6.32 unsigned
         working-directory: aiv-v19
         env:
           AIV_BUILD_MODE: unsigned
@@ -42,36 +42,34 @@ jobs:
       - name: Regression tests
         run: bash aiv-v19/tests/run-v23.sh
 
-      - name: Full UI regression checks
+      - name: V32 UI regression checks
         shell: bash
         run: |
           set -euo pipefail
-          grep -q 'aiv-level-pie' aiv-v19/app/src/main/assets/journal.html
-          grep -q 'Règles et seuils' aiv-v19/app/src/main/assets/journal.html
-          grep -q 'Barème et formules' aiv-v19/app/src/main/assets/journal.html
-          grep -q 'jc-pagination' aiv-v19/app/src/main/assets/journal.html
-          grep -q 'jc-analysis-pagination' aiv-v19/app/src/main/assets/journal.html
-          grep -q 'jc-shizuku-run' aiv-v19/app/src/main/assets/journal.html
-          grep -q 'renderPenaltySettings' aiv-v19/app/src/main/assets/journal.html
-          grep -q 'Applications' aiv-v19/app/src/main/assets/journal.html
-          grep -q 'Référentiels' aiv-v19/app/src/main/assets/journal.html
+          grep -q 'aiv-v32-android-design' aiv-v19/app/src/main/assets/journal.html
+          grep -q 'V32 Android UI overlay' aiv-v19/app/src/main/assets/journal.html
+          grep -q 'A · Autorisations' aiv-v19/app/src/main/assets/journal.html
+          grep -q 'R · Règles' aiv-v19/app/src/main/assets/journal.html
+          grep -q 'Applications par catégorie' aiv-v19/app/src/main/assets/journal.html
+          grep -q 'trackerMatch' aiv-v19/app/src/main/java/fr/erick/journallocal/MainActivity.java
+          grep -q 'aivConfigureBatch' aiv-v19/app/src/main/java/fr/erick/journallocal/MainActivity.java
 
-      - name: Verify V30 package
+      - name: Verify V32 package
         shell: bash
         run: |
           set -euo pipefail
-          test -s aiv-v19/build/AIV-0.6.30-unsigned.apk
-          test -s aiv-v19/build/AIV-0.6.30-unsigned.apk.sha256
-          grep -q 'android:versionName="0.6.30"' aiv-v19/app/src/main/AndroidManifest.xml
+          test -s aiv-v19/build/AIV-0.6.32-unsigned.apk
+          test -s aiv-v19/build/AIV-0.6.32-unsigned.apk.sha256
+          grep -q 'android:versionName="0.6.32"' aiv-v19/app/src/main/AndroidManifest.xml
           grep -q 'rikka.shizuku.ShizukuProvider' aiv-v19/app/src/main/AndroidManifest.xml
           grep -q 'class ShizukuCleanup' aiv-v19/app/src/main/java/fr/erick/journallocal/ShizukuCleanup.java
-          sha256sum -c aiv-v19/build/AIV-0.6.30-unsigned.apk.sha256
+          sha256sum -c aiv-v19/build/AIV-0.6.32-unsigned.apk.sha256
 
-      - name: Upload AIV V30 unsigned APK
+      - name: Upload AIV V32 unsigned APK
         uses: actions/upload-artifact@v4
         with:
-          name: AIV-0.6.30-unsigned
+          name: AIV-0.6.32-unsigned
           path: |
-            aiv-v19/build/AIV-0.6.30-unsigned.apk
-            aiv-v19/build/AIV-0.6.30-unsigned.apk.sha256
+            aiv-v19/build/AIV-0.6.32-unsigned.apk
+            aiv-v19/build/AIV-0.6.32-unsigned.apk.sha256
           retention-days: 14
