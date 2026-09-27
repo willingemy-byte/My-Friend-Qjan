@@ -44,10 +44,15 @@ body{
 button,input{font:inherit}
 button{touch-action:manipulation}
 .shell{width:min(100%,980px);margin:0 auto;min-height:100vh;border-inline:1px solid rgba(88,184,255,.07)}
-.topbar{
+.header-stack{
   position:sticky;
   top:0;
   z-index:50;
+  background:transparent;
+}
+.topbar{
+  position:relative;
+  z-index:1;
   display:grid;
   grid-template-columns:auto 1fr auto;
   gap:11px;
@@ -80,7 +85,7 @@ button{touch-action:manipulation}
 }
 .nav{
   position:relative;
-  z-index:10;
+  z-index:2;
   display:flex;
   gap:6px;
   overflow-x:auto;
@@ -218,7 +223,15 @@ button{touch-action:manipulation}
 .table-frame{
   border:1px solid #203d56;border-radius:17px;background:#07111c;overflow:visible;
 }
-.table-scroll{overflow-x:auto;overscroll-behavior-x:contain;border-radius:16px}
+.table-head-scroll{
+  position:sticky;
+  top:var(--header-stack-height,108px);
+  z-index:35;
+  overflow:hidden;
+  background:#0f2234;
+  border-bottom:1px solid #315672;
+}
+.table-scroll{overflow-x:auto;overscroll-behavior-x:contain;border-radius:0 0 16px 16px}
 .journal-table{min-width:1040px;border-right:1px solid rgba(80,117,153,.28)}
 .tr{
   display:grid;
@@ -226,10 +239,9 @@ button{touch-action:manipulation}
   align-items:center;
 }
 .th{
-  position:sticky;top:72px;z-index:35;
-  background:#0f2234;color:#cfe2f5;border-bottom:1px solid #315672;
+  position:relative;
+  background:#0f2234;color:#cfe2f5;
   font-size:.66rem;font-weight:850;text-transform:uppercase;letter-spacing:.045em;
-  box-shadow:0 8px 18px rgba(0,0,0,.18);
 }
 .th>div,.td{padding:7px 9px;border-right:1px solid rgba(80,117,153,.18)}
 .tr.data{min-height:44px;border-bottom:1px solid rgba(76,107,137,.2);background:#08141f}
@@ -314,22 +326,24 @@ button{touch-action:manipulation}
 </head>
 <body>
 <div class="shell">
-  <header class="topbar">
-    <div class="logo">AIV</div>
-    <div class="brand"><small></small><strong>ALL IN VISIBLE</strong></div>
-    <div class="nominal" aria-label="État des moteurs">
-      <span class="status-line"><span class="nominal-dot"></span><span>Calcul</span></span>
-      <span class="status-line"><span class="nominal-dot"></span><span>Corrélation</span></span>
-    </div>
-  </header>
+  <div class="header-stack" id="header-stack">
+    <header class="topbar">
+      <div class="logo">AIV</div>
+      <div class="brand"><small></small><strong>ALL IN VISIBLE</strong></div>
+      <div class="nominal" aria-label="État des moteurs">
+        <span class="status-line"><span class="nominal-dot"></span><span>Calcul</span></span>
+        <span class="status-line"><span class="nominal-dot"></span><span>Corrélation</span></span>
+      </div>
+    </header>
 
-  <nav class="nav" aria-label="Navigation prototype">
-    <button class="active" data-page="home">Présentation</button>
-    <button data-page="journal">Journal</button>
-    <button data-page="anomalies">Anomalies</button>
-    <button data-page="apps">Applications</button>
-    <button data-page="settings">Paramètres</button>
-  </nav>
+    <nav class="nav" aria-label="Navigation prototype">
+      <button class="active" data-page="home">Présentation</button>
+      <button data-page="journal">Journal</button>
+      <button data-page="anomalies">Anomalies</button>
+      <button data-page="apps">Applications</button>
+      <button data-page="settings">Paramètres</button>
+    </nav>
+  </div>
 
   <main>
     <section class="page active" id="page-home">
@@ -408,11 +422,15 @@ button{touch-action:manipulation}
         </div>
 
         <div class="table-frame">
-          <div class="table-scroll">
+          <div class="table-head-scroll" id="journal-head-scroll" aria-label="Colonnes du journal">
             <div class="journal-table">
               <div class="tr th" id="journal-columns">
                 <div>Heure</div><div>Application</div><div>UID</div><div>Événement</div><div>Destination / permission</div><div>Tracker / SDK</div><div>État</div>
               </div>
+            </div>
+          </div>
+          <div class="table-scroll" id="journal-body-scroll">
+            <div class="journal-table">
               <div id="journal-body"></div>
             </div>
           </div>
@@ -448,12 +466,12 @@ button{touch-action:manipulation}
         <div class="settings-pane" id="settings-r">
           <p class="journal-note">R1 à R6 : chaque règle peut être activée, configurée ou décochée. Une règle décochée ne sera pas exportée.</p>
           <div class="form-stack" id="r-rules">
-            <div class="rule-row"><input class="toggle" type="checkbox" checked><strong>R1</strong><select><option>FIRST_SEEN</option><option>Tracker détecté</option><option>Nouvel endpoint</option></select></div>
-            <div class="rule-row"><input class="toggle" type="checkbox" checked><strong>R2</strong><select><option>Tracker détecté</option><option>FIRST_SEEN</option><option>Nouvel UID</option></select></div>
-            <div class="rule-row"><input class="toggle" type="checkbox" checked><strong>R3</strong><select><option>Nouvel endpoint</option><option>Permission A4/A5</option><option>Volume inhabituel</option></select></div>
-            <div class="rule-row"><input class="toggle" type="checkbox" checked><strong>R4</strong><select><option>Permission A4/A5</option><option>Nouvel UID</option><option>Tracker détecté</option></select></div>
-            <div class="rule-row"><input class="toggle" type="checkbox"><strong>R5</strong><select><option>Volume inhabituel</option><option>Nouvel endpoint</option><option>FIRST_SEEN</option></select></div>
-            <div class="rule-row"><input class="toggle" type="checkbox"><strong>R6</strong><select><option>Nouvel UID</option><option>Volume inhabituel</option><option>Permission A4/A5</option></select></div>
+            <div class="rule-row"><input class="toggle" type="checkbox" checked><strong>R1</strong><select><option value="FIRST_PACKET">Premier paquet observé</option><option value="TRACKER_DETECTED">Tracker / SDK détecté</option><option value="NEW_ENDPOINT">Nouvelle destination</option></select></div>
+            <div class="rule-row"><input class="toggle" type="checkbox" checked><strong>R2</strong><select><option value="TRACKER_DETECTED">Tracker / SDK détecté</option><option value="FIRST_SEEN">Première fois observé</option><option value="NEW_UID">Nouvel UID</option></select></div>
+            <div class="rule-row"><input class="toggle" type="checkbox" checked><strong>R3</strong><select><option value="NEW_ENDPOINT">Nouvelle destination</option><option value="A4_A5_PERMISSION">Autorisation A4 / A5</option><option value="UNUSUAL_VOLUME">Volume inhabituel</option></select></div>
+            <div class="rule-row"><input class="toggle" type="checkbox" checked><strong>R4</strong><select><option value="A4_A5_PERMISSION">Autorisation A4 / A5</option><option value="NEW_UID">Nouvel UID</option><option value="TRACKER_DETECTED">Tracker / SDK détecté</option></select></div>
+            <div class="rule-row"><input class="toggle" type="checkbox"><strong>R5</strong><select><option value="UNUSUAL_VOLUME">Volume inhabituel</option><option value="NEW_ENDPOINT">Nouvelle destination</option><option value="FIRST_SEEN">Première fois observé</option></select></div>
+            <div class="rule-row"><input class="toggle" type="checkbox"><strong>R6</strong><select><option value="NEW_UID">Nouvel UID</option><option value="UNUSUAL_VOLUME">Volume inhabituel</option><option value="A4_A5_PERMISSION">Autorisation A4 / A5</option></select></div>
           </div>
           <div class="json-actions"><button data-go-json>Créer JSON des R</button></div>
         </div>
@@ -591,7 +609,10 @@ function showSettings(name){
 settingsButtons.forEach(b=>b.addEventListener('click',()=>showSettings(b.dataset.settings)));
 function generateJson(){
   const a=[...document.querySelectorAll('#a-rules .rule-row')].map((row,i)=>({id:'A'+(i+1),enabled:row.querySelector('input[type="checkbox"]').checked,label:row.querySelector('input[type="text"]').value})).filter(x=>x.enabled);
-  const r=[...document.querySelectorAll('#r-rules .rule-row')].map((row,i)=>({id:'R'+(i+1),enabled:row.querySelector('input[type="checkbox"]').checked,trigger:row.querySelector('select').value})).filter(x=>x.enabled);
+  const r=[...document.querySelectorAll('#r-rules .rule-row')].map((row,i)=>{
+    const select=row.querySelector('select');
+    return {id:'R'+(i+1),enabled:row.querySelector('input[type="checkbox"]').checked,label:select.options[select.selectedIndex].text,trigger:select.value};
+  }).filter(x=>x.enabled);
   document.getElementById('json-output').value=JSON.stringify({schema:'aiv-ui-rules-prototype/1',authorizations:a,rules:r},null,2);
 }
 document.querySelectorAll('[data-go-json]').forEach(b=>b.addEventListener('click',()=>showSettings('json')));
@@ -599,6 +620,18 @@ document.getElementById('generate-json').addEventListener('click',generateJson);
 generateJson();
 
 // Only the main header stays. Controls scroll away; the table category row stays against the header.
+const headerStack=document.getElementById('header-stack');
+function updateStickyStack(){
+  document.documentElement.style.setProperty('--header-stack-height',headerStack.getBoundingClientRect().height+'px');
+}
+updateStickyStack();
+new ResizeObserver(updateStickyStack).observe(headerStack);
+window.addEventListener('resize',updateStickyStack,{passive:true});
+
+const journalHeadScroll=document.getElementById('journal-head-scroll');
+const journalBodyScroll=document.getElementById('journal-body-scroll');
+journalBodyScroll.addEventListener('scroll',()=>{journalHeadScroll.scrollLeft=journalBodyScroll.scrollLeft;},{passive:true});
+
 const backTop=document.getElementById('back-top');
 window.addEventListener('scroll',()=>backTop.classList.toggle('show',window.scrollY>180),{passive:true});
 backTop.addEventListener('click',()=>window.scrollTo({top:0,behavior:'smooth'}));
