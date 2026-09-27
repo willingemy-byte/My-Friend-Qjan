@@ -703,18 +703,19 @@ button{touch-action:manipulation}
   document.getElementById('generate-json').onclick=generateJson;generateJson();
 
   function syncTables(){
-    var bodies=document.querySelectorAll('[data-sync-body]'),j,key,head;
+    var bodies=document.querySelectorAll('[data-sync-body]'),j;
     for(j=0;j<bodies.length;j++){
       (function(body){
-        key=body.getAttribute('data-sync-body');head=document.querySelector('[data-sync-head="'+key+'"]');
+        var key=body.getAttribute('data-sync-body');
+        var head=document.querySelector('[data-sync-head="'+key+'"]');
         body.onscroll=function(){if(head)head.scrollLeft=body.scrollLeft;};
       })(bodies[j]);
     }
   }
   syncTables();
 
-  var header=document.getElementById('header-stack');
-  function sizeHeader(){document.documentElement.style.setProperty('--header-stack-height',header.offsetHeight+'px');}
+  var topbar=document.querySelector('.topbar');
+  function sizeHeader(){document.documentElement.style.setProperty('--topbar-height',topbar.offsetHeight+'px');}
   sizeHeader();window.onresize=sizeHeader;
 
   var toast=document.getElementById('toast');
