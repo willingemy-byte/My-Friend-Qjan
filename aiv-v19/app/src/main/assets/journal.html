@@ -42,15 +42,8 @@ body{padding:0!important;max-width:none!important}
 #jc-reader #jc-pane-anomalies h2,#jc-reader #jc-pane-anomalies h3{color:#ef83dc}
 #jc-reader .jc-pagination{position:relative;z-index:2;padding:18px 0 6px;border-top:1px solid #17323b}
 #jc-reader .jc-pagination button{background:#0a2b39;border-color:#2d7f96;color:#c9f3ff}
-#jc-reader .aiv-level-overview{display:grid;grid-template-columns:minmax(260px,1fr) minmax(260px,1fr);gap:18px;margin:8px 0 24px}
-#jc-reader .aiv-level-card{background:linear-gradient(155deg,#0c1e28,#071119);border:1px solid #1b3943;border-radius:18px;padding:18px}
-#jc-reader .aiv-level-pie{width:min(360px,78vw);aspect-ratio:1;border-radius:50%;margin:8px auto;background:conic-gradient(#47d89f 0 20%,#e3c35b 20% 40%,#ef9a4d 40% 60%,#ff5964 60% 80%,#e15acb 80% 100%);box-shadow:0 0 28px #47cbea1f}
-#jc-reader .aiv-level-legend{display:grid;gap:8px}
-#jc-reader .aiv-level-row{display:grid;grid-template-columns:18px 42px 1fr;gap:9px;align-items:start}
-#jc-reader .aiv-level-swatch{width:12px;height:12px;border-radius:50%;margin-top:4px}
-#jc-reader .aiv-level-note{color:#91a7ad;font-size:.78rem;line-height:1.45}
 #jc-reader .jp-multiplier[data-aiv-level="5"],#jc-reader [data-penalty-color="gray"] .jp-multiplier{color:#f38bdd!important}
-@media(max-width:760px){#jc-reader .jc-top{min-height:82px;padding:14px 12px}#jc-reader .jc-user-nav{top:82px!important;grid-template-columns:repeat(6,minmax(108px,1fr))!important}#jc-reader .aiv-level-overview{grid-template-columns:1fr}#jc-reader .jc-group-rings{grid-template-columns:1fr!important}#jc-reader .jc-group-disc{max-width:220px!important}}
+@media(max-width:760px){#jc-reader .jc-top{min-height:82px;padding:14px 12px}#jc-reader .jc-user-nav{top:82px!important;grid-template-columns:repeat(6,minmax(108px,1fr))!important}#jc-reader .jc-group-rings{grid-template-columns:1fr!important}#jc-reader .jc-group-disc{max-width:220px!important}}
 </style>
 
 <style id="aiv-v32-android-design">
@@ -436,30 +429,13 @@ body{padding:0!important;margin:0!important;max-width:none!important}
     <button type="button" data-jc-tab="menu" aria-pressed="false" aria-controls="jc-pane-menu">Menu</button>
   </nav>
   <section class="jc-pane jc-home" id="jc-pane-home" aria-label="Accueil AIV">
-    <p class="jc-clean-build-tag" aria-label="Version de compilation">AIV 0.6.35 · DESIGN COMPLET · FONCTIONS CONSERVÉES</p>
+    <p class="jc-clean-build-tag" aria-label="Version de compilation">AIV 0.6.36 · BUILD GITHUB · FONCTIONS CONSERVÉES</p>
     <div class="jc-view-switch" aria-label="Choisir la vue de démonstration">
       <button type="button" id="jc-mode-user" aria-pressed="true">Utilisateur</button>
       <button type="button" id="jc-mode-ti" aria-pressed="false">TI · démo</button>
     </div>
     <div class="jc-mode-banner" id="jc-mode-banner"><strong>Vue utilisateur.</strong> Les valeurs affichées proviennent des données locales disponibles sur ce téléphone.</div>
-    <div class="aiv-level-overview" aria-label="Répartition des permissions L1 à L5">
-  <article class="aiv-level-card">
-    <div class="jc-home-eyebrow">RÉPARTITION DES PERMISSIONS</div>
-    <div class="aiv-level-pie" id="aiv-level-pie" role="img" aria-label="Répartition L1 à L5 en attente du calcul"></div>
-    <p class="aiv-level-note" id="aiv-level-total">Calcul local des permissions…</p>
-  </article>
-  <article class="aiv-level-card">
-    <div class="jc-home-eyebrow">L1 → L5</div>
-    <div class="aiv-level-legend">
-      <div class="aiv-level-row"><i class="aiv-level-swatch" style="background:#47d89f"></i><b>L1</b><span>Déclarations concordantes pour la même version et la source de visibilité fournie.</span></div>
-      <div class="aiv-level-row"><i class="aiv-level-swatch" style="background:#e3c35b"></i><b>L2</b><span>Permission visible dans « Toutes les autorisations », mais absente de la liste principale comparable.</span></div>
-      <div class="aiv-level-row"><i class="aiv-level-swatch" style="background:#ef9a4d"></i><b>L3</b><span>Capacité documentée de fonctionner ou d’observer sans intervention immédiate.</span></div>
-      <div class="aiv-level-row"><i class="aiv-level-swatch" style="background:#ff5964"></i><b>L4</b><span>Description Android/Bayton comportant un avertissement explicite de détournement possible.</span></div>
-      <div class="aiv-level-row"><i class="aiv-level-swatch" style="background:#e15acb"></i><b>L5</b><span>Portée système ou capacité d’agir sur d’autres applications. Rose WATCHER dans cette vue.</span></div>
-    </div>
-  </article>
-</div>
-<div class="jc-home-hero">
+    <div class="jc-home-hero">
       <div class="jc-home-eyebrow" id="jc-home-eyebrow">Écarts moyens de visibilité</div>
       <div class="jc-score-ring jc-legacy-ring" id="jc-score-ring" role="img" aria-label="Indice de cohérence en attente de données">
         <div class="jc-score-inner"><div class="jc-score-number" id="jc-score-number">—</div><div class="jc-score-label" id="jc-score-label">moyenne par application</div></div>
@@ -1870,25 +1846,10 @@ if(typeof module!=='undefined')module.exports=PenaltyModel;
     clearInterval(penaltyImportTimer);penaltyImportTimer=0;
   }catch(e){penaltyStatus('Import refusé : '+e.message);clearInterval(penaltyImportTimer);penaltyImportTimer=0;}}
   $('jp-import').onclick=()=>{nativeBridge.command('import-penalty');clearInterval(penaltyImportTimer);let ticks=0;penaltyImportTimer=setInterval(()=>{penaltyCheckImport();if(++ticks>300){clearInterval(penaltyImportTimer);penaltyImportTimer=0;}},1000);};
-  function aivRenderPermissionPie(result){
-    const pie=$('aiv-level-pie'),totalNode=$('aiv-level-total');if(!pie||!result)return;
-    const counts=[0,0,0,0,0,0];
-    for(const app of result.apps||[]){
-      const ex=app.exposure||{};
-      for(const finding of ex.findings||[]){const n=Number(finding.level)||0;if(n>=1&&n<=5)counts[n]++;}
-      if(ex.level===1&&!(ex.findings||[]).length)counts[1]+=Number(app.R)||0;
-    }
-    const total=counts.slice(1).reduce((a,b)=>a+b,0),colors=['','#47d89f','#e3c35b','#ef9a4d','#ff5964','#e15acb'];
-    if(!total){pie.style.background='#13242b';pie.setAttribute('aria-label','Aucune permission classée L1 à L5');totalNode.textContent='Aucune permission classée L1 à L5 dans le dernier calcul.';return;}
-    let acc=0,parts=[];for(let n=1;n<=5;n++){const start=acc/total*360;acc+=counts[n];const end=acc/total*360;parts.push(colors[n]+' '+start+'deg '+end+'deg');}
-    pie.style.background='conic-gradient('+parts.join(',')+')';
-    pie.setAttribute('aria-label',counts.slice(1).map((v,i)=>'L'+(i+1)+' '+v).join(', '));
-    totalNode.textContent=total.toLocaleString('fr-CA')+' permissions classées · '+counts.slice(1).map((v,i)=>'L'+(i+1)+' '+v).join(' · ');
-  }
   function renderPenaltyHome(){
     try{
       const scan=penaltyRead('auditSummary');if(penaltyCache&&penaltyCache.input.scan_id!==scan.scan_id)penaltyCache=null;
-      const {result:r,input}=penaltyLoad(),g=r.summary,p=r.policy,ring=$('jc-score-ring'),list=$('jc-home-app-list');aivRenderPermissionPie(r);
+      const {result:r,input}=penaltyLoad(),g=r.summary,p=r.policy,ring=$('jc-score-ring'),list=$('jc-home-app-list');
       $('jc-endpoint-config').hidden=true;$('jc-pane-home').dataset.lowScore=String(g.color==='critical');$('jc-pane-home').style.background='';
       $('jc-mode-banner').textContent='L1 vert · L2 jaune · L3 orange · L4 rouge · L5 rose WATCHER. Bleu : indéterminé. Les couleurs indiquent la capacité déclarée; le calcul numérique V21 reste disponible.';
       $('jc-home-eyebrow').textContent='Indice de pénalité AIV';$('jc-score-label').textContent='moyenne par application avec écart';

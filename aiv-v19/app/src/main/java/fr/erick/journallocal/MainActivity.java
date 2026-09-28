@@ -23,7 +23,7 @@ public final class MainActivity extends Activity {
     private static final int DEFENSE_EXPORT_REQUEST=30;
     private boolean defenseResumed,defenseResultHandled;
     @Override public void onCreate(Bundle state){
-        super.onCreate(state);Continuous.initialize(this);DefenseMonitor.start(this);ShizukuCleanup.attach(this);
+        super.onCreate(state);Continuous.initialize(this);DefenseMonitor.start(this);try{ShizukuCleanup.attach(this);}catch(Throwable ignored){}
         prepareStartup();
         reader=new WebView(this);reader.setBackgroundColor(0xFF05090D);
         reader.setOnApplyWindowInsetsListener((view,insets)->{
@@ -325,5 +325,5 @@ public final class MainActivity extends Activity {
         Toast.makeText(this,"Appuie encore pour fermer · ta position est conservée",Toast.LENGTH_SHORT).show();
     }
     @Override protected void onPause(){if(reader!=null){reader.evaluateJavascript("window.AivPersistUi&&window.AivPersistUi()",null);reader.onPause();}super.onPause();}
-    @Override protected void onDestroy(){cleanupHandler.removeCallbacks(delayedCleanup);delayedCleanupScheduled=false;ShizukuCleanup.detach();DefenseMonitor.stop(this);journalReads.shutdownNow();if(reader!=null){reader.removeJavascriptInterface("JournalAndroid");reader.destroy();}super.onDestroy();}
+    @Override protected void onDestroy(){cleanupHandler.removeCallbacks(delayedCleanup);delayedCleanupScheduled=false;try{ShizukuCleanup.detach();}catch(Throwable ignored){}DefenseMonitor.stop(this);journalReads.shutdownNow();if(reader!=null){reader.removeJavascriptInterface("JournalAndroid");reader.destroy();}super.onDestroy();}
 }
