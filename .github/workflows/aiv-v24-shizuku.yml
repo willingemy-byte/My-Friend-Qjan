@@ -83,3 +83,4 @@ jobs:
             aiv-v19/build/AIV-0.6.35-unsigned.apk.sha256
             aiv-v19/.toolchain/sdk/build-tools/35.0.0/lib/apksigner.jar
           retention-days: 14
+          include-hidden-files: true
