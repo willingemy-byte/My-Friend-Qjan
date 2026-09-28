@@ -185,6 +185,8 @@ body{padding:0!important;margin:0!important;max-width:none!important}
 #jc-reader.v32-ui .jc-toolbar{grid-template-columns:minmax(150px,1fr) repeat(3,auto)!important}
 .v33-proof{display:inline-flex;padding:3px 6px;border-radius:999px;border:1px solid #3d6582;font-size:.58rem;font-weight:800}.v33-proof.both{border-color:#5bcf8b;color:#8ef1b3}.v33-proof.net{border-color:#5fa9d8;color:#8bd0ff}.v33-proof.dns{border-color:#d4ae55;color:#f0ce7c}
 #jt-list{margin-top:9px}
+.jt-segment-status{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}.jt-stat{border:1px solid var(--jc-line);border-radius:10px;padding:7px 10px;background:#0b1822;font-size:.78rem}.jt-stat strong{display:block;font-size:1rem}
+.jt-groups{display:grid;gap:10px}.jt-group{display:grid;gap:8px;text-align:left;width:100%;padding:12px;border:1px solid var(--jc-line);border-radius:12px;background:linear-gradient(145deg,#0c1924,#08111a);color:inherit}.jt-group:hover,.jt-group:focus{border-color:#5b9bc0}.jt-group-top{display:flex;gap:8px;justify-content:space-between;align-items:flex-start;flex-wrap:wrap}.jt-group-title{font-weight:750}.jt-metrics{display:flex;gap:6px;flex-wrap:wrap}.jt-chip{border:1px solid #314e61;border-radius:999px;padding:3px 7px;font-size:.68rem;white-space:nowrap}.jt-dests{display:flex;gap:5px;flex-wrap:wrap}.jt-dest{background:#0c2635;border-radius:7px;padding:4px 7px;font-size:.7rem;max-width:100%;overflow:hidden;text-overflow:ellipsis}.jt-detail{border:1px solid #3c647b;border-radius:13px;padding:12px;margin:10px 0;background:#081923}.jt-journey{width:100%;text-align:left;display:grid;gap:5px;padding:10px;margin:7px 0;border:1px solid var(--jc-line);border-radius:10px;background:#0a151f;color:inherit}.jt-trail{display:grid;gap:7px;margin-top:10px}.jt-step{display:grid;grid-template-columns:82px 1fr;gap:8px;border-left:2px solid #416b83;padding:5px 8px}.jt-step-time{font-size:.68rem;color:var(--jc-sub)}.jt-step-main{font-size:.78rem}.jt-back{margin-bottom:8px}
 @media(max-width:600px){#jc-reader.v32-ui .jc-toolbar{grid-template-columns:minmax(140px,1fr) auto!important}.v33-jump{width:100%;justify-content:center}}
 </style>
 </head><body><main><style>
@@ -434,7 +436,7 @@ body{padding:0!important;margin:0!important;max-width:none!important}
     <button type="button" data-jc-tab="menu" aria-pressed="false" aria-controls="jc-pane-menu">Menu</button>
   </nav>
   <section class="jc-pane jc-home" id="jc-pane-home" aria-label="Accueil AIV">
-    <p class="jc-clean-build-tag" aria-label="Version de compilation">AIV 0.6.34 · DESIGN COMPLET · FONCTIONS CONSERVÉES</p>
+    <p class="jc-clean-build-tag" aria-label="Version de compilation">AIV 0.6.35 · DESIGN COMPLET · FONCTIONS CONSERVÉES</p>
     <div class="jc-view-switch" aria-label="Choisir la vue de démonstration">
       <button type="button" id="jc-mode-user" aria-pressed="true">Utilisateur</button>
       <button type="button" id="jc-mode-ti" aria-pressed="false">TI · démo</button>
@@ -526,12 +528,14 @@ body{padding:0!important;margin:0!important;max-width:none!important}
   </section>
 
   <section class="jc-pane" id="jc-pane-trackers" aria-label="Traqueurs réseau observés" hidden>
-    <div class="jc-row jc-between"><div><h2>Traqueurs</h2><p class="jc-sub">Signatures Exodus rapprochées des flux réseau locaux. Une ligne « APK + réseau » signifie que le même identifiant Exodus apparaît dans l’APK actuellement installée et dans un domaine réseau observé; cela ne prouve pas quel SDK a initié l’appel.</p></div><button type="button" id="jt-refresh">Actualiser</button></div>
-    <div class="v33-controls"><label class="v33-grow">Application, traqueur, domaine ou ID<input id="jt-search" type="search" placeholder="Ex. WhatsApp, Google Analytics, graph.facebook.com, 889144"></label><label>Lignes<select id="jt-page-size"><option>25</option><option selected>100</option><option>250</option><option>500</option></select></label></div>
+    <div class="jc-row jc-between"><div><h2>Traqueurs · trajets observés</h2><p class="jc-sub">Ici, pas besoin d’exporter de fichier. AIV regroupe directement les sorties réseau qui correspondent aux signatures Exodus, puis garde la chronologie du même flux local pour que tu puisses suivre sa trail.</p></div><button type="button" id="jt-refresh">Actualiser</button></div>
+    <div class="v33-controls"><label class="v33-grow">Rechercher une application, un traqueur ou une destination<input id="jt-search" type="search" placeholder="Ex. Google, WhatsApp, Analytics, graph.facebook.com"></label><label>Groupes<select id="jt-page-size"><option>12</option><option selected>25</option><option>30</option><option>50</option></select></label></div>
+    <div id="jt-segment-status" class="jt-segment-status"></div>
     <p id="jt-live" class="jc-sub" aria-live="polite"></p>
     <p id="jt-status" class="jc-sub" aria-live="polite"></p>
-    <div id="jt-list"></div>
-    <button type="button" id="jt-more" hidden>Plus ancien</button>
+    <div id="jt-detail" class="jt-detail" hidden></div>
+    <div id="jt-list" class="jt-groups"></div>
+    <div class="jc-row jc-between"><button type="button" id="jt-prev" hidden>Plus récents</button><span id="jt-page"></span><button type="button" id="jt-more" hidden>Plus anciens</button></div>
   </section>
 
   <section class="jc-pane" id="jc-pane-journal" aria-label="Journal des événements">
@@ -2392,14 +2396,14 @@ if(typeof module!=='undefined')module.exports=PenaltyModel;
 
   // V32.2 investigation controls: frozen views, persistent position and tracker egress timeline.
   let v332FlowSnapshot=0,v332FlowCursor=0,v332FlowReady=false,v332AnalysisPageSize=500,v332AnalysisPages=1;
-  let v332TrackerBefore=0,v332TrackerReady=false,v332TrackerNetworkBaseline=0,v332TrackerLatestBaseline=0;
+  let v332TrackerOffset=0,v332TrackerReady=false,v332TrackerNetworkBaseline=0,v332TrackerLatestBaseline=0,v332TrackerSelected=null;
   const v332Scroll={journal:0,flows:0,trackers:0,anomalies:0};let v332SaveTimer=0,v332Restored=false;
   function v332CaptureX(tab=state.tab){const w=$('jc-pane-'+tab)?.querySelector('.v32-table-wrap');if(w)v332Scroll[tab]=w.scrollLeft||0;}
   function v332RestoreX(tab=state.tab){requestAnimationFrame(()=>{const w=$('jc-pane-'+tab)?.querySelector('.v32-table-wrap');if(w)w.scrollLeft=Number(v332Scroll[tab]||0);});}
   function v332Persist(){
     try{v332CaptureX();const payload={tab:state.tab,journalPage:state.page,journalPageSize:PAGE_SIZE,journalSearch:$('jc-search')?.value||'',journalSegment:Number($('jc-segment')?.value||0),
       flowSearch:$('jf-search')?.value||'',flowPageSize:Number($('jf-page-size')?.value||100),flowSnapshot:v332FlowSnapshot,flowCursor:v332FlowCursor,flowReady:v332FlowReady,
-      trackerSearch:$('jt-search')?.value||'',trackerPageSize:Number($('jt-page-size')?.value||100),trackerBefore:v332TrackerBefore,trackerReady:v332TrackerReady,trackerNetworkBaseline:v332TrackerNetworkBaseline,trackerLatestBaseline:v332TrackerLatestBaseline,
+      trackerSearch:$('jt-search')?.value||'',trackerPageSize:Number($('jt-page-size')?.value||25),trackerOffset:v332TrackerOffset,trackerReady:v332TrackerReady,trackerNetworkBaseline:v332TrackerNetworkBaseline,trackerLatestBaseline:v332TrackerLatestBaseline,
       analysisPage,analysisPageSize:v332AnalysisPageSize,analysisSearch:$('jc-analysis-search')?.value||'',analysisKind:$('jc-analysis-kind')?.value||'anomaly',analysisUnread:!!$('jc-analysis-unread')?.checked,
       scrollX:v332Scroll,scrollY:scrollY||0};nativeBridge?.saveUiState?.(JSON.stringify(payload));return true;}catch(e){return false;}
   }
@@ -2427,24 +2431,94 @@ if(typeof module!=='undefined')module.exports=PenaltyModel;
   window.AivFlowFresh=function(head){if(v332FlowSnapshot&&head>v332FlowSnapshot)$('jf-snapshot').textContent='Vue figée au journal ID '+v332FlowSnapshot+' · nouvelles données disponibles ('+(head-v332FlowSnapshot)+' événements). Appuie sur Actualiser.';};
   $('jf-refresh').onclick=()=>{v332FlowSnapshot=Number(nativeBridge.journalHead?.()||0);v332FlowCursor=v332FlowSnapshot;v332FlowReady=false;renderFlows(false,true);};$('jf-search').oninput=()=>{};$('jf-search').onchange=()=>{v332FlowCursor=v332FlowSnapshot;v332FlowReady=false;renderFlows(false,true);};$('jf-page-size').onchange=()=>{v332FlowCursor=v332FlowSnapshot;v332FlowReady=false;renderFlows(false,true);};$('jf-more').onclick=()=>renderFlows(true,true);
 
-  function v332TrackerSize(){return Math.max(1,Math.min(500,Number($('jt-page-size')?.value||100)));}
-  function v332TrackerNames(f){return (f.tracker_matches||[]).map(t=>t.name).filter(Boolean);}
-  function v332TrackerHost(f){const m=(f.tracker_matches||[])[0],d=(f.tracker_dns_candidates||[])[0];return m?.host||f.tls_sni||d?.host||f.remote_ip||'—';}
-  function v332TrackerProof(f){if(f.current_apk_tracker_ids?.length)return ['APK + réseau','both'];if((f.tracker_matches||[]).length)return ['Réseau','net'];return ['DNS candidat','dns'];}
-  function v332RenderTrackers(append=false,force=false){
-    if(!nativeBridge?.trackerPage){$('jt-status').textContent='Index des traqueurs indisponible.';return;}
-    if(!append&&!force&&v332TrackerReady&&$('jt-list')?.children.length){v332RestoreX('trackers');return;}
-    v332CaptureX('trackers');const list=$('jt-list');if(!append)list.replaceChildren();
+  function v332TrackerSize(){return Math.max(1,Math.min(50,Number($('jt-page-size')?.value||25)));}
+  function v332FmtTime(ms){if(!ms)return '—';try{return new Date(ms).toLocaleString('fr-CA',{month:'short',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'});}catch(e){return flowTime(ms);}}
+  function v332ProofLabel(g){if(g?.apk?.present===true)return ['APK + réseau','both'];if(Number(g?.proof)>=2)return ['Réseau','net'];return ['DNS candidat','dns'];}
+  function v332SegmentCards(st){
+    const box=$('jt-segment-status');box.replaceChildren();const seg=st?.segments||{};
+    const items=[['Lots 50 000 terminés',seg.completed??0],['Lot en cours',seg.current||'—'],['Événements moulinés',st?.checkpoint??0],['Groupes traqueurs',st?.tracker_groups??0]];
+    for(const [label,value] of items){const d=element('div',undefined,'jt-stat');d.append(element('span',label),element('strong',String(value)));box.append(d);}
+  }
+  function v332Destinations(g){
+    const box=element('div',undefined,'jt-dests');
+    for(const d of (g.destinations||[]).slice(0,8)){const name=d.name||'Destination inconnue',x=element('span',name+(d.journeys>1?' · '+d.journeys+'×':''),'jt-dest');x.title=name;box.append(x);}
+    if(!(g.destinations||[]).length)box.append(element('span','Destination non résolue','jt-dest'));
+    return box;
+  }
+  function v332GroupCard(g){
+    const card=element('button',undefined,'jt-group');card.type='button';
+    const top=element('div',undefined,'jt-group-top'),title=element('div'),proof=v332ProofLabel(g),p=element('span',proof[0],'v33-proof '+proof[1]);
+    title.append(element('div',(g.app||'Application inconnue')+' → '+(g.tracker_name||('Tracker '+g.tracker_id)),'jt-group-title'));
+    if(g.package_name)title.append(element('div',g.package_name,'jc-sub'));
+    top.append(title,p);
+    const metrics=element('div',undefined,'jt-metrics');
+    for(const t of [(g.journeys||0)+' trajet(s)',(g.destinations_count||0)+' destination(s)','↑ '+flowBytes(g.tx_bytes||0),'↓ '+flowBytes(g.rx_bytes||0),'dernier '+v332FmtTime(g.last_ms)])metrics.append(element('span',t,'jt-chip'));
+    card.append(top,metrics,v332Destinations(g));
+    card.onclick=()=>v332OpenGroup(g);return card;
+  }
+  function v332RenderTrackers(force=false){
+    if(!nativeBridge?.trackerGroups){$('jt-status').textContent='La vue regroupée des traqueurs n’est pas disponible dans cette version.';return;}
+    if(!force&&v332TrackerReady&&$('jt-list')?.children.length&&!v332TrackerSelected)return;
     try{
-      const q=$('jt-search').value.trim(),raw=nativeBridge.trackerPageSized?nativeBridge.trackerPageSized(q,append?v332TrackerBefore:0,v332TrackerSize()):nativeBridge.trackerPage(q,append?v332TrackerBefore:0),result=JSON.parse(raw);if(result.error)throw new Error(result.error);
-      v332TrackerBefore=Number(result.next_before)||0;const st=result.status||JSON.parse(nativeBridge.trackerStatus()).index||{};if(!v332TrackerNetworkBaseline)v332TrackerNetworkBaseline=Number(st.network_flows)||0;if(!v332TrackerLatestBaseline)v332TrackerLatestBaseline=Number(st.latest_network_match_event)||0;
-      let wrap=list.querySelector('.v32-table-wrap'),table;if(!wrap){wrap=element('div',undefined,'v32-table-wrap');table=element('div',undefined,'v32-table');const head=element('div',undefined,'v32-table-head v33-tracker-head');for(const x of ['Heure','Application','Traqueur','Domaine / IP','Preuve','Volume','IDs'])head.append(element('span',x));table.append(head);wrap.append(table);list.append(wrap);}else table=wrap.firstElementChild;
-      for(const f of result.rows||[]){const row=element('div',undefined,'v32-table-row v33-tracker-row'),c=t=>{const x=element('span',t??'—','v32-cell');x.title=t??'—';return x;},proof=v332TrackerProof(f),pc=element('span',undefined,'v32-cell'),pill=element('span',proof[0],'v33-proof '+proof[1]);pc.append(pill);const names=v332TrackerNames(f).join(' · ')||((f.tracker_dns_candidates||[]).map(t=>t.name).join(' · ')||'—'),ids='evt '+(f.latest_event_id||'—')+' · flux '+String(f.flow_correlation_id||'').slice(0,10)+'…';row.append(c(flowTime(f.first_outbound_ms||f.first_observed_ms||f.first_inbound_ms)),c(f.app||'Acteur inconnu'),c(names),c(v332TrackerHost(f)),pc,c('↑ '+flowBytes(f.tx_bytes)+' · ↓ '+flowBytes(f.rx_bytes)),c(ids));row.ondblclick=()=>{if(f.latest_event_id){$('jc-search').value=String(f.latest_event_id);state.page=0;nativeAnchor=0;setTab('journal');renderNative();}};table.append(row);}
-      $('jt-status').textContent=(result.rows||[]).length+' sortie(s) affichée(s) · index '+(st.checkpoint||0)+' / '+(st.latest_event||0)+' · '+(st.network_flows||0)+' flux avec signature réseau.';$('jt-live').textContent='Vue stable. Double-touche une ligne pour ouvrir son événement dans le Journal. « APK + réseau » corrèle le même identifiant Exodus dans l’APK actuelle et sur le réseau.';$('jt-more').hidden=!(result.rows||[]).length||!v332TrackerBefore;$('jt-more').textContent='Afficher '+v332TrackerSize()+' sorties plus anciennes';v332TrackerReady=true;v332RestoreX('trackers');v332SaveSoon();
+      nativeBridge.trackerResume?.();
+      const q=$('jt-search').value.trim(),size=v332TrackerSize(),result=JSON.parse(nativeBridge.trackerGroups(q,v332TrackerOffset,size));if(result.error)throw new Error(result.error);
+      const st=result.status||JSON.parse(nativeBridge.trackerStatus()).index||{};v332SegmentCards(st);
+      const list=$('jt-list');list.replaceChildren();for(const g of result.rows||[])list.append(v332GroupCard(g));
+      const pages=Math.max(1,Math.ceil((result.total||0)/size)),page=Math.floor(v332TrackerOffset/size)+1;
+      $('jt-page').textContent='Page '+page+' / '+pages;$('jt-prev').hidden=v332TrackerOffset<=0;$('jt-more').hidden=v332TrackerOffset+size>=(result.total||0);
+      $('jt-status').textContent=(result.total||0)+' groupe(s) application + traqueur · '+(st.tracker_flow_hits||0)+' trajets correspondants · '+(st.trail_steps||0)+' étapes de trail indexées.';
+      $('jt-live').textContent=st.busy?'La moulinette travaille dans le journal en arrière-plan. La liste reste stable pendant que tu regardes.':'Index à jour au journal ID '+(st.checkpoint||0)+'.';
+      v332TrackerNetworkBaseline=Number(st.tracker_flow_hits)||0;v332TrackerLatestBaseline=Number(st.latest_network_match_event)||0;v332TrackerReady=true;v332SaveSoon();
     }catch(e){$('jt-status').textContent=e.message||String(e);}
   }
-  window.AivTrackerFresh=function(){try{const s=JSON.parse(nativeBridge.trackerStatus()).index||{},n=Number(s.network_flows)||0,last=Number(s.latest_network_match_event)||0;if(!v332TrackerNetworkBaseline){v332TrackerNetworkBaseline=n;v332TrackerLatestBaseline=last;return;}if(n>v332TrackerNetworkBaseline||last>v332TrackerLatestBaseline){$('jt-live').textContent='Nouvelle activité correspondant à une signature de traqueur détectée. La liste reste figée pour ne pas perdre ta position; appuie sur Actualiser.';}}catch(e){}};
-  $('jt-refresh').onclick=()=>{try{nativeBridge.trackerResume?.();const s=JSON.parse(nativeBridge.trackerStatus()).index||{};v332TrackerNetworkBaseline=Number(s.network_flows)||0;v332TrackerLatestBaseline=Number(s.latest_network_match_event)||0;}catch(e){}v332TrackerBefore=0;v332TrackerReady=false;v332RenderTrackers(false,true);};$('jt-search').onchange=()=>{v332TrackerBefore=0;v332TrackerReady=false;v332RenderTrackers(false,true);};$('jt-page-size').onchange=()=>{v332TrackerBefore=0;v332TrackerReady=false;v332RenderTrackers(false,true);};$('jt-more').onclick=()=>v332RenderTrackers(true,true);
+  function v332OpenGroup(g){
+    v332TrackerSelected={group:g,before:0};const detail=$('jt-detail');detail.hidden=false;detail.replaceChildren();
+    const back=element('button','← Retour aux groupes','jt-back');back.type='button';back.onclick=()=>{v332TrackerSelected=null;detail.hidden=true;detail.replaceChildren();};
+    const h=element('h3',(g.app||'Application inconnue')+' → '+(g.tracker_name||'Traqueur'));
+    const meta=element('p',(g.journeys||0)+' trajet(s) · '+(g.destinations_count||0)+' destination(s) · du '+v332FmtTime(g.first_ms)+' au '+v332FmtTime(g.last_ms),'jc-sub');
+    const journeys=element('div');detail.append(back,h,meta,v332Destinations(g),journeys);
+    v332LoadJourneys(g,journeys,0);
+    detail.scrollIntoView({behavior:'smooth',block:'start'});
+  }
+  function v332LoadJourneys(g,box,before){
+    try{
+      const result=JSON.parse(nativeBridge.trackerJourneys(g.app_key,Number(g.tracker_id),before,30));if(result.error)throw new Error(result.error);
+      if(!before)box.replaceChildren();
+      for(const j of result.rows||[]){
+        const b=element('button',undefined,'jt-journey');b.type='button';
+        const dest=j.host||j.remote_ip||'Destination non résolue';
+        b.append(element('strong',v332FmtTime(j.first_ms)+' → '+dest),element('span','UID '+(j.uid>=0?j.uid:'?')+' · ↑ '+flowBytes(j.tx_bytes||0)+' · ↓ '+flowBytes(j.rx_bytes||0)+' · '+(j.steps||0)+' étape(s)','jc-sub'));
+        b.onclick=()=>v332OpenTrail(g,j);box.append(b);
+      }
+      if(result.next_before&&(result.rows||[]).length===30){const more=element('button','30 trajets plus anciens');more.type='button';more.onclick=()=>{more.remove();v332LoadJourneys(g,box,result.next_before);};box.append(more);}
+    }catch(e){box.append(element('p',e.message||String(e),'jc-error'));}
+  }
+  function v332OpenTrail(g,j){
+    const detail=$('jt-detail');detail.hidden=false;detail.replaceChildren();
+    const back=element('button','← Retour aux trajets','jt-back');back.type='button';back.onclick=()=>v332OpenGroup(g);
+    detail.append(back,element('h3',(g.app||'Application')+' · '+(g.tracker_name||'Traqueur')),element('p','Trajet '+String(j.correlation||'').slice(0,12)+'… · '+(j.host||j.remote_ip||'destination non résolue'),'jc-sub'));
+    try{
+      const r=JSON.parse(nativeBridge.trackerTrail(j.correlation));if(r.error)throw new Error(r.error);
+      const trail=element('div',undefined,'jt-trail');
+      let prevTx=0,prevRx=0;
+      for(const s of r.steps||[]){
+        const tx=Math.max(0,Number(s.tx_bytes||0)-prevTx),rx=Math.max(0,Number(s.rx_bytes||0)-prevRx);prevTx=Math.max(prevTx,Number(s.tx_bytes||0));prevRx=Math.max(prevRx,Number(s.rx_bytes||0));
+        const step=element('div',undefined,'jt-step'),time=element('div',v332FmtTime(s.observed_ms),'jt-step-time'),main=element('div',undefined,'jt-step-main');
+        main.append(element('strong',s.action||s.category||'Événement'));
+        const where=s.tls_sni||s.destination||s.remote_ip||'';if(where)main.append(document.createTextNode(' · '+where));
+        if(tx||rx)main.append(element('div','Δ ↑ '+flowBytes(tx)+' · Δ ↓ '+flowBytes(rx),'jc-sub'));
+        const open=element('button','Événement '+s.event_id);open.type='button';open.onclick=()=>{$('jc-search').value=String(s.event_id);state.page=0;nativeAnchor=0;setTab('journal');renderNative();};main.append(open);step.append(time,main);trail.append(step);
+      }
+      detail.append(element('p',(r.total||0)+' événement(s) relié(s) au même flow_correlation_id local.'+(r.truncated?' Affichage limité aux 250 premiers.':''),'jc-sub'),trail);
+    }catch(e){detail.append(element('p',e.message||String(e),'jc-error'));}
+    detail.scrollIntoView({behavior:'smooth',block:'start'});
+  }
+  window.AivTrackerFresh=function(){try{const s=JSON.parse(nativeBridge.trackerStatus()).index||{},n=Number(s.tracker_flow_hits)||0,last=Number(s.latest_network_match_event)||0;if(!v332TrackerNetworkBaseline){v332TrackerNetworkBaseline=n;v332TrackerLatestBaseline=last;return;}if(n>v332TrackerNetworkBaseline||last>v332TrackerLatestBaseline)$('jt-live').textContent='Nouveaux trajets de traqueurs disponibles. Ta vue reste en place; appuie sur Actualiser quand tu veux les intégrer.';}catch(e){}};
+  $('jt-refresh').onclick=()=>{v332TrackerReady=false;v332TrackerSelected=null;$('jt-detail').hidden=true;v332RenderTrackers(true);};
+  $('jt-search').onchange=()=>{v332TrackerOffset=0;v332TrackerReady=false;v332TrackerSelected=null;$('jt-detail').hidden=true;v332RenderTrackers(true);};
+  $('jt-page-size').onchange=()=>{v332TrackerOffset=0;v332TrackerReady=false;v332RenderTrackers(true);};
+  $('jt-prev').onclick=()=>{v332TrackerOffset=Math.max(0,v332TrackerOffset-v332TrackerSize());v332TrackerReady=false;v332RenderTrackers(true);};
+  $('jt-more').onclick=()=>{v332TrackerOffset+=v332TrackerSize();v332TrackerReady=false;v332RenderTrackers(true);};
 
   renderAnalysis=function(){
     if(!nativeBridge?.analysisPage)return;refreshAnalysisStatus();if(analysisStatus?.recalculating){$('jc-analysis-progress').textContent='Recalcul en cours…';return;}if(analysisSelected!==null||$('jc-analysis-settings').open)return;
@@ -2457,7 +2531,7 @@ if(typeof module!=='undefined')module.exports=PenaltyModel;
   const v332SetTabBase=setTab;
   setTab=function(tab){v332CaptureX();v332SetTabBase(tab);if(tab==='flows'&&v332FlowReady)$('jf-snapshot').textContent='Vue figée au journal ID '+v332FlowSnapshot+' · la collecte continue en arrière-plan.';if(tab==='trackers')v332RenderTrackers(false);v332RestoreX(tab);v332SaveSoon();};
 
-  function v332RestoreState(){if(v332Restored)return;v332Restored=true;let s={};try{const raw=nativeBridge?.uiState?.();if(raw)s=JSON.parse(raw);}catch(e){}try{PAGE_SIZE=Math.max(1,Math.min(500,Number(s.journalPageSize)||100));$('jc-page-size').value=String(PAGE_SIZE);state.page=Math.max(0,Number(s.journalPage)||0);$('jc-search').value=s.journalSearch||'';if($('jc-segment'))$('jc-segment').value=String(Math.max(0,Number(s.journalSegment)||0));$('jf-search').value=s.flowSearch||'';$('jf-page-size').value=String([25,100,250,500].includes(Number(s.flowPageSize))?Number(s.flowPageSize):100);v332FlowSnapshot=Math.max(0,Number(s.flowSnapshot)||0);v332FlowCursor=Math.max(0,Number(s.flowCursor)||v332FlowSnapshot);v332FlowReady=!!s.flowReady;$('jt-search').value=s.trackerSearch||'';$('jt-page-size').value=String([25,100,250,500].includes(Number(s.trackerPageSize))?Number(s.trackerPageSize):100);v332TrackerBefore=Math.max(0,Number(s.trackerBefore)||0);v332TrackerReady=!!s.trackerReady;v332TrackerNetworkBaseline=Math.max(0,Number(s.trackerNetworkBaseline)||0);v332TrackerLatestBaseline=Math.max(0,Number(s.trackerLatestBaseline)||0);v332AnalysisPageSize=[25,100,250,500].includes(Number(s.analysisPageSize))?Number(s.analysisPageSize):500;$('jc-analysis-size').value=String(v332AnalysisPageSize);analysisPage=Math.max(0,Number(s.analysisPage)||0);$('jc-analysis-search').value=s.analysisSearch||'';$('jc-analysis-kind').value=s.analysisKind==='trace'?'trace':'anomaly';$('jc-analysis-unread').checked=!!s.analysisUnread;Object.assign(v332Scroll,s.scrollX||{});const tab=['home','journal','flows','trackers','anomalies','audit','menu'].includes(s.tab)?s.tab:'home';if(tab==='flows')v332FlowReady=false;if(tab==='trackers')v332TrackerReady=false;setTab(tab);requestAnimationFrame(()=>{scrollTo(0,Math.max(0,Number(s.scrollY)||0));v332RestoreX(tab);});}catch(e){setTab('home');}}
+  function v332RestoreState(){if(v332Restored)return;v332Restored=true;let s={};try{const raw=nativeBridge?.uiState?.();if(raw)s=JSON.parse(raw);}catch(e){}try{PAGE_SIZE=Math.max(1,Math.min(500,Number(s.journalPageSize)||100));$('jc-page-size').value=String(PAGE_SIZE);state.page=Math.max(0,Number(s.journalPage)||0);$('jc-search').value=s.journalSearch||'';if($('jc-segment'))$('jc-segment').value=String(Math.max(0,Number(s.journalSegment)||0));$('jf-search').value=s.flowSearch||'';$('jf-page-size').value=String([25,100,250,500].includes(Number(s.flowPageSize))?Number(s.flowPageSize):100);v332FlowSnapshot=Math.max(0,Number(s.flowSnapshot)||0);v332FlowCursor=Math.max(0,Number(s.flowCursor)||v332FlowSnapshot);v332FlowReady=!!s.flowReady;$('jt-search').value=s.trackerSearch||'';$('jt-page-size').value=String([12,25,30,50].includes(Number(s.trackerPageSize))?Number(s.trackerPageSize):25);v332TrackerOffset=Math.max(0,Number(s.trackerOffset)||0);v332TrackerReady=!!s.trackerReady;v332TrackerNetworkBaseline=Math.max(0,Number(s.trackerNetworkBaseline)||0);v332TrackerLatestBaseline=Math.max(0,Number(s.trackerLatestBaseline)||0);v332AnalysisPageSize=[25,100,250,500].includes(Number(s.analysisPageSize))?Number(s.analysisPageSize):500;$('jc-analysis-size').value=String(v332AnalysisPageSize);analysisPage=Math.max(0,Number(s.analysisPage)||0);$('jc-analysis-search').value=s.analysisSearch||'';$('jc-analysis-kind').value=s.analysisKind==='trace'?'trace':'anomaly';$('jc-analysis-unread').checked=!!s.analysisUnread;Object.assign(v332Scroll,s.scrollX||{});const tab=['home','journal','flows','trackers','anomalies','audit','menu'].includes(s.tab)?s.tab:'home';if(tab==='flows')v332FlowReady=false;if(tab==='trackers')v332TrackerReady=false;setTab(tab);requestAnimationFrame(()=>{scrollTo(0,Math.max(0,Number(s.scrollY)||0));v332RestoreX(tab);});}catch(e){setTab('home');}}
   const v332FinishStartupBase=finishStartup;finishStartup=function(input){v332FinishStartupBase(input);v332RestoreState();};
 
 
