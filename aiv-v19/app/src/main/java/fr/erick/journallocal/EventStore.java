@@ -96,7 +96,7 @@ public final class EventStore extends SQLiteOpenHelper {
             values.put("payload",event.toString());values.put("search_text",event.toString().toLowerCase(Locale.ROOT));
             getWritableDatabase().insertOrThrow("events",null,values);
             // Analysis errors have their own status and must never stop successful source recording.
-            AnomalyMonitor.request(context);JournalSegments.request(context);
+            AnomalyMonitor.request(context);JournalSegments.request(context);TrackerIndex.get(context).request();
             return true;
         } catch(Exception e) { lastError = "Écriture du journal impossible : " + e.getClass().getSimpleName(); return false; }
     }
