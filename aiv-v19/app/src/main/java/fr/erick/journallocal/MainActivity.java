@@ -109,6 +109,8 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public String journalResult(int ticket){return ticket==journalReplyId?journalReply:ticket<journalRequestId.get()?"{\"cancelled\":true}":"";}
 
         @JavascriptInterface public long journalHead(){return EventStore.get(MainActivity.this).latestId();}
+        @JavascriptInterface public String uiState(){return getSharedPreferences("ui",MODE_PRIVATE).getString("reader_state","");}
+        @JavascriptInterface public boolean saveUiState(String value){if(value==null||value.length()>16384)return false;getSharedPreferences("ui",MODE_PRIVATE).edit().putString("reader_state",value).apply();return true;}
         @JavascriptInterface public String continuousStatus(){return EventStore.object("enabled",Continuous.enabled(MainActivity.this),"collector",RecorderService.running,"vpn",NetworkCaptureService.running,"analysis",WatcherService.analysisActive,"vpn_error",NetworkCaptureService.lastError,"error",EventStore.lastError).toString();}
         @JavascriptInterface public String startupStatus(){return EventStore.object("state",startupState,"ready",!startupResult.isEmpty(),"error",startupError).toString();}
         @JavascriptInterface public void startupRetry(){if("Erreur".equals(startupState)){startupError="";startupState="Calcul en cours";prepareStartup();}}
@@ -165,6 +167,7 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public String auditContext(String pkg){try{return PermissionAudit.get(MainActivity.this).colorContext(pkg).toString();}catch(Exception e){return auditError(e);}}
         @JavascriptInterface public String trackerStatus(){try{return EventStore.object("catalog",ReferenceCatalog.get(MainActivity.this).summary(),"apk",ApkEvidence.get(MainActivity.this).status(),"index",TrackerIndex.get(MainActivity.this).status()).toString();}catch(Exception e){return auditError(e);}}
         @JavascriptInterface public String trackerPage(String query,long before){try{return TrackerIndex.get(MainActivity.this).page(query,before).toString();}catch(Exception e){return auditError(e);}}
+        @JavascriptInterface public String trackerPageSized(String query,long before,int limit){try{return TrackerIndex.get(MainActivity.this).page(query,before,limit).toString();}catch(Exception e){return auditError(e);}}
         @JavascriptInterface public String trackerMatch(String host,String kind){try{return ReferenceCatalog.get(MainActivity.this).network(host==null?"":host,kind==null?"JOURNAL":kind).toString();}catch(Exception e){return "[]";}}
         @JavascriptInterface public void trackerResume(){Continuous.prefs(MainActivity.this).edit().putBoolean("enabled",true).putBoolean("analysis_enabled",true).apply();Continuous.start(MainActivity.this);TrackerIndex.get(MainActivity.this).request();ApkEvidence.get(MainActivity.this).request();}
         @JavascriptInterface public String auditSummary(){try{return PermissionAudit.get(MainActivity.this).summary().put("file_status",fileStatus).toString();}catch(Exception e){return auditError(e);}}
@@ -198,6 +201,7 @@ public final class MainActivity extends Activity {
             return s.toString();
         }catch(Exception e){return EventStore.object("error","Lecture de l’analyse impossible : "+e.getClass().getSimpleName()).toString();}}
         @JavascriptInterface public String analysisPage(String kind,boolean unread,int offset){try{return AnomalyMonitor.get(MainActivity.this).page(kind,unread,offset).toString();}catch(Exception e){return EventStore.object("error","Lecture des signalements impossible : "+e.getClass().getSimpleName()).toString();}}
+        @JavascriptInterface public String analysisPageSized(String kind,boolean unread,int offset,int limit,String search){try{if(search!=null&&search.length()>1024)throw new IllegalArgumentException("Recherche trop longue");return AnomalyMonitor.get(MainActivity.this).page(kind,unread,offset,limit,search).toString();}catch(Exception e){return EventStore.object("error","Lecture des signalements impossible : "+e.getClass().getSimpleName()).toString();}}
         @JavascriptInterface public String analysisEvidence(long id){try{return AnomalyMonitor.get(MainActivity.this).evidence(id).toString();}catch(Exception e){return EventStore.object("error","Événements sources indisponibles : "+e.getClass().getSimpleName()).toString();}}
         @JavascriptInterface public String analysisChange(String action,String value){try{return AnomalyMonitor.get(MainActivity.this).change(action,value).toString();}catch(Exception e){return EventStore.object("error",e instanceof IllegalArgumentException?e.getMessage():"Action d’analyse impossible : "+e.getClass().getSimpleName()).toString();}}
     }
@@ -309,6 +313,14 @@ public final class MainActivity extends Activity {
     @Override protected void onResume(){super.onResume();if(reader!=null)reader.onResume();if(defenseResumed&&!defenseResultHandled)PermissionAudit.get(this).scan();defenseResultHandled=false;defenseResumed=true;refreshDefenseReader();if(!launchRulesApplied){launchRulesApplied=true;Continuous.start(this);if(Continuous.enabled(this)&&Continuous.prefs(this).getBoolean("vpn_enabled",true)&&!Continuous.prefs(this).getBoolean("vpn_prompted",false)){Intent consent=android.net.VpnService.prepare(this);if(consent!=null){Continuous.prefs(this).edit().putBoolean("vpn_prompted",true).apply();startActivityForResult(consent,VPN_REQUEST);}}}}
     private void refreshDefenseReader(){if(reader!=null)reader.evaluateJavascript("window.AivDefenseRefresh && window.AivDefenseRefresh()",null);}
 
-    @Override protected void onPause(){if(reader!=null)reader.onPause();super.onPause();}
+    private long lastBackPressMs;
+    @Override public void onBackPressed(){
+        long now=android.os.SystemClock.elapsedRealtime();
+        if(reader!=null)reader.evaluateJavascript("window.AivPersistUi&&window.AivPersistUi()",null);
+        if(now-lastBackPressMs<1800){super.onBackPressed();return;}
+        lastBackPressMs=now;
+        Toast.makeText(this,"Appuie encore pour fermer · ta position est conservée",Toast.LENGTH_SHORT).show();
+    }
+    @Override protected void onPause(){if(reader!=null){reader.evaluateJavascript("window.AivPersistUi&&window.AivPersistUi()",null);reader.onPause();}super.onPause();}
     @Override protected void onDestroy(){cleanupHandler.removeCallbacks(delayedCleanup);delayedCleanupScheduled=false;ShizukuCleanup.detach();DefenseMonitor.stop(this);journalReads.shutdownNow();if(reader!=null){reader.removeJavascriptInterface("JournalAndroid");reader.destroy();}super.onDestroy();}
 }
