@@ -136,12 +136,20 @@ public final class AnomalyMonitor extends SQLiteOpenHelper {
         return EventStore.object("revision",revision,"replay_target",config.optLong("replay_target",0),"recalculating",persistedRevision(db)!=revision||checkpoint<config.optLong("replay_target",0),"processed",processed,"checkpoint",checkpoint,"latest",EventStore.get(context).latestId(),"busy",busy||scheduled.get(),"unread",unread,"anomalies",total,"traces",traces,"unknown_attribution",unknown,"uncertain_counters",uncertain,"error",lastError,"settings",settingsJson());
     }
     public synchronized JSONObject page(String kind,boolean unread,int offset)throws Exception{
+        return page(kind,unread,offset,15,"");
+    }
+    public synchronized JSONObject page(String kind,boolean unread,int offset,int limit,String search)throws Exception{
         if(!kind.equals("trace")&&!kind.equals("anomaly"))throw new IllegalArgumentException("Vue inconnue.");
         JSONObject status=summary();if(status.optBoolean("recalculating"))return EventStore.object("rows",new JSONArray(),"total",JSONObject.NULL,"recalculating",true,"checkpoint",status.optLong("checkpoint"),"target",status.optLong("replay_target"));
         String revision=status.getLong("revision")+":%";
-        offset=Math.max(0,offset);String where="group_key LIKE ? AND kind=?"+(unread?" AND reviewed=0":"");SQLiteDatabase db=getReadableDatabase();long count;
-        try(Cursor c=db.rawQuery("SELECT COUNT(*) FROM findings WHERE "+where,new String[]{revision,kind})){c.moveToFirst();count=c.getLong(0);}
-        JSONArray rows=new JSONArray();try(Cursor c=db.rawQuery("SELECT id,first_ms,last_ms,occurrences,reviewed,payload FROM findings WHERE "+where+" ORDER BY id DESC LIMIT 15 OFFSET ?",new String[]{revision,kind,String.valueOf(offset)})){
+        offset=Math.max(0,offset);limit=Math.max(1,Math.min(500,limit));
+        String where="group_key LIKE ? AND kind=?"+(unread?" AND reviewed=0":"");ArrayList<String> args=new ArrayList<>();args.add(revision);args.add(kind);
+        String term=search==null?"":search.trim().toLowerCase(Locale.ROOT);
+        if(!term.isEmpty()){String escaped=term.replace("\\","\\\\").replace("%","\\%").replace("_","\\_");where+=" AND (LOWER(payload) LIKE ? ESCAPE '\\' OR CAST(id AS TEXT)=?)";args.add("%"+escaped+"%");args.add(term);}
+        SQLiteDatabase db=getReadableDatabase();long count;
+        try(Cursor c=db.rawQuery("SELECT COUNT(*) FROM findings WHERE "+where,args.toArray(new String[0]))){c.moveToFirst();count=c.getLong(0);}
+        ArrayList<String> pageArgs=new ArrayList<>(args);pageArgs.add(String.valueOf(limit));pageArgs.add(String.valueOf(offset));
+        JSONArray rows=new JSONArray();try(Cursor c=db.rawQuery("SELECT id,first_ms,last_ms,occurrences,reviewed,payload FROM findings WHERE "+where+" ORDER BY id DESC LIMIT ? OFFSET ?",pageArgs.toArray(new String[0]))){
             while(c.moveToNext()){JSONObject row=new JSONObject(c.getString(5));row.put("id",c.getLong(0));row.put("first_ms",c.getLong(1));row.put("last_ms",c.getLong(2));row.put("occurrences",c.getLong(3));row.put("reviewed",c.getInt(4)!=0);rows.put(row);}
         }
         for(int i=0;i<rows.length();i++){
@@ -152,7 +160,7 @@ public final class AnomalyMonitor extends SQLiteOpenHelper {
             }
             if(!mixed&&identity!=null)item.put("identity",identity);
         }
-        return EventStore.object("rows",rows,"total",count);
+        return EventStore.object("rows",rows,"total",count,"limit",limit,"offset",offset,"query",term);
     }
     public JSONObject evidence(long id)throws Exception{
         JSONArray ids=null;
