@@ -1,9 +1,9 @@
-name: AIV V36 clean GitHub build
+name: AIV V37 recovery GitHub build
 
 on:
   workflow_dispatch:
   push:
-    branches: [aiv-v36-clean-rebuild]
+    branches: [aiv-v37-recovery]
     paths:
       - "aiv-v19/**"
       - ".github/workflows/aiv-v24-shizuku.yml"
@@ -31,7 +31,7 @@ jobs:
           path: aiv-v19/.toolchain
           key: aiv-v32-android35-ndk27d-shizuku-13.1.5
 
-      - name: Build AIV 0.6.36 unsigned
+      - name: Build AIV 0.6.37 unsigned
         working-directory: aiv-v19
         env:
           AIV_BUILD_MODE: unsigned
@@ -42,12 +42,14 @@ jobs:
       - name: Regression tests
         run: bash aiv-v19/tests/run-v23.sh
 
-      - name: V36 clean UI regression checks
+      - name: V37 recovery regression checks
         shell: bash
         run: |
           set -euo pipefail
           ! grep -q 'aiv-level-pie' aiv-v19/app/src/main/assets/journal.html
           ! grep -q 'RÉPARTITION DES PERMISSIONS' aiv-v19/app/src/main/assets/journal.html
+          grep -q 'try{Continuous.initialize(this);}catch(Throwable ignored){}' aiv-v19/app/src/main/java/fr/erick/journallocal/MainActivity.java
+          grep -q 'try{DefenseMonitor.start(this);}catch(Throwable ignored){}' aiv-v19/app/src/main/java/fr/erick/journallocal/MainActivity.java
           grep -q 'try{ShizukuCleanup.attach(this);}catch(Throwable ignored){}' aiv-v19/app/src/main/java/fr/erick/journallocal/MainActivity.java
           grep -q 'aiv-v32-android-design' aiv-v19/app/src/main/assets/journal.html
           grep -q 'V32 Android UI overlay' aiv-v19/app/src/main/assets/journal.html
@@ -70,20 +72,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -s aiv-v19/build/AIV-0.6.36-unsigned.apk
-          test -s aiv-v19/build/AIV-0.6.36-unsigned.apk.sha256
-          grep -q 'android:versionName="0.6.36"' aiv-v19/app/src/main/AndroidManifest.xml
+          test -s aiv-v19/build/AIV-0.6.37-unsigned.apk
+          test -s aiv-v19/build/AIV-0.6.37-unsigned.apk.sha256
+          grep -q 'android:versionName="0.6.37"' aiv-v19/app/src/main/AndroidManifest.xml
           grep -q 'rikka.shizuku.ShizukuProvider' aiv-v19/app/src/main/AndroidManifest.xml
           grep -q 'class ShizukuCleanup' aiv-v19/app/src/main/java/fr/erick/journallocal/ShizukuCleanup.java
-          sha256sum -c aiv-v19/build/AIV-0.6.36-unsigned.apk.sha256
+          sha256sum -c aiv-v19/build/AIV-0.6.37-unsigned.apk.sha256
 
-      - name: Upload AIV V36 unsigned APK
+      - name: Upload AIV V37 unsigned APK
         uses: actions/upload-artifact@v4
         with:
-          name: AIV-0.6.36-unsigned
+          name: AIV-0.6.37-unsigned
           path: |
-            aiv-v19/build/AIV-0.6.36-unsigned.apk
-            aiv-v19/build/AIV-0.6.36-unsigned.apk.sha256
+            aiv-v19/build/AIV-0.6.37-unsigned.apk
+            aiv-v19/build/AIV-0.6.37-unsigned.apk.sha256
             aiv-v19/.toolchain/sdk/build-tools/35.0.0/lib/apksigner.jar
           retention-days: 14
           include-hidden-files: true
