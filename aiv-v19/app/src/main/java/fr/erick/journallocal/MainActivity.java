@@ -23,8 +23,12 @@ public final class MainActivity extends Activity {
     private static final int DEFENSE_EXPORT_REQUEST=30;
     private boolean defenseResumed,defenseResultHandled;
     @Override public void onCreate(Bundle state){
-        super.onCreate(state);Continuous.initialize(this);DefenseMonitor.start(this);try{ShizukuCleanup.attach(this);}catch(Throwable ignored){}
-        prepareStartup();
+        super.onCreate(state);
+        // V37 recovery: no optional subsystem may prevent the journal UI from opening.
+        try{Continuous.initialize(this);}catch(Throwable ignored){}
+        try{DefenseMonitor.start(this);}catch(Throwable ignored){}
+        try{ShizukuCleanup.attach(this);}catch(Throwable ignored){}
+        try{prepareStartup();}catch(Throwable e){startupState="Erreur";startupError="Initialisation : "+e.getClass().getSimpleName();}
         reader=new WebView(this);reader.setBackgroundColor(0xFF05090D);
         reader.setOnApplyWindowInsetsListener((view,insets)->{
             if(Build.VERSION.SDK_INT>=30){android.graphics.Insets bars=insets.getInsets(WindowInsets.Type.systemBars());view.setPadding(bars.left,bars.top,bars.right,bars.bottom);}
@@ -325,5 +329,5 @@ public final class MainActivity extends Activity {
         Toast.makeText(this,"Appuie encore pour fermer · ta position est conservée",Toast.LENGTH_SHORT).show();
     }
     @Override protected void onPause(){if(reader!=null){reader.evaluateJavascript("window.AivPersistUi&&window.AivPersistUi()",null);reader.onPause();}super.onPause();}
-    @Override protected void onDestroy(){cleanupHandler.removeCallbacks(delayedCleanup);delayedCleanupScheduled=false;try{ShizukuCleanup.detach();}catch(Throwable ignored){}DefenseMonitor.stop(this);journalReads.shutdownNow();if(reader!=null){reader.removeJavascriptInterface("JournalAndroid");reader.destroy();}super.onDestroy();}
+    @Override protected void onDestroy(){cleanupHandler.removeCallbacks(delayedCleanup);delayedCleanupScheduled=false;try{ShizukuCleanup.detach();}catch(Throwable ignored){}try{DefenseMonitor.stop(this);}catch(Throwable ignored){}journalReads.shutdownNow();if(reader!=null){reader.removeJavascriptInterface("JournalAndroid");reader.destroy();}super.onDestroy();}
 }
