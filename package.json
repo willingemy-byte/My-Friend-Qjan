@@ -1,0 +1,23 @@
+{
+  "name": "my-friend-qjan",
+  "version": "1.0.0",
+  "description": "Projet de journalisation locale sur Android, transféré depuis ChatGPT Work le 11 septembre 2026.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/willingemy-byte/My-Friend-Qjan.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/willingemy-byte/My-Friend-Qjan/issues"
+  },
+  "homepage": "https://github.com/willingemy-byte/My-Friend-Qjan#readme",
+  "devDependencies": {
+    "supabase": "^2.118.0"
+  }
+}
