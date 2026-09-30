@@ -15,7 +15,7 @@ public final class TrackerIndex extends SQLiteOpenHelper {
     public void onCreate(SQLiteDatabase db){db.execSQL("CREATE TABLE progress(id INTEGER PRIMARY KEY,checkpoint INTEGER,revision TEXT)");db.execSQL("INSERT INTO progress VALUES(1,0,'')");db.execSQL("CREATE TABLE flows(correlation TEXT PRIMARY KEY,latest INTEGER,search TEXT,payload TEXT)");db.execSQL("CREATE INDEX tracker_latest ON flows(latest)");}
     public void onUpgrade(SQLiteDatabase db,int old,int next){}
     private long checkpoint(){try(Cursor c=getReadableDatabase().rawQuery("SELECT checkpoint FROM progress WHERE id=1",null)){c.moveToFirst();return c.getLong(0);}}
-    public JSONObject status(){long n=0;try(Cursor c=getReadableDatabase().rawQuery("SELECT COUNT(*) FROM flows",null)){c.moveToFirst();n=c.getLong(0);}return EventStore.object("busy",busy.get(),"enabled",enabled(),"checkpoint",checkpoint(),"latest_event",EventStore.get(context).latestId(),"candidate_flows",n,"error",error,"notice","Reprise progressive de l’historique; compteurs cumulés conservés une fois par flux. Résultats partiels tant que le rattrapage continue.");}
+    public JSONObject status(){long n=0,network=0,latestNetwork=0;SQLiteDatabase db=getReadableDatabase();try(Cursor c=db.rawQuery("SELECT COUNT(*) FROM flows",null)){c.moveToFirst();n=c.getLong(0);}try(Cursor c=db.rawQuery("SELECT COUNT(*),COALESCE(MAX(latest),0) FROM flows WHERE instr(search,?)>0",new String[]{"\"tracker_matches\":[{"})){c.moveToFirst();network=c.getLong(0);latestNetwork=c.getLong(1);}return EventStore.object("busy",busy.get(),"enabled",enabled(),"checkpoint",checkpoint(),"latest_event",EventStore.get(context).latestId(),"candidate_flows",n,"network_flows",network,"latest_network_match_event",latestNetwork,"error",error,"notice","Reprise progressive de l’historique; compteurs cumulés conservés une fois par flux. Une signature réseau correspond à un domaine observé, pas au contenu transmis ni au SDK qui a initié l’appel.");}
     private boolean enabled(){return Continuous.enabled(context)&&Continuous.prefs(context).getBoolean("analysis_enabled",true);}
     public void request(){if(!enabled()||!busy.compareAndSet(false,true))return;new Thread(()->{
         android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND);
@@ -45,14 +45,16 @@ public final class TrackerIndex extends SQLiteOpenHelper {
         writer.write("{\"schema\":\"aiv-tracker-observations/22\",\"status\":");writer.write(status().toString());writer.write(",\"catalog\":");writer.write(ReferenceCatalog.get(context).summary().toString());writer.write(",\"flows\":[");
         boolean first=true;try(Cursor c=getReadableDatabase().rawQuery("SELECT payload FROM flows ORDER BY latest",null)){while(c.moveToNext()){if(!first)writer.write(",");writer.write(c.getString(0));first=false;}}writer.write("]}");
     }
-    public JSONObject page(String query,long before)throws Exception{
-        if(query==null)query="";if(query.length()>512)throw new IllegalArgumentException("Recherche trop longue");JSONArray rows=new JSONArray();long next=0;
-        try(Cursor c=getReadableDatabase().rawQuery("SELECT latest,payload FROM flows WHERE latest<? AND instr(search,?)>0 ORDER BY latest DESC LIMIT 25",new String[]{""+(before>0?before:Long.MAX_VALUE),query.toLowerCase(java.util.Locale.ROOT)})){while(c.moveToNext()){next=c.getLong(0);JSONObject row=new JSONObject(c.getString(1));if(row.optBoolean("attribution_unique")){JSONArray pkgs=row.optJSONArray("packages");if(pkgs!=null&&pkgs.length()==1)try{
+    public JSONObject page(String query,long before)throws Exception{return page(query,before,25);}
+    public JSONObject page(String query,long before,int limit)throws Exception{
+        if(query==null)query="";if(query.length()>512)throw new IllegalArgumentException("Recherche trop longue");limit=Math.max(1,Math.min(500,limit));JSONArray rows=new JSONArray();long next=0;
+        try(Cursor c=getReadableDatabase().rawQuery("SELECT latest,payload FROM flows WHERE latest<? AND instr(search,?)>0 ORDER BY latest DESC LIMIT ?",new String[]{""+(before>0?before:Long.MAX_VALUE),query.toLowerCase(java.util.Locale.ROOT),String.valueOf(limit)})){while(c.moveToNext()){next=c.getLong(0);JSONObject row=new JSONObject(c.getString(1));if(row.optBoolean("attribution_unique")){JSONArray pkgs=row.optJSONArray("packages");if(pkgs!=null&&pkgs.length()==1)try{
             android.content.pm.PackageInfo installed=context.getPackageManager().getPackageInfo(pkgs.getString(0),0);long version=android.os.Build.VERSION.SDK_INT>=28?installed.getLongVersionCode():installed.versionCode;
             JSONObject apk=ApkEvidence.get(context).read(pkgs.getString(0),version,installed.lastUpdateTime);JSONArray sdk=apk.optJSONArray("trackers"),network=row.optJSONArray("tracker_matches"),intersection=new JSONArray();
             if(sdk!=null&&network!=null)for(int i=0;i<network.length();i++)for(int j=0;j<sdk.length();j++)if(network.getJSONObject(i).optInt("tracker_id")==sdk.getJSONObject(j).optInt("id"))intersection.put(network.getJSONObject(i).optInt("tracker_id"));
-            row.put("current_apk_tracker_ids",intersection).put("current_apk_version",version).put("current_apk_status",apk.optString("status")).put("apk_correlation_scope","Même identifiant Exodus dans le flux et l’APK actuellement installé; version au moment du flux et SDK appelant non prouvés.");
+            row.put("current_apk_tracker_ids",intersection).put("current_apk_version",version).put("current_apk_status",apk.optString("status")).put("apk_correlation_scope","Même identifiant Exodus dans le flux et l’APK actuellement installé; cela renforce la corrélation mais ne prouve pas quel SDK a initié cette connexion.");
         }catch(android.content.pm.PackageManager.NameNotFoundException e){row.put("current_apk_status","NOT_VISIBLE_OR_REMOVED");}}rows.put(row);}}
-        return EventStore.object("rows",rows,"next_before",next,"status",status());
+        return EventStore.object("rows",rows,"next_before",next,"limit",limit,"status",status());
     }
+
 }

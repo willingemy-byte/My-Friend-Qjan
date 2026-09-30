@@ -173,6 +173,20 @@ body{padding:0!important;margin:0!important;max-width:none!important}
 
 </style>
 
+<style id="aiv-v32-2-investigation">
+.v33-controls{display:flex;gap:7px;align-items:end;flex-wrap:wrap;margin:8px 0}.v33-grow{flex:1 1 260px;min-width:0}.v33-jump{display:flex;align-items:center;gap:5px;white-space:nowrap}.v33-jump input{width:72px!important;min-height:36px!important;padding:4px 6px!important}.v33-jump button{min-width:44px!important}
+#jc-reader.v32-ui .v32-table{min-width:860px!important}
+#jc-reader.v32-ui .v32-table-head,#jc-reader.v32-ui .v32-table-row{grid-template-columns:92px 145px 58px 118px 165px 120px 100px!important}
+#jc-reader.v32-ui .v32-flow-head,#jc-reader.v32-ui .v32-flow-row{grid-template-columns:92px 145px 58px 72px 145px 150px 110px 88px!important}
+#jc-reader.v32-ui .v32-anom-head,#jc-reader.v32-ui .v32-anom-row{grid-template-columns:92px 145px 110px 185px 105px 70px!important}
+#jc-reader.v32-ui .v33-tracker-head,#jc-reader.v32-ui .v33-tracker-row{grid-template-columns:96px 150px 145px 175px 90px 95px 120px!important}
+#jc-reader.v32-ui .v32-cell{white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;overflow-wrap:normal!important}
+#jc-reader.v32-ui .v32-appcell{overflow:hidden!important;text-overflow:ellipsis!important}
+#jc-reader.v32-ui .jc-toolbar{grid-template-columns:minmax(150px,1fr) repeat(3,auto)!important}
+.v33-proof{display:inline-flex;padding:3px 6px;border-radius:999px;border:1px solid #3d6582;font-size:.58rem;font-weight:800}.v33-proof.both{border-color:#5bcf8b;color:#8ef1b3}.v33-proof.net{border-color:#5fa9d8;color:#8bd0ff}.v33-proof.dns{border-color:#d4ae55;color:#f0ce7c}
+#jt-list{margin-top:9px}
+@media(max-width:600px){#jc-reader.v32-ui .jc-toolbar{grid-template-columns:minmax(140px,1fr) auto!important}.v33-jump{width:100%;justify-content:center}}
+</style>
 </head><body><main><style>
 #jc-reader { --jc-bg:light-dark(#fbfcfc,#151a1b); --jc-ink:light-dark(#202b2c,#edf4f2); --jc-sub:light-dark(#506565,#b4c6c4); --jc-line:light-dark(#d6e2df,#364845); --jc-accent:light-dark(#096558,#81dbc4); --jc-wash:light-dark(#e9f5f0,#223c35); --jc-paper:light-dark(#ffffff,#1c2425); --jc-warn:light-dark(#8c570f,#f3c680); --jc-danger:light-dark(#a32336,#ffadb8); color:var(--jc-ink); background:var(--jc-bg); border:1px solid var(--jc-line); border-radius:18px; font-family:system-ui,sans-serif; overflow-wrap:anywhere; color-scheme:light dark; }
 #jc-reader * { box-sizing:border-box; }
@@ -420,7 +434,7 @@ body{padding:0!important;margin:0!important;max-width:none!important}
     <button type="button" data-jc-tab="menu" aria-pressed="false" aria-controls="jc-pane-menu">Menu</button>
   </nav>
   <section class="jc-pane jc-home" id="jc-pane-home" aria-label="Accueil AIV">
-    <p class="jc-clean-build-tag" aria-label="Version de compilation">AIV 0.6.33 · DESIGN COMPLET · FONCTIONS CONSERVÉES</p>
+    <p class="jc-clean-build-tag" aria-label="Version de compilation">AIV 0.6.34 · DESIGN COMPLET · FONCTIONS CONSERVÉES</p>
     <div class="jc-view-switch" aria-label="Choisir la vue de démonstration">
       <button type="button" id="jc-mode-user" aria-pressed="true">Utilisateur</button>
       <button type="button" id="jc-mode-ti" aria-pressed="false">TI · démo</button>
@@ -504,10 +518,20 @@ body{padding:0!important;margin:0!important;max-width:none!important}
   <section class="jc-pane" id="jc-pane-flows" aria-label="Flux réseau" hidden>
     <div class="jc-row jc-between"><div><h2>Flux</h2><p class="jc-sub">Sortie et retour regroupés par l’identifiant local du VPN. Aucun marqueur n’est injecté dans Internet.</p></div><button type="button" id="jf-refresh">Actualiser</button></div>
     <div class="jc-flow-help">Le contenu TLS n’est jamais déchiffré. DNS et SNI sont affichés seulement lorsqu’ils sont visibles. Un UID réservé ou partagé reste <strong>non attribuable</strong>.</div>
-    <label>Application, UID, IP, domaine ou identifiant de flux<input id="jf-search" type="search" placeholder="Ex. Gmail, UID 1000, 142.250…, flow…"></label>
+    <div class="v33-controls"><label class="v33-grow">Application, UID, IP, domaine, ID événement ou flux<input id="jf-search" type="search" placeholder="Ex. Gmail, UID 1000, 142.250…, 889144, flow…"></label><label>Lignes<select id="jf-page-size"><option>25</option><option selected>100</option><option>250</option><option>500</option></select></label></div>
+    <p id="jf-snapshot" class="jc-sub" aria-live="polite"></p>
     <p id="jf-status" class="jc-sub" aria-live="polite"></p>
     <div id="jf-list" class="jc-flow-list"></div>
     <button type="button" id="jf-more" hidden>Afficher des flux plus anciens</button>
+  </section>
+
+  <section class="jc-pane" id="jc-pane-trackers" aria-label="Traqueurs réseau observés" hidden>
+    <div class="jc-row jc-between"><div><h2>Traqueurs</h2><p class="jc-sub">Signatures Exodus rapprochées des flux réseau locaux. Une ligne « APK + réseau » signifie que le même identifiant Exodus apparaît dans l’APK actuellement installée et dans un domaine réseau observé; cela ne prouve pas quel SDK a initié l’appel.</p></div><button type="button" id="jt-refresh">Actualiser</button></div>
+    <div class="v33-controls"><label class="v33-grow">Application, traqueur, domaine ou ID<input id="jt-search" type="search" placeholder="Ex. WhatsApp, Google Analytics, graph.facebook.com, 889144"></label><label>Lignes<select id="jt-page-size"><option>25</option><option selected>100</option><option>250</option><option>500</option></select></label></div>
+    <p id="jt-live" class="jc-sub" aria-live="polite"></p>
+    <p id="jt-status" class="jc-sub" aria-live="polite"></p>
+    <div id="jt-list"></div>
+    <button type="button" id="jt-more" hidden>Plus ancien</button>
   </section>
 
   <section class="jc-pane" id="jc-pane-journal" aria-label="Journal des événements">
@@ -521,7 +545,8 @@ body{padding:0!important;margin:0!important;max-width:none!important}
     <p id="jc-message" class="jc-status" role="status" hidden></p><p id="jc-error" class="jc-error" role="alert" hidden></p>
     <div id="jc-filter-area" hidden>
       <div class="jc-toolbar">
-        <label class="jc-wide">Rechercher dans le journal<input id="jc-search" type="search" placeholder="Application, domaine, action…"></label>
+        <label class="jc-wide">Rechercher dans le journal<input id="jc-search" type="search" placeholder="Application, domaine, action ou ID d’événement…"></label>
+        <label>Lignes<select id="jc-page-size"><option>25</option><option selected>100</option><option>250</option><option>500</option></select></label>
         <label>Application ou acteur<select id="jc-app"><option value="">Tous les acteurs</option></select></label>
         <label>Connexion<select id="jc-transport"><option value="">Toutes les connexions</option><option>Wi-Fi</option><option>LTE / 5G</option><option>Bluetooth</option><option>Partage</option><option>USB</option><option>Ethernet</option><option>VPN</option><option>Interne</option><option>Inconnue</option></select></label>
       </div>
@@ -547,7 +572,9 @@ body{padding:0!important;margin:0!important;max-width:none!important}
       </div>
     </div>
     <div class="jc-toolbar">
+      <label class="v33-grow">Rechercher<input id="jc-analysis-search" type="search" placeholder="Application, signal, groupe ou ID événement…"></label>
       <label>Vue<select id="jc-analysis-kind"><option value="anomaly">Anomalies et diagnostics</option><option value="trace">Traces de l’enquête</option></select></label>
+      <label>Lignes<select id="jc-analysis-size"><option>25</option><option>100</option><option>250</option><option selected>500</option></select></label>
       <label class="jc-check"><input id="jc-analysis-unread" type="checkbox">À lire uniquement</label>
     </div>
     <p id="jc-analysis-message" role="status" hidden></p>
@@ -579,7 +606,7 @@ body{padding:0!important;margin:0!important;max-width:none!important}
     <div id="jc-analysis-detail" class="jc-detail" hidden></div>
     <p id="jc-analysis-empty" class="jc-note" hidden></p>
     <ol id="jc-analysis-list" class="jc-events" aria-label="Signalements regroupés"></ol>
-    <div id="jc-analysis-pagination" class="jc-pagination" hidden><button type="button" id="jc-analysis-prev">Précédent</button><span id="jc-analysis-page"></span><button type="button" id="jc-analysis-next">Suivant</button></div>
+    <div id="jc-analysis-pagination" class="jc-pagination" hidden><button type="button" id="jc-analysis-prev">Précédent</button><span id="jc-analysis-page"></span><label class="v33-jump">Aller à <input id="jc-analysis-go" type="number" min="1" step="1" inputmode="numeric"><button type="button" id="jc-analysis-jump">OK</button></label><button type="button" id="jc-analysis-next">Suivant</button></div>
     <p class="jc-sub" style="margin-top:16px">Les répétitions sont regroupées par périodes de 5 minutes pour les seuils et de 15 minutes pour les autres règles. « Marquer vu » vaut pour ce groupe. Aucune connexion n’est bloquée.</p>
     <button type="button" id="jc-analysis-retry" style="margin-top:12px">Reprendre l’analyse en attente</button>
   </section>
@@ -795,7 +822,7 @@ main{max-width:1120px}
   const root=document.getElementById('jc-reader'); if(!root)return;
   const $=id=>root.querySelector('#'+id);
   const state={events:[],sources:[],payloads:[],page:0,selected:null,tab:'home',busy:false};
-  const PAGE_SIZE=15;
+  let PAGE_SIZE=100;
   const permissionGroups=[
     ['Activité physique',[['reconnaître les activités physiques','3714.jpg']]],
     ['Agenda',[["Lire les événements d’agenda et leurs détails",'3714.jpg'],["ajouter ou modifier des événements d’agenda et envoyer des courriels aux invités à l’insu du propriétaire",'3714.jpg']]],
@@ -2170,7 +2197,7 @@ if(typeof module!=='undefined')module.exports=PenaltyModel;
   }
   function v32InstallNav(){
     const n=root.querySelector('.jc-user-nav');if(!n)return;n.replaceChildren();
-    for(const [tab,label] of [['home','Présentation'],['journal','Journal'],['flows','Flux'],['anomalies','Anomalies'],['audit','Applications'],['menu','Paramètres']]){
+    for(const [tab,label] of [['home','Présentation'],['journal','Journal'],['flows','Flux'],['trackers','Traqueurs'],['anomalies','Anomalies'],['audit','Applications'],['menu','Paramètres']]){
       const b=penaltyButton(label,()=>setTab(tab));b.dataset.jcTab=tab;b.setAttribute('aria-pressed',String(tab==='home'));n.append(b);
     }
   }
@@ -2179,12 +2206,13 @@ if(typeof module!=='undefined')module.exports=PenaltyModel;
   try{const p=$('jc-pane-flows');if(p&&p.parentElement!==root)$('jc-pane-anomalies').before(p);}catch(e){}
   const v32OldSetTab=setTab;
   setTab=function(tab){
-    if(['home','journal','flows','anomalies','audit','menu'].includes(tab)){
+    if(['home','journal','flows','trackers','anomalies','audit','menu'].includes(tab)){
       state.tab=tab;
-      for(const name of ['home','menu','journal','flows','audit','anomalies','diagnostic','permissions','sources','decisions','references','penalty']){const p=$('jc-pane-'+name);if(p)p.hidden=name!==tab;}
+      for(const name of ['home','menu','journal','flows','trackers','audit','anomalies','diagnostic','permissions','sources','decisions','references','penalty']){const p=$('jc-pane-'+name);if(p)p.hidden=name!==tab;}
       if(tab==='home')v32RenderHome();
       if(tab==='journal')renderJournal();
       if(tab==='flows')renderFlows(false);
+      if(tab==='trackers')v332RenderTrackers(false);
       if(tab==='anomalies')renderAnalysis();
       if(tab==='audit')renderAudit();
       if(tab==='menu')v32RenderSettings();
@@ -2354,9 +2382,84 @@ if(typeof module!=='undefined')module.exports=PenaltyModel;
 
   v32InstallHeader();v32InstallNav();v32Status();setInterval(v32Status,2500);
   const v32Top=penaltyButton('↑',()=>window.scrollTo({top:0,behavior:'smooth'}));v32Top.className='v32-float-top';v32Top.setAttribute('aria-label','Remonter en haut');document.body.append(v32Top);addEventListener('scroll',()=>v32Top.classList.toggle('show',scrollY>180),{passive:true});
-  // Refresh live views while they are visible. Tracker matching stays local/offline.
-  let v32Head=0;setInterval(()=>{if(document.hidden||!nativeBridge?.journalHead)return;try{const h=Number(nativeBridge.journalHead());if(h>v32Head){const changed=v32Head>0;v32Head=h;if(changed&&state.tab==='journal'){state.page=0;nativeAnchor=0;renderNative();}if(changed&&state.tab==='flows'){flowBefore=0;renderFlows(false);}}}catch(e){}},2500);
+  // V32.2: do not throw the investigator back to the newest rows.
+  let v32Head=0;setInterval(()=>{if(document.hidden||!nativeBridge?.journalHead)return;try{const h=Number(nativeBridge.journalHead());if(!v32Head){v32Head=h;return;}if(h<=v32Head)return;const added=h-v32Head;v32Head=h;
+    if(state.tab==='journal'){const fresh=$('jc-new-events');if(fresh){fresh.hidden=false;fresh.textContent=added+' nouveaux événements · actualiser';}}
+    if(state.tab==='flows'&&window.AivFlowFresh)window.AivFlowFresh(h);
+    if(window.AivTrackerFresh)window.AivTrackerFresh();
+  }catch(e){}},2500);
   const v32OldMvp=renderMvpHome;renderMvpHome=function(){try{v32RenderHome();}catch(e){v32OldMvp();}};
+
+  // V32.2 investigation controls: frozen views, persistent position and tracker egress timeline.
+  let v332FlowSnapshot=0,v332FlowCursor=0,v332FlowReady=false,v332AnalysisPageSize=500,v332AnalysisPages=1;
+  let v332TrackerBefore=0,v332TrackerReady=false,v332TrackerNetworkBaseline=0,v332TrackerLatestBaseline=0;
+  const v332Scroll={journal:0,flows:0,trackers:0,anomalies:0};let v332SaveTimer=0,v332Restored=false;
+  function v332CaptureX(tab=state.tab){const w=$('jc-pane-'+tab)?.querySelector('.v32-table-wrap');if(w)v332Scroll[tab]=w.scrollLeft||0;}
+  function v332RestoreX(tab=state.tab){requestAnimationFrame(()=>{const w=$('jc-pane-'+tab)?.querySelector('.v32-table-wrap');if(w)w.scrollLeft=Number(v332Scroll[tab]||0);});}
+  function v332Persist(){
+    try{v332CaptureX();const payload={tab:state.tab,journalPage:state.page,journalPageSize:PAGE_SIZE,journalSearch:$('jc-search')?.value||'',journalSegment:Number($('jc-segment')?.value||0),
+      flowSearch:$('jf-search')?.value||'',flowPageSize:Number($('jf-page-size')?.value||100),flowSnapshot:v332FlowSnapshot,flowCursor:v332FlowCursor,flowReady:v332FlowReady,
+      trackerSearch:$('jt-search')?.value||'',trackerPageSize:Number($('jt-page-size')?.value||100),trackerBefore:v332TrackerBefore,trackerReady:v332TrackerReady,trackerNetworkBaseline:v332TrackerNetworkBaseline,trackerLatestBaseline:v332TrackerLatestBaseline,
+      analysisPage,analysisPageSize:v332AnalysisPageSize,analysisSearch:$('jc-analysis-search')?.value||'',analysisKind:$('jc-analysis-kind')?.value||'anomaly',analysisUnread:!!$('jc-analysis-unread')?.checked,
+      scrollX:v332Scroll,scrollY:scrollY||0};nativeBridge?.saveUiState?.(JSON.stringify(payload));return true;}catch(e){return false;}
+  }
+  window.AivPersistUi=v332Persist;
+  function v332SaveSoon(){clearTimeout(v332SaveTimer);v332SaveTimer=setTimeout(v332Persist,180);}
+  addEventListener('scroll',v332SaveSoon,{passive:true});root.addEventListener('scroll',v332SaveSoon,{passive:true,capture:true});
+
+  const v332RenderNativeBase=renderNative;
+  renderNative=async function(){v332CaptureX('journal');const r=await v332RenderNativeBase();v332RestoreX('journal');v332SaveSoon();return r;};
+
+  function v332FlowPageSize(){return Math.max(1,Math.min(500,Number($('jf-page-size')?.value||100)));}
+  renderFlows=function(append=false,force=false){
+    if(!nativeBridge?.flowPage){$('jf-status').textContent='Flux indisponibles dans cette version.';return;}
+    if(!append&&!force&&v332FlowReady&&$('jf-list')?.children.length){v332RestoreX('flows');return;}
+    v332CaptureX('flows');const list=$('jf-list');if(!append)list.replaceChildren();
+    try{
+      if(!v332FlowSnapshot)v332FlowSnapshot=Number(nativeBridge.journalHead?.()||0);if(!append)v332FlowCursor=v332FlowSnapshot;
+      const result=JSON.parse(nativeBridge.flowPage($('jf-search').value.trim(),append?v332FlowCursor:v332FlowSnapshot,v332FlowPageSize()));if(result.error)throw new Error(result.error);
+      const rows=Array.isArray(result.flows)?result.flows:[];v332FlowCursor=Number(result.next_before_id)||0;flowBefore=v332FlowCursor;
+      let wrap=list.querySelector('.v32-table-wrap'),table;if(!wrap){wrap=element('div',undefined,'v32-table-wrap');table=element('div',undefined,'v32-table');const head=element('div',undefined,'v32-table-head v32-flow-head');for(const x of ['Heure','Application','UID','Transport','IP / port','DNS / SNI','Tracker','Volume'])head.append(element('span',x));table.append(head);wrap.append(table);list.append(wrap);}else table=wrap.firstElementChild;
+      for(const f of rows){const app=(f.packages?.length===1)?v32PenaltyApps().find(a=>a.package_name===f.packages[0]):null,level=v32Exposure(app),row=element('div',undefined,'v32-table-row v32-flow-row');const c=t=>{const x=element('span',t??'—','v32-cell');x.title=t??'—';return x;},trackerName=(f.tracker_matches||[]).map(t=>t.name).concat((f.tracker_dns_candidates||[]).map(t=>t.name)).slice(0,2).join(' · ')||'—';const name=element('span',undefined,'v32-cell v32-appcell');name.title=f.actor||'Acteur inconnu';name.append(v32Badge(level),document.createTextNode(f.actor||'Acteur inconnu'));row.append(c(flowTime(f.first_outbound_ms||f.first_inbound_ms)),name,c(Number(f.uid)>=0?String(f.uid):'—'),c(f.protocol||'—'),c(f.destination||[f.remote_ip,f.remote_port].filter(Boolean).join(':')||'—'),c(f.tls_sni||(f.dns||[]).join(', ')||'—'),c(trackerName),c('↑ '+flowBytes(f.tx_bytes)+' · ↓ '+flowBytes(f.rx_bytes)));table.append(row);}
+      $('jf-status').textContent=rows.length+' flux affiché(s) · '+(result.scanned_events||0)+' événements examinés · '+(result.notice||'');$('jf-snapshot').textContent='Vue figée au journal ID '+v332FlowSnapshot+' · la collecte continue en arrière-plan.';$('jf-more').hidden=!rows.length||!v332FlowCursor;$('jf-more').textContent='Afficher '+v332FlowPageSize()+' flux plus anciens';v332FlowReady=true;v332RestoreX('flows');v332SaveSoon();
+    }catch(e){$('jf-status').textContent=e.message||String(e);}
+  };
+  window.AivFlowFresh=function(head){if(v332FlowSnapshot&&head>v332FlowSnapshot)$('jf-snapshot').textContent='Vue figée au journal ID '+v332FlowSnapshot+' · nouvelles données disponibles ('+(head-v332FlowSnapshot)+' événements). Appuie sur Actualiser.';};
+  $('jf-refresh').onclick=()=>{v332FlowSnapshot=Number(nativeBridge.journalHead?.()||0);v332FlowCursor=v332FlowSnapshot;v332FlowReady=false;renderFlows(false,true);};$('jf-search').oninput=()=>{};$('jf-search').onchange=()=>{v332FlowCursor=v332FlowSnapshot;v332FlowReady=false;renderFlows(false,true);};$('jf-page-size').onchange=()=>{v332FlowCursor=v332FlowSnapshot;v332FlowReady=false;renderFlows(false,true);};$('jf-more').onclick=()=>renderFlows(true,true);
+
+  function v332TrackerSize(){return Math.max(1,Math.min(500,Number($('jt-page-size')?.value||100)));}
+  function v332TrackerNames(f){return (f.tracker_matches||[]).map(t=>t.name).filter(Boolean);}
+  function v332TrackerHost(f){const m=(f.tracker_matches||[])[0],d=(f.tracker_dns_candidates||[])[0];return m?.host||f.tls_sni||d?.host||f.remote_ip||'—';}
+  function v332TrackerProof(f){if(f.current_apk_tracker_ids?.length)return ['APK + réseau','both'];if((f.tracker_matches||[]).length)return ['Réseau','net'];return ['DNS candidat','dns'];}
+  function v332RenderTrackers(append=false,force=false){
+    if(!nativeBridge?.trackerPage){$('jt-status').textContent='Index des traqueurs indisponible.';return;}
+    if(!append&&!force&&v332TrackerReady&&$('jt-list')?.children.length){v332RestoreX('trackers');return;}
+    v332CaptureX('trackers');const list=$('jt-list');if(!append)list.replaceChildren();
+    try{
+      const q=$('jt-search').value.trim(),raw=nativeBridge.trackerPageSized?nativeBridge.trackerPageSized(q,append?v332TrackerBefore:0,v332TrackerSize()):nativeBridge.trackerPage(q,append?v332TrackerBefore:0),result=JSON.parse(raw);if(result.error)throw new Error(result.error);
+      v332TrackerBefore=Number(result.next_before)||0;const st=result.status||JSON.parse(nativeBridge.trackerStatus()).index||{};if(!v332TrackerNetworkBaseline)v332TrackerNetworkBaseline=Number(st.network_flows)||0;if(!v332TrackerLatestBaseline)v332TrackerLatestBaseline=Number(st.latest_network_match_event)||0;
+      let wrap=list.querySelector('.v32-table-wrap'),table;if(!wrap){wrap=element('div',undefined,'v32-table-wrap');table=element('div',undefined,'v32-table');const head=element('div',undefined,'v32-table-head v33-tracker-head');for(const x of ['Heure','Application','Traqueur','Domaine / IP','Preuve','Volume','IDs'])head.append(element('span',x));table.append(head);wrap.append(table);list.append(wrap);}else table=wrap.firstElementChild;
+      for(const f of result.rows||[]){const row=element('div',undefined,'v32-table-row v33-tracker-row'),c=t=>{const x=element('span',t??'—','v32-cell');x.title=t??'—';return x;},proof=v332TrackerProof(f),pc=element('span',undefined,'v32-cell'),pill=element('span',proof[0],'v33-proof '+proof[1]);pc.append(pill);const names=v332TrackerNames(f).join(' · ')||((f.tracker_dns_candidates||[]).map(t=>t.name).join(' · ')||'—'),ids='evt '+(f.latest_event_id||'—')+' · flux '+String(f.flow_correlation_id||'').slice(0,10)+'…';row.append(c(flowTime(f.first_outbound_ms||f.first_observed_ms||f.first_inbound_ms)),c(f.app||'Acteur inconnu'),c(names),c(v332TrackerHost(f)),pc,c('↑ '+flowBytes(f.tx_bytes)+' · ↓ '+flowBytes(f.rx_bytes)),c(ids));row.ondblclick=()=>{if(f.latest_event_id){$('jc-search').value=String(f.latest_event_id);state.page=0;nativeAnchor=0;setTab('journal');renderNative();}};table.append(row);}
+      $('jt-status').textContent=(result.rows||[]).length+' sortie(s) affichée(s) · index '+(st.checkpoint||0)+' / '+(st.latest_event||0)+' · '+(st.network_flows||0)+' flux avec signature réseau.';$('jt-live').textContent='Vue stable. Double-touche une ligne pour ouvrir son événement dans le Journal. « APK + réseau » corrèle le même identifiant Exodus dans l’APK actuelle et sur le réseau.';$('jt-more').hidden=!(result.rows||[]).length||!v332TrackerBefore;$('jt-more').textContent='Afficher '+v332TrackerSize()+' sorties plus anciennes';v332TrackerReady=true;v332RestoreX('trackers');v332SaveSoon();
+    }catch(e){$('jt-status').textContent=e.message||String(e);}
+  }
+  window.AivTrackerFresh=function(){try{const s=JSON.parse(nativeBridge.trackerStatus()).index||{},n=Number(s.network_flows)||0,last=Number(s.latest_network_match_event)||0;if(!v332TrackerNetworkBaseline){v332TrackerNetworkBaseline=n;v332TrackerLatestBaseline=last;return;}if(n>v332TrackerNetworkBaseline||last>v332TrackerLatestBaseline){$('jt-live').textContent='Nouvelle activité correspondant à une signature de traqueur détectée. La liste reste figée pour ne pas perdre ta position; appuie sur Actualiser.';}}catch(e){}};
+  $('jt-refresh').onclick=()=>{try{nativeBridge.trackerResume?.();const s=JSON.parse(nativeBridge.trackerStatus()).index||{};v332TrackerNetworkBaseline=Number(s.network_flows)||0;v332TrackerLatestBaseline=Number(s.latest_network_match_event)||0;}catch(e){}v332TrackerBefore=0;v332TrackerReady=false;v332RenderTrackers(false,true);};$('jt-search').onchange=()=>{v332TrackerBefore=0;v332TrackerReady=false;v332RenderTrackers(false,true);};$('jt-page-size').onchange=()=>{v332TrackerBefore=0;v332TrackerReady=false;v332RenderTrackers(false,true);};$('jt-more').onclick=()=>v332RenderTrackers(true,true);
+
+  renderAnalysis=function(){
+    if(!nativeBridge?.analysisPage)return;refreshAnalysisStatus();if(analysisStatus?.recalculating){$('jc-analysis-progress').textContent='Recalcul en cours…';return;}if(analysisSelected!==null||$('jc-analysis-settings').open)return;
+    try{const type=$('jc-analysis-kind').value,unread=$('jc-analysis-unread').checked,q=$('jc-analysis-search')?.value.trim()||'',size=Math.max(1,Math.min(500,Number($('jc-analysis-size')?.value||v332AnalysisPageSize)));v332AnalysisPageSize=size;const result=nativeBridge.analysisPageSized?JSON.parse(nativeBridge.analysisPageSized(type,unread,analysisPage*size,size,q)):analysisCall('analysisPage',type,unread,analysisPage*15),list=$('jc-analysis-list');if(result.error)throw new Error(result.error);list.replaceChildren();if(analysisPage&&!result.rows.length){analysisPage=0;renderAnalysis();return;}const wrap=element('div',undefined,'v32-table-wrap'),table=element('div',undefined,'v32-table'),head=element('div',undefined,'v32-table-head v32-anom-head');for(const x of ['Heure','Application','Type','Signal','État','Niveau'])head.append(element('span',x));table.append(head);wrap.append(table);list.append(wrap);for(const a of result.rows||[]){const app=v32AppForRaw(a.identity||a),level=v32Exposure(app),row=element('button',undefined,'v32-table-row v32-anom-row');row.type='button';row.style.width='100%';row.style.padding='0';row.style.border='0';row.style.textAlign='left';row.onclick=()=>showAnalysis(a);const vals=[analysisTime(a.last_ms),a.actor||'—',a.kind||type,a.title||'—',a.reviewed?'Vu':a.severity==='attention'?'À examiner':'Nouveau'];for(const v of vals){const s=element('span',v,'v32-cell');s.title=v;row.append(s);}const l=element('span',undefined,'v32-cell');l.append(v32Badge(level));row.append(l);table.append(row);} $('jc-analysis-count').textContent=result.total+' groupe(s)'+(q?' · filtre « '+q+' »':'');v332AnalysisPages=Math.max(1,Math.ceil(result.total/size));$('jc-analysis-pagination').hidden=v332AnalysisPages<=1;$('jc-analysis-page').textContent='Page '+(analysisPage+1)+' / '+v332AnalysisPages;$('jc-analysis-prev').disabled=!analysisPage;$('jc-analysis-next').disabled=analysisPage>=v332AnalysisPages-1;$('jc-analysis-empty').hidden=Boolean((result.rows||[]).length);$('jc-analysis-go').max=String(v332AnalysisPages);$('jc-analysis-go').value=String(analysisPage+1);v332RestoreX('anomalies');v332SaveSoon();}catch(e){analysisMessage(e.message,true);}
+  };
+  $('jc-analysis-search').onchange=()=>{analysisPage=0;analysisSelected=null;$('jc-analysis-detail').hidden=true;renderAnalysis();};$('jc-analysis-size').onchange=()=>{analysisPage=0;analysisSelected=null;$('jc-analysis-detail').hidden=true;renderAnalysis();};$('jc-analysis-kind').onchange=()=>{analysisPage=0;analysisSelected=null;$('jc-analysis-detail').hidden=true;renderAnalysis();};$('jc-analysis-unread').onchange=()=>{analysisPage=0;analysisSelected=null;$('jc-analysis-detail').hidden=true;renderAnalysis();};$('jc-analysis-prev').onclick=()=>{analysisPage=Math.max(0,analysisPage-1);renderAnalysis();};$('jc-analysis-next').onclick=()=>{analysisPage=Math.min(v332AnalysisPages-1,analysisPage+1);renderAnalysis();};$('jc-analysis-jump').onclick=()=>{const n=Math.max(1,Math.min(v332AnalysisPages,Number($('jc-analysis-go').value)||1));analysisPage=n-1;renderAnalysis();};$('jc-analysis-go').onkeydown=e=>{if(e.key==='Enter')$('jc-analysis-jump').click();};
+
+  $('jc-page-size').onchange=()=>{PAGE_SIZE=Math.max(1,Math.min(500,Number($('jc-page-size').value)||100));state.page=0;nativeAnchor=0;renderNative();v332SaveSoon();};
+
+  const v332SetTabBase=setTab;
+  setTab=function(tab){v332CaptureX();v332SetTabBase(tab);if(tab==='flows'&&v332FlowReady)$('jf-snapshot').textContent='Vue figée au journal ID '+v332FlowSnapshot+' · la collecte continue en arrière-plan.';if(tab==='trackers')v332RenderTrackers(false);v332RestoreX(tab);v332SaveSoon();};
+
+  function v332RestoreState(){if(v332Restored)return;v332Restored=true;let s={};try{const raw=nativeBridge?.uiState?.();if(raw)s=JSON.parse(raw);}catch(e){}try{PAGE_SIZE=Math.max(1,Math.min(500,Number(s.journalPageSize)||100));$('jc-page-size').value=String(PAGE_SIZE);state.page=Math.max(0,Number(s.journalPage)||0);$('jc-search').value=s.journalSearch||'';if($('jc-segment'))$('jc-segment').value=String(Math.max(0,Number(s.journalSegment)||0));$('jf-search').value=s.flowSearch||'';$('jf-page-size').value=String([25,100,250,500].includes(Number(s.flowPageSize))?Number(s.flowPageSize):100);v332FlowSnapshot=Math.max(0,Number(s.flowSnapshot)||0);v332FlowCursor=Math.max(0,Number(s.flowCursor)||v332FlowSnapshot);v332FlowReady=!!s.flowReady;$('jt-search').value=s.trackerSearch||'';$('jt-page-size').value=String([25,100,250,500].includes(Number(s.trackerPageSize))?Number(s.trackerPageSize):100);v332TrackerBefore=Math.max(0,Number(s.trackerBefore)||0);v332TrackerReady=!!s.trackerReady;v332TrackerNetworkBaseline=Math.max(0,Number(s.trackerNetworkBaseline)||0);v332TrackerLatestBaseline=Math.max(0,Number(s.trackerLatestBaseline)||0);v332AnalysisPageSize=[25,100,250,500].includes(Number(s.analysisPageSize))?Number(s.analysisPageSize):500;$('jc-analysis-size').value=String(v332AnalysisPageSize);analysisPage=Math.max(0,Number(s.analysisPage)||0);$('jc-analysis-search').value=s.analysisSearch||'';$('jc-analysis-kind').value=s.analysisKind==='trace'?'trace':'anomaly';$('jc-analysis-unread').checked=!!s.analysisUnread;Object.assign(v332Scroll,s.scrollX||{});const tab=['home','journal','flows','trackers','anomalies','audit','menu'].includes(s.tab)?s.tab:'home';if(tab==='flows')v332FlowReady=false;if(tab==='trackers')v332TrackerReady=false;setTab(tab);requestAnimationFrame(()=>{scrollTo(0,Math.max(0,Number(s.scrollY)||0));v332RestoreX(tab);});}catch(e){setTab('home');}}
+  const v332FinishStartupBase=finishStartup;finishStartup=function(input){v332FinishStartupBase(input);v332RestoreState();};
+
 
 
   beginStartup();
