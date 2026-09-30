@@ -96,7 +96,7 @@ public final class EventStore extends SQLiteOpenHelper {
             values.put("payload",event.toString());values.put("search_text",event.toString().toLowerCase(Locale.ROOT));
             getWritableDatabase().insertOrThrow("events",null,values);
             // Analysis errors have their own status and must never stop successful source recording.
-            AnomalyMonitor.request(context);JournalSegments.request(context);
+            AnomalyMonitor.request(context);JournalSegments.request(context);TrackerIndex.get(context).request();
             return true;
         } catch(Exception e) { lastError = "Écriture du journal impossible : " + e.getClass().getSimpleName(); return false; }
     }
@@ -105,13 +105,13 @@ public final class EventStore extends SQLiteOpenHelper {
         return pageFiltered(search,transport,offset,limit,beforeId,actor,kind,quiet,"","");
     }
     public synchronized JSONObject pageFiltered(String search,String transport,int offset,int limit,long beforeId,String actor,String kind,boolean quiet,String scope,String pkg)throws Exception{
-        limit=Math.max(1,Math.min(100,limit));offset=Math.max(0,offset);
+        limit=Math.max(1,Math.min(500,limit));offset=Math.max(0,offset);
         SQLiteDatabase db=getReadableDatabase();
         long total, maxId;
         try(Cursor c=db.rawQuery("SELECT COUNT(*),COALESCE(MAX(id),0) FROM events",null)){c.moveToFirst();total=c.getLong(0);maxId=c.getLong(1);}
         long ceiling=beforeId>0?Math.min(beforeId,maxId):maxId;
         String where="id <= ?";ArrayList<String> args=new ArrayList<>();args.add(String.valueOf(ceiling));
-        if(search!=null && !search.trim().isEmpty()){where+=" AND search_text LIKE ? ESCAPE '\\'";args.add("%"+literalLike(search.trim().toLowerCase(Locale.ROOT))+"%");}
+        if(search!=null && !search.trim().isEmpty()){String term=search.trim(),lower=term.toLowerCase(Locale.ROOT);if(term.matches("\\d+")){where+=" AND (id=? OR search_text LIKE ? ESCAPE '\\')";args.add(term);args.add("%"+literalLike(lower)+"%");}else{where+=" AND search_text LIKE ? ESCAPE '\\'";args.add("%"+literalLike(lower)+"%");}}
         if(transport!=null && !transport.isEmpty()){where+=" AND transport = ?";args.add(transport);}
         if(actor!=null && !actor.isEmpty()){where+=" AND app = ?";args.add(actor);}
         if("apps".equals(kind))where+=" AND category IN ('trafic','dns')";
@@ -138,13 +138,13 @@ public final class EventStore extends SQLiteOpenHelper {
     }
 
     public JSONObject pageSegment(String search,String transport,int offset,int limit,long beforeId,String actor,String kind,boolean quiet,String scope,String pkg,int selectedSegment)throws Exception{
-        limit=Math.max(1,Math.min(100,limit));offset=Math.max(0,offset);
+        limit=Math.max(1,Math.min(500,limit));offset=Math.max(0,offset);
         SQLiteDatabase db=getReadableDatabase();
         JSONObject segment=JournalSegments.window(context,selectedSegment);
         long total=segment.getLong("total"),maxId=segment.getLong("latest"),first=segment.getLong("first_id"),last=segment.getLong("last_id");
         long ceiling=beforeId>0?Math.min(beforeId,last):last;
         String where="id >= ? AND id <= ?";ArrayList<String> args=new ArrayList<>();args.add(String.valueOf(first));args.add(String.valueOf(ceiling));
-        if(search!=null && !search.trim().isEmpty()){where+=" AND search_text LIKE ? ESCAPE '\\'";args.add("%"+literalLike(search.trim().toLowerCase(Locale.ROOT))+"%");}
+        if(search!=null && !search.trim().isEmpty()){String term=search.trim(),lower=term.toLowerCase(Locale.ROOT);if(term.matches("\\d+")){where+=" AND (id=? OR search_text LIKE ? ESCAPE '\\')";args.add(term);args.add("%"+literalLike(lower)+"%");}else{where+=" AND search_text LIKE ? ESCAPE '\\'";args.add("%"+literalLike(lower)+"%");}}
         if(transport!=null && !transport.isEmpty()){where+=" AND transport = ?";args.add(transport);}
         if(actor!=null && !actor.isEmpty()){where+=" AND app = ?";args.add(actor);}
         if("apps".equals(kind))where+=" AND category IN ('trafic','dns')";
@@ -172,10 +172,10 @@ public final class EventStore extends SQLiteOpenHelper {
 
     /** Bounded flow projection over the existing VPN journal. No second network log is created. */
     public synchronized JSONObject flowPage(String search,long beforeId,int limit)throws Exception{
-        limit=Math.max(1,Math.min(50,limit));SQLiteDatabase db=getReadableDatabase();long maxId=latestId();long ceiling=beforeId>0?Math.min(beforeId,maxId):maxId;
+        limit=Math.max(1,Math.min(500,limit));SQLiteDatabase db=getReadableDatabase();long maxId=latestId();long ceiling=beforeId>0?Math.min(beforeId,maxId):maxId;
         String where="id<=? AND category IN ('trafic','dns')";ArrayList<String> args=new ArrayList<>();args.add(String.valueOf(ceiling));
-        if(search!=null&&!search.trim().isEmpty()){where+=" AND search_text LIKE ? ESCAPE '\\'";args.add("%"+literalLike(search.trim().toLowerCase(Locale.ROOT))+"%");}
-        int scanLimit=Math.min(2500,Math.max(300,limit*30));ArrayList<String> q=new ArrayList<>(args);q.add(String.valueOf(scanLimit));
+        if(search!=null&&!search.trim().isEmpty()){String term=search.trim(),lower=term.toLowerCase(Locale.ROOT);if(term.matches("\\d+")){where+=" AND (id=? OR search_text LIKE ? ESCAPE '\\')";args.add(term);args.add("%"+literalLike(lower)+"%");}else{where+=" AND search_text LIKE ? ESCAPE '\\'";args.add("%"+literalLike(lower)+"%");}}
+        int scanLimit=Math.min(20000,Math.max(1000,limit*40));ArrayList<String> q=new ArrayList<>(args);q.add(String.valueOf(scanLimit));
         java.util.LinkedHashMap<String,JSONObject> flows=new java.util.LinkedHashMap<>();long next=0;int scanned=0;
         try(Cursor c=db.rawQuery("SELECT id,payload FROM events WHERE "+where+" ORDER BY id DESC LIMIT ?",q.toArray(new String[0]))){
             while(c.moveToNext()){scanned++;long eventId=c.getLong(0);next=eventId-1;JSONObject e=new JSONObject(c.getString(1)),d=e.optJSONObject("details");if(d==null)continue;String corr=d.optString("flow_correlation_id","");if(corr.isEmpty())continue;
