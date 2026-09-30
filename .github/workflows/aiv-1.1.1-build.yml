@@ -1,0 +1,59 @@
+name: AIV 1.1.1 clean V19 build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [aiv-1.1.1-v19-clean-baseline]
+    paths:
+      - "aiv-v19/**"
+      - ".github/workflows/aiv-1.1.1-build.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Cache Android toolchain
+        uses: actions/cache@v4
+        with:
+          path: aiv-v19/.toolchain
+          key: aiv-111-v19-android35-ndk27d
+
+      - name: Build AIV 1.1.1 unsigned
+        working-directory: aiv-v19
+        env:
+          AIV_BUILD_MODE: unsigned
+        run: |
+          chmod +x bootstrap-clean-build.sh
+          ./bootstrap-clean-build.sh
+
+      - name: Verify AIV 1.1.1 artifact
+        run: |
+          test -s aiv-v19/build/AIV-1.1.1-unsigned.apk
+          test -s aiv-v19/build/AIV-1.1.1-unsigned.apk.sha256
+          grep -q 'android:versionCode="111"' aiv-v19/app/src/main/AndroidManifest.xml
+          grep -q 'android:versionName="1.1.1"' aiv-v19/app/src/main/AndroidManifest.xml
+          sha256sum -c aiv-v19/build/AIV-1.1.1-unsigned.apk.sha256
+
+      - name: Upload AIV 1.1.1 unsigned APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: AIV-1.1.1-V19-clean-unsigned
+          path: |
+            aiv-v19/build/AIV-1.1.1-unsigned.apk
+            aiv-v19/build/AIV-1.1.1-unsigned.apk.sha256
+            aiv-v19/.toolchain/sdk/build-tools/35.0.0/lib/apksigner.jar
+          retention-days: 14
+          include-hidden-files: true
