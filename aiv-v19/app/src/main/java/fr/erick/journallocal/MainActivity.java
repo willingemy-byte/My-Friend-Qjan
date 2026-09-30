@@ -410,6 +410,7 @@ public final class MainActivity extends Activity {
                 if(problem!=null){new AlertDialog.Builder(this).setTitle(dbName).setMessage(problem).setPositiveButton("Fermer",null).show();return;}
                 new AlertDialog.Builder(this).setTitle(dbName+" · tables")
                     .setItems(tables.toArray(new String[0]),(d,which)->showDatabaseRows(dbName,tables.get(which)))
+                    .setNeutralButton("SQL",(d,w)->showSqlQueryDialog(dbName))
                     .setNegativeButton("Fermer",null).show();
             });
         },"aiv-sqlite-tables").start();
@@ -432,6 +433,75 @@ public final class MainActivity extends Activity {
                     .setPositiveButton("Fermer",null).show();
             });
         },"aiv-sqlite-preview").start();
+    }
+
+    private void showSqlQueryDialog(String dbName){
+        final EditText input=new EditText(this);
+        input.setMinLines(5);input.setGravity(Gravity.TOP|Gravity.START);input.setTextIsSelectable(true);
+        input.setHint("SELECT * FROM apps ORDER BY rowid DESC LIMIT 100");
+        FrameLayout box=new FrameLayout(this);box.setPadding(24,8,24,0);box.addView(input,new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT));
+        AlertDialog dialog=new AlertDialog.Builder(this).setTitle(dbName+" · SQL lecture seule")
+            .setMessage("SELECT, WITH, EXPLAIN et PRAGMA seulement. La base est ouverte en lecture seule.")
+            .setView(box)
+            .setNegativeButton("Annuler",null)
+            .setPositiveButton("Exécuter",null).create();
+        dialog.setOnShowListener(x->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+            String sql=input.getText()==null?"":input.getText().toString().trim();
+            if(sql.isEmpty())return;
+            String normalized=sql.replaceFirst("(?s)^\\s*(?:--[^\\n]*\\n|/\\*.*?\\*/\\s*)*","").trim().toLowerCase(java.util.Locale.ROOT);
+            if(!(normalized.startsWith("select")||normalized.startsWith("with")||normalized.startsWith("explain")||normalized.startsWith("pragma"))){
+                input.setError("Lecture seule : SELECT, WITH, EXPLAIN ou PRAGMA");
+                return;
+            }
+            dialog.dismiss();
+            runSqlPreview(dbName,sql);
+        }));
+        dialog.show();
+    }
+
+    private void runSqlPreview(String dbName,String sql){
+        new Thread(()->{
+            String text;
+            try(SQLiteDatabase db=SQLiteDatabase.openDatabase(getDatabasePath(dbName).getAbsolutePath(),null,SQLiteDatabase.OPEN_READONLY);
+                Cursor rows=db.rawQuery(sql,null)){
+                text=cursorPreview(rows);
+            }catch(Exception e){text=e.getClass().getSimpleName()+": "+String.valueOf(e.getMessage());}
+            final String output=text;
+            runOnUiThread(()->{
+                TextView body=new TextView(this);body.setText(output);body.setTextIsSelectable(true);body.setPadding(24,18,24,18);body.setTextSize(12);
+                ScrollView scroll=new ScrollView(this);scroll.addView(body);
+                new AlertDialog.Builder(this).setTitle(dbName+" · résultat SQL")
+                    .setView(scroll)
+                    .setNeutralButton("Nouvelle requête",(d,w)->showSqlQueryDialog(dbName))
+                    .setPositiveButton("Fermer",null).show();
+            });
+        },"aiv-sqlite-query").start();
+    }
+
+    private String cursorPreview(Cursor rows){
+        StringBuilder out=new StringBuilder();
+        String[] columns=rows.getColumnNames();
+        out.append("Lecture seule. ").append(columns.length).append(" colonne(s).\\n\\n");
+        int count=0;
+        while(rows.moveToNext()&&count<200){
+            count++;
+            for(int i=0;i<columns.length;i++){
+                out.append(columns[i]).append(" = ");
+                if(rows.isNull(i))out.append("NULL");
+                else if(rows.getType(i)==Cursor.FIELD_TYPE_BLOB)out.append("<BLOB ").append(rows.getBlob(i).length).append(" octets>");
+                else{
+                    String value=rows.getString(i);
+                    if(value!=null&&value.length()>3000)value=value.substring(0,3000)+"…";
+                    out.append(value);
+                }
+                out.append('\\n');
+            }
+            out.append("\\n---\\n");
+            if(out.length()>180000){out.append("\\nAperçu tronqué à 180 000 caractères.");break;}
+        }
+        if(count==0)out.append("Aucune ligne.");
+        else if(count>=200)out.append("\\nLimite d'affichage : 200 lignes.");
+        return out.toString();
     }
 
     private String readTablePreview(SQLiteDatabase db,String table)throws Exception{
