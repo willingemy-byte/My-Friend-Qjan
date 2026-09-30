@@ -2150,13 +2150,32 @@ if(typeof module!=='undefined')module.exports=PenaltyModel;
   }
   function beginStartup(){
     if(!nativeBridge||!nativeBridge.startupStatus){finishStartup();return;}
-    // V40: never block the whole application behind the first full audit.
     root.inert=false;
     const total=$('jc-total');
     if(total)total.textContent='Initialisation en arrière-plan · interface disponible';
+    let overlay=document.getElementById('jc-startup');
+    if(!overlay){
+      overlay=element('div');overlay.id='jc-startup';overlay.setAttribute('role','status');
+      const progressText=element('p','Préparation de l’inventaire');
+      const journalButton=penaltyButton('Consulter le journal pendant le calcul',()=>{
+        overlay.remove();
+        root.inert=false;
+        setTab('journal');
+      });
+      journalButton.classList.add('jc-primary');
+      overlay.append(element('div',undefined,'jc-spinner'),element('h2','Initialisation'),progressText,journalButton);
+      document.body.append(overlay);
+    }
     const poll=()=>{try{
       const status=JSON.parse(nativeBridge.startupStatus());
-      if(total&&!status.ready)total.textContent=(status.state||'Calcul en cours')+' · vous pouvez utiliser le Journal';
+      const parts=[];
+      if(status.progress_stage)parts.push(status.progress_stage);
+      if(status.apps_total>0)parts.push('applications '+status.apps_done+'/'+status.apps_total);
+      if(status.permissions_total>0)parts.push('permissions '+status.permissions_done+'/'+status.permissions_total);
+      const detail=parts.length?parts.join(' · '):(status.state||'Calcul en cours');
+      if(total&&!status.ready)total.textContent=detail+' · Journal disponible';
+      const startupOverlay=document.getElementById('jc-startup');
+      if(startupOverlay){const p=startupOverlay.querySelector('p');if(p)p.textContent=detail;}
       if(status.ready){finishStartup(JSON.parse(nativeBridge.startupData()));return;}
       if(status.error){
         if(total)total.textContent='Initialisation partielle : '+status.error+' · dernier état disponible';
