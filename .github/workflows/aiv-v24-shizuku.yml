@@ -1,9 +1,9 @@
-name: AIV V32.3 tracker trails
+name: AIV V38 test build
 
 on:
   workflow_dispatch:
   push:
-    branches: [aiv-v32-android, aiv-v32-2-investigation-trackers, aiv-v32-3-tracker-trails]
+    branches: [AIV_TEST_HS]
     paths:
       - "aiv-v19/**"
       - ".github/workflows/aiv-v24-shizuku.yml"
@@ -12,26 +12,26 @@ permissions:
   contents: read
 
 jobs:
-  build-v30:
+  build-v38:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Java 17
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "17"
 
       - name: Cache Android toolchain
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: aiv-v19/.toolchain
           key: aiv-v32-android35-ndk27d-shizuku-13.1.5
 
-      - name: Build AIV 0.6.35 unsigned
+      - name: Build AIV 0.6.38 unsigned
         working-directory: aiv-v19
         env:
           AIV_BUILD_MODE: unsigned
@@ -63,24 +63,24 @@ jobs:
           grep -q 'Traqueurs · trajets observés' aiv-v19/app/src/main/assets/journal.html
           grep -q 'Lots 50 000 terminés' aiv-v19/app/src/main/assets/journal.html
 
-      - name: Verify V32.3 package
+      - name: Verify V38 package
         shell: bash
         run: |
           set -euo pipefail
-          test -s aiv-v19/build/AIV-0.6.35-unsigned.apk
-          test -s aiv-v19/build/AIV-0.6.35-unsigned.apk.sha256
-          grep -q 'android:versionName="0.6.35"' aiv-v19/app/src/main/AndroidManifest.xml
+          test -s aiv-v19/build/AIV-0.6.38-unsigned.apk
+          test -s aiv-v19/build/AIV-0.6.38-unsigned.apk.sha256
+          grep -q 'android:versionName="0.6.38"' aiv-v19/app/src/main/AndroidManifest.xml
           grep -q 'rikka.shizuku.ShizukuProvider' aiv-v19/app/src/main/AndroidManifest.xml
           grep -q 'class ShizukuCleanup' aiv-v19/app/src/main/java/fr/erick/journallocal/ShizukuCleanup.java
-          sha256sum -c aiv-v19/build/AIV-0.6.35-unsigned.apk.sha256
+          sha256sum -c aiv-v19/build/AIV-0.6.38-unsigned.apk.sha256
 
-      - name: Upload AIV V32.3 unsigned APK
-        uses: actions/upload-artifact@v4
+      - name: Upload AIV V38 unsigned APK
+        uses: actions/upload-artifact@v6
         with:
-          name: AIV-0.6.35-unsigned
+          name: AIV-0.6.38-unsigned
           path: |
-            aiv-v19/build/AIV-0.6.35-unsigned.apk
-            aiv-v19/build/AIV-0.6.35-unsigned.apk.sha256
+            aiv-v19/build/AIV-0.6.38-unsigned.apk
+            aiv-v19/build/AIV-0.6.38-unsigned.apk.sha256
             aiv-v19/.toolchain/sdk/build-tools/35.0.0/lib/apksigner.jar
           retention-days: 14
           include-hidden-files: true
