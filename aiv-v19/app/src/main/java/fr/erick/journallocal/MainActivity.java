@@ -9,13 +9,20 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.WindowInsets;
+import android.view.Gravity;
+import android.view.ViewGroup;
 import android.webkit.*;
-import android.widget.Toast;
+import android.widget.*;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
+import android.graphics.Color;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 
 public final class MainActivity extends Activity {
     private WebView reader;
+    private FrameLayout nativeShell;
+    private LinearLayout rescueControls;
     private static final int NOTIFICATION_REQUEST=10,BLUETOOTH_REQUEST=11,EXPORT_REQUEST=12,VPN_REQUEST=13,ANALYSIS_EXPORT_REQUEST=14,LINES_EXPORT_REQUEST=15,RECOVER_IMPORT_REQUEST=16,RECOVER_EXPORT_REQUEST=17,DIAGNOSTIC_IMPORT_REQUEST=18,CORRELATION_EXPORT_REQUEST=19,LAST_EXPORT_REQUEST=20;
     private static volatile String fileStatus="";
     private static final int AUDIT_EXPORT_REQUEST=21,AUDIT_IMPORT_REQUEST=22,AIV_EXPORT_REQUEST=23,AIV_REFERENCE_REQUEST=24,PENALTY_EXPORT_REQUEST=25,PENALTY_IMPORT_REQUEST=26,REFERENCE_EXPORT_REQUEST=27,AUDIT_FULL_EXPORT_REQUEST=28,TRACKER_EXPORT_REQUEST=29;
@@ -25,13 +32,26 @@ public final class MainActivity extends Activity {
     @Override public void onCreate(Bundle state){
         super.onCreate(state);
         // V39 fail-safe: paint the WebView first. Inventory, analysis, VPN and Shizuku start after the UI gets a chance to render.
-        reader=new WebView(this);reader.setBackgroundColor(0xFF05090D);
+        nativeShell=new FrameLayout(this);
+        reader=new WebView(this);reader.setBackgroundColor(Color.rgb(247,249,252));
         reader.setOnApplyWindowInsetsListener((view,insets)->{
             if(Build.VERSION.SDK_INT>=30){android.graphics.Insets bars=insets.getInsets(WindowInsets.Type.systemBars());view.setPadding(bars.left,bars.top,bars.right,bars.bottom);}
             else view.setPadding(insets.getSystemWindowInsetLeft(),insets.getSystemWindowInsetTop(),insets.getSystemWindowInsetRight(),insets.getSystemWindowInsetBottom());
             return insets;
         });
-        setContentView(reader);reader.requestApplyInsets();
+        nativeShell.addView(reader,new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.MATCH_PARENT));
+        rescueControls=new LinearLayout(this);
+        rescueControls.setOrientation(LinearLayout.HORIZONTAL);
+        rescueControls.setPadding(6,6,6,6);
+        Button sqliteButton=new Button(this);
+        sqliteButton.setText("SQLite");
+        sqliteButton.setContentDescription("Ouvrir les bases SQLite locales");
+        sqliteButton.setOnClickListener(v->showDatabasePicker());
+        rescueControls.addView(sqliteButton,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,ViewGroup.LayoutParams.WRAP_CONTENT));
+        FrameLayout.LayoutParams rescueParams=new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,ViewGroup.LayoutParams.WRAP_CONTENT,Gravity.END|Gravity.BOTTOM);
+        rescueParams.setMargins(12,12,12,18);
+        nativeShell.addView(rescueControls,rescueParams);
+        setContentView(nativeShell);reader.requestApplyInsets();
         WebSettings settings=reader.getSettings();settings.setJavaScriptEnabled(true);settings.setDomStorageEnabled(false);
         settings.setAllowFileAccess(false);settings.setAllowContentAccess(false);settings.setBlockNetworkLoads(true);settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);settings.setSupportMultipleWindows(false);
         WebView.setWebContentsDebuggingEnabled(false);
@@ -366,6 +386,85 @@ public final class MainActivity extends Activity {
     }
     @Override protected void onResume(){super.onResume();if(reader!=null)reader.onResume();if(defenseResumed&&!defenseResultHandled)PermissionAudit.get(this).scan();defenseResultHandled=false;defenseResumed=true;refreshDefenseReader();applyLaunchRules();}
     private void refreshDefenseReader(){if(reader!=null)reader.evaluateJavascript("window.AivDefenseRefresh && window.AivDefenseRefresh()",null);}
+
+    private void showDatabasePicker(){
+        final String[] names={"journal.sqlite","permission-audit.sqlite","analysis.sqlite"};
+        final java.util.ArrayList<String> present=new java.util.ArrayList<>();
+        for(String name:names){File f=getDatabasePath(name);if(f.isFile())present.add(name);}
+        if(present.isEmpty()){Toast.makeText(this,"Aucune base SQLite locale trouvée.",Toast.LENGTH_LONG).show();return;}
+        new AlertDialog.Builder(this).setTitle("Bases SQLite locales · lecture seule")
+            .setItems(present.toArray(new String[0]),(d,which)->showDatabaseTables(present.get(which)))
+            .setNegativeButton("Fermer",null).show();
+    }
+
+    private void showDatabaseTables(String dbName){
+        new Thread(()->{
+            final java.util.ArrayList<String> tables=new java.util.ArrayList<>();
+            String error=null;
+            try(SQLiteDatabase db=SQLiteDatabase.openDatabase(getDatabasePath(dbName).getAbsolutePath(),null,SQLiteDatabase.OPEN_READONLY);
+                Cursor c=db.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name",null)){
+                while(c.moveToNext())tables.add(c.getString(0));
+            }catch(Exception e){error=e.getClass().getSimpleName()+": "+String.valueOf(e.getMessage());}
+            final String problem=error;
+            runOnUiThread(()->{
+                if(problem!=null){new AlertDialog.Builder(this).setTitle(dbName).setMessage(problem).setPositiveButton("Fermer",null).show();return;}
+                new AlertDialog.Builder(this).setTitle(dbName+" · tables")
+                    .setItems(tables.toArray(new String[0]),(d,which)->showDatabaseRows(dbName,tables.get(which)))
+                    .setNegativeButton("Fermer",null).show();
+            });
+        },"aiv-sqlite-tables").start();
+    }
+
+    private void showDatabaseRows(String dbName,String table){
+        new Thread(()->{
+            String text;
+            try(SQLiteDatabase db=SQLiteDatabase.openDatabase(getDatabasePath(dbName).getAbsolutePath(),null,SQLiteDatabase.OPEN_READONLY)){
+                text=readTablePreview(db,table);
+            }catch(Exception e){text=e.getClass().getSimpleName()+": "+String.valueOf(e.getMessage());}
+            final String output=text;
+            runOnUiThread(()->{
+                TextView body=new TextView(this);
+                body.setText(output);body.setTextIsSelectable(true);body.setPadding(24,18,24,18);body.setTextSize(12);
+                ScrollView scroll=new ScrollView(this);scroll.addView(body);
+                new AlertDialog.Builder(this).setTitle(dbName+" · "+table+" · 100 lignes max")
+                    .setView(scroll)
+                    .setNeutralButton("Tables",(d,w)->showDatabaseTables(dbName))
+                    .setPositiveButton("Fermer",null).show();
+            });
+        },"aiv-sqlite-preview").start();
+    }
+
+    private String readTablePreview(SQLiteDatabase db,String table)throws Exception{
+        boolean known=false;
+        try(Cursor c=db.rawQuery("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",new String[]{table})){known=c.moveToFirst();}
+        if(!known)throw new IllegalArgumentException("Table inconnue");
+        String ident="\""+table.replace("\"","\"\"")+"\"";
+        Cursor c;
+        try{c=db.rawQuery("SELECT * FROM "+ident+" ORDER BY rowid DESC LIMIT 100",null);}
+        catch(Exception e){c=db.rawQuery("SELECT * FROM "+ident+" LIMIT 100",null);}
+        try(Cursor rows=c){
+            StringBuilder out=new StringBuilder();
+            String[] columns=rows.getColumnNames();
+            out.append("Lecture seule. Aucun contenu n'est modifié.\n\n");
+            while(rows.moveToNext()){
+                for(int i=0;i<columns.length;i++){
+                    out.append(columns[i]).append(" = ");
+                    if(rows.isNull(i))out.append("NULL");
+                    else if(rows.getType(i)==Cursor.FIELD_TYPE_BLOB)out.append("<BLOB ").append(rows.getBlob(i).length).append(" octets>");
+                    else{
+                        String value=rows.getString(i);
+                        if(value!=null&&value.length()>3000)value=value.substring(0,3000)+"…";
+                        out.append(value);
+                    }
+                    out.append('\n');
+                }
+                out.append("\n---\n");
+                if(out.length()>180000){out.append("\nAperçu tronqué à 180 000 caractères.");break;}
+            }
+            if(out.length()==0)out.append("Table vide.");
+            return out.toString();
+        }
+    }
 
     private long lastBackPressMs;
     @Override public void onBackPressed(){
