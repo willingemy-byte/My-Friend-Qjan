@@ -2150,12 +2150,22 @@ if(typeof module!=='undefined')module.exports=PenaltyModel;
   }
   function beginStartup(){
     if(!nativeBridge||!nativeBridge.startupStatus){finishStartup();return;}
-    root.inert=true;const overlay=element('div');overlay.id='jc-startup';overlay.setAttribute('role','status');
-    overlay.append(element('div',undefined,'jc-spinner'),element('h2','Initialisation'),element('p','Calcul en cours'));document.body.append(overlay);overlay.append(penaltyButton('Consulter le journal pendant le calcul',()=>{overlay.remove();root.inert=false;setTab('journal');}));
-    const poll=()=>{try{const status=JSON.parse(nativeBridge.startupStatus());overlay.querySelector('p').textContent=status.state;
+    // V40: never block the whole application behind the first full audit.
+    root.inert=false;
+    const total=$('jc-total');
+    if(total)total.textContent='Initialisation en arrière-plan · interface disponible';
+    const poll=()=>{try{
+      const status=JSON.parse(nativeBridge.startupStatus());
+      if(total&&!status.ready)total.textContent=(status.state||'Calcul en cours')+' · vous pouvez utiliser le Journal';
       if(status.ready){finishStartup(JSON.parse(nativeBridge.startupData()));return;}
-      if(status.error)throw Error(status.error);setTimeout(poll,250);
-    }catch(e){overlay.querySelector('p').textContent='Initialisation incomplète : '+e.message;overlay.append(penaltyButton('Réessayer',()=>{if(nativeBridge.startupRetry)nativeBridge.startupRetry();overlay.remove();beginStartup();}),penaltyButton('Consulter le dernier relevé',()=>finishStartup()));}};
+      if(status.error){
+        if(total)total.textContent='Initialisation partielle : '+status.error+' · dernier état disponible';
+        return;
+      }
+      setTimeout(poll,250);
+    }catch(e){
+      if(total)total.textContent='Initialisation partielle : '+e.message+' · interface maintenue ouverte';
+    }};
     setTimeout(poll,50);
   }
   // Paint the pending state before configuration writes and synchronous recalculation.
