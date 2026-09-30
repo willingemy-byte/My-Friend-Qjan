@@ -16,6 +16,8 @@ public final class PermissionAudit extends SQLiteOpenHelper {
     private final AtomicBoolean busy=new AtomicBoolean();
     private final AtomicBoolean scanAgain=new AtomicBoolean();
     private volatile String error="";
+    private volatile String progressStage="En attente";
+    private volatile int progressAppsDone=0,progressAppsTotal=0,progressPermissionsDone=0,progressPermissionsTotal=0;
     public static synchronized PermissionAudit get(Context c){if(instance==null)instance=new PermissionAudit(c.getApplicationContext());return instance;}
     private PermissionAudit(Context c){super(c,"permission-audit.sqlite",null,2);context=c;setWriteAheadLoggingEnabled(true);}
     @Override public void onCreate(SQLiteDatabase db){
@@ -31,7 +33,10 @@ public final class PermissionAudit extends SQLiteOpenHelper {
     @Override public void onUpgrade(SQLiteDatabase db,int old,int next){if(old<2)penaltyTable(db);}
     private long latest(){try(Cursor c=getReadableDatabase().rawQuery("SELECT COALESCE(MAX(id),0) FROM scans",null)){c.moveToFirst();return c.getLong(0);}}
     public JSONObject summary()throws Exception{
-        JSONObject s=EventStore.object("scan_id",latest(),"busy",busy.get(),"error",error,"coverage","Profil courant; paquets visibles, y compris désactivés. AppOps et règles SYSTEM_FIXED/POLICY_FIXED non collectés.");
+        JSONObject s=EventStore.object("scan_id",latest(),"busy",busy.get(),"error",error,
+            "progress_stage",progressStage,"progress_apps_done",progressAppsDone,"progress_apps_total",progressAppsTotal,
+            "progress_permissions_done",progressPermissionsDone,"progress_permissions_total",progressPermissionsTotal,
+            "coverage","Profil courant; paquets visibles, y compris désactivés. AppOps et règles SYSTEM_FIXED/POLICY_FIXED non collectés.");
         try(Cursor c=getReadableDatabase().rawQuery("SELECT COUNT(*),COALESCE(SUM(system_app),0) FROM apps WHERE scan_id=?",new String[]{""+latest()})){c.moveToFirst();s.put("total",c.getLong(0));s.put("system",c.getLong(1));}
         return s;
     }
@@ -41,7 +46,8 @@ public final class PermissionAudit extends SQLiteOpenHelper {
     private void saveReference(String pkg,JSONObject r){ContentValues v=new ContentValues();v.put("package_name",pkg);v.put("payload",r.toString());getWritableDatabase().insertWithOnConflict("references_data",null,v,SQLiteDatabase.CONFLICT_REPLACE);}
     public synchronized void scan(){
         if(!busy.compareAndSet(false,true)){scanAgain.set(true);return;}error="";
-        new Thread(()->{try{collect();}catch(Exception e){error="Inventaire interrompu : "+e.getClass().getSimpleName()+". Dernier relevé complet conservé.";}finally{ApkEvidence.get(context).request();finishScan();}},"journal-inventory").start();
+        progressStage="Préparation de l’inventaire";progressAppsDone=0;progressAppsTotal=0;progressPermissionsDone=0;progressPermissionsTotal=0;
+        new Thread(()->{try{collect();}catch(Exception e){error="Inventaire interrompu : "+e.getClass().getSimpleName()+". Dernier relevé complet conservé.";progressStage="Erreur";}finally{ApkEvidence.get(context).request();finishScan();}},"journal-inventory").start();
     }
     private synchronized void finishScan(){busy.set(false);if(scanAgain.getAndSet(false))scan();}
     JSONObject inspectCurrent(String pkg)throws Exception{
@@ -119,7 +125,17 @@ public final class PermissionAudit extends SQLiteOpenHelper {
     }
     private void collect()throws Exception{
         long start=System.currentTimeMillis(),old=latest(),id=old+1;PackageManager pm=context.getPackageManager();JSONArray result=new JSONArray();
-        for(PackageInfo p:pm.getInstalledPackages((android.os.Build.VERSION.SDK_INT>=28?PackageManager.GET_SIGNING_CERTIFICATES:PackageManager.GET_SIGNATURES)|PackageManager.GET_PERMISSIONS|PackageManager.GET_PROVIDERS|PackageManager.GET_SERVICES|PackageManager.GET_ACTIVITIES|PackageManager.GET_RECEIVERS|PackageManager.MATCH_DISABLED_COMPONENTS))if(p.applicationInfo!=null)result.put(inspect(pm,p));
+        List<PackageInfo> installed=pm.getInstalledPackages((android.os.Build.VERSION.SDK_INT>=28?PackageManager.GET_SIGNING_CERTIFICATES:PackageManager.GET_SIGNATURES)|PackageManager.GET_PERMISSIONS|PackageManager.GET_PROVIDERS|PackageManager.GET_SERVICES|PackageManager.GET_ACTIVITIES|PackageManager.GET_RECEIVERS|PackageManager.MATCH_DISABLED_COMPONENTS);
+        progressAppsTotal=0;progressPermissionsTotal=0;
+        for(PackageInfo p:installed)if(p.applicationInfo!=null){progressAppsTotal++;if(p.requestedPermissions!=null)progressPermissionsTotal+=p.requestedPermissions.length;}
+        progressStage="Évaluation des applications et permissions";
+        for(PackageInfo p:installed)if(p.applicationInfo!=null){
+            int before=p.requestedPermissions==null?0:p.requestedPermissions.length;
+            result.put(inspect(pm,p));
+            progressAppsDone++;
+            progressPermissionsDone+=before;
+        }
+        progressStage="Enregistrement de l’inventaire";
         SQLiteDatabase db=getWritableDatabase();db.beginTransaction();try{
             for(int i=0;i<result.length();i++){JSONObject a=result.getJSONObject(i);String pkg=a.getString("package_name");JSONObject before=stored(old,pkg);
                 ContentValues v=new ContentValues();v.put("scan_id",id);v.put("package_name",pkg);v.put("label",a.getString("label"));v.put("system_app",a.getBoolean("system_app")?1:0);v.put("uid",a.getInt("uid"));v.put("count",a.getInt("count"));v.put("version_code",a.getLong("version_code"));v.put("search_text",a.toString().toLowerCase(Locale.ROOT));v.put("payload",a.toString());db.insertOrThrow("apps",null,v);
@@ -128,8 +144,11 @@ public final class PermissionAudit extends SQLiteOpenHelper {
             if(old>0)try(Cursor c=db.rawQuery("SELECT package_name FROM apps WHERE scan_id=? AND package_name NOT IN (SELECT package_name FROM apps WHERE scan_id=?)",new String[]{""+old,""+id})){while(c.moveToNext())history(c.getString(0),EventStore.object("kind","not_returned","before_scan",old,"after_scan",id,"scope","Non retourné; désinstallation non établie"));}
             ContentValues v=new ContentValues();v.put("id",id);v.put("started_ms",start);v.put("ended_ms",System.currentTimeMillis());db.insertOrThrow("scans",null,v);db.setTransactionSuccessful();
         }finally{db.endTransaction();}
+        progressStage="Comparaison et dossiers à réexaminer";
         try{DefenseStore.get(context).onSnapshot(id,result);}catch(Exception e){DefenseStore.get(context).failed(e);}
+        progressStage="Indexation du journal";
         try{EventStore.get(context).setAuditInventory(result);}catch(Exception e){error="Inventaire conservé; index du journal indisponible : "+e.getClass().getSimpleName();}
+        progressStage="Inventaire terminé";
     }
     /** Minimal coherence input derived from the latest completed local PackageManager snapshot. */
     public JSONObject coherenceInventory()throws Exception{
