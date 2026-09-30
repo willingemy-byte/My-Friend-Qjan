@@ -23,8 +23,8 @@ public final class MainActivity extends Activity {
     private static final int DEFENSE_EXPORT_REQUEST=30;
     private boolean defenseResumed,defenseResultHandled;
     @Override public void onCreate(Bundle state){
-        super.onCreate(state);Continuous.initialize(this);DefenseMonitor.start(this);ShizukuCleanup.attach(this);
-        prepareStartup();
+        super.onCreate(state);
+        // V39 fail-safe: paint the WebView first. Inventory, analysis, VPN and Shizuku start after the UI gets a chance to render.
         reader=new WebView(this);reader.setBackgroundColor(0xFF05090D);
         reader.setOnApplyWindowInsetsListener((view,insets)->{
             if(Build.VERSION.SDK_INT>=30){android.graphics.Insets bars=insets.getInsets(WindowInsets.Type.systemBars());view.setPadding(bars.left,bars.top,bars.right,bars.bottom);}
@@ -38,14 +38,44 @@ public final class MainActivity extends Activity {
         reader.setWebViewClient(new WebViewClient(){
             @Override public boolean shouldOverrideUrlLoading(WebView view,WebResourceRequest request){return true;}
             @Override public boolean shouldOverrideUrlLoading(WebView view,String url){return true;}
-            @Override public WebResourceResponse shouldInterceptRequest(WebView view,WebResourceRequest request){return new WebResourceResponse("text/plain","UTF-8",new ByteArrayInputStream(new byte[0]));}
+            @Override public WebResourceResponse shouldInterceptRequest(WebView view,WebResourceRequest request){
+                // The UI is injected with loadDataWithBaseURL(null,...). Block every real network subrequest.
+                return new WebResourceResponse("text/plain","UTF-8",new ByteArrayInputStream(new byte[0]));
+            }
+            @Override public void onPageFinished(WebView view,String url){
+                super.onPageFinished(view,url);
+                view.evaluateJavascript("try{document.documentElement.style.visibility='visible';document.body.style.visibility='visible';var r=document.getElementById('jc-reader');if(r){r.inert=false;r.style.display='block';}}catch(e){}",null);
+                cleanupHandler.postDelayed(()->startBackgroundInitialization(),100);
+            }
         });
-        reader.setWebChromeClient(new WebChromeClient(){@Override public void onPermissionRequest(PermissionRequest request){request.deny();}});
+        reader.setWebChromeClient(new WebChromeClient(){
+            @Override public void onPermissionRequest(PermissionRequest request){request.deny();}
+            @Override public boolean onConsoleMessage(ConsoleMessage message){
+                if(message.messageLevel()==ConsoleMessage.MessageLevel.ERROR){
+                    String m=message.message();fileStatus="UI WebView : "+(m==null?"Erreur JavaScript":m);
+                    android.util.Log.e("AIV-WEBVIEW",fileStatus+" @"+message.lineNumber());
+                }
+                return true;
+            }
+        });
         reader.addJavascriptInterface(new Bridge(),"JournalAndroid");
         try(InputStream input=getAssets().open("journal.html")){
             ByteArrayOutputStream data=new ByteArrayOutputStream();byte[] buffer=new byte[8192];int count;while((count=input.read(buffer))!=-1)data.write(buffer,0,count);
-            reader.loadDataWithBaseURL("https://journal.local.invalid/",new String(data.toByteArray(),StandardCharsets.UTF_8),"text/html","UTF-8",null);
+            reader.loadDataWithBaseURL(null,new String(data.toByteArray(),StandardCharsets.UTF_8),"text/html","UTF-8",null);
+            // If WebView is slow, background work still begins, but only after the first paint window.
+            cleanupHandler.postDelayed(()->startBackgroundInitialization(),1500);
         }catch(Exception e){new AlertDialog.Builder(this).setTitle("Lecteur indisponible").setMessage(e.getClass().getSimpleName()).setPositiveButton("Fermer",(d,w)->finish()).show();}
+    }
+
+    private boolean backgroundInitStarted;
+    private synchronized void startBackgroundInitialization(){
+        if(backgroundInitStarted)return;
+        backgroundInitStarted=true;
+        try{Continuous.initialize(this);}catch(Throwable t){EventStore.lastError="Initialisation continue : "+t.getClass().getSimpleName();}
+        try{DefenseMonitor.start(this);}catch(Throwable t){EventStore.lastError="Surveillance applications : "+t.getClass().getSimpleName();}
+        try{ShizukuCleanup.attach(this);}catch(Throwable t){EventStore.lastError="Shizuku : "+t.getClass().getSimpleName();}
+        prepareStartup();
+        applyLaunchRules();
     }
     private volatile String startupState="Calcul en cours", startupResult="", startupError="";
     private volatile boolean cleanupRecalcSeen=false;
@@ -313,7 +343,18 @@ public final class MainActivity extends Activity {
     private void chooseExport(int request,String name,String mime){try{startActivityForResult(new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(mime).putExtra(Intent.EXTRA_TITLE,name),request);}catch(Exception e){fileStatus="Sélection du fichier impossible : "+e.getClass().getSimpleName();Toast.makeText(this,fileStatus,Toast.LENGTH_LONG).show();}}
     private File savedFile(String key)throws IOException{String value=getSharedPreferences("files",0).getString(key,"");if(value.isEmpty())return null;File f=new File(value);File dir=new File(getCacheDir(),"exports");if(!f.getCanonicalPath().startsWith(dir.getCanonicalPath()+File.separator)||!f.isFile())return null;return f;}
     private boolean launchRulesApplied;
-    @Override protected void onResume(){super.onResume();if(reader!=null)reader.onResume();if(defenseResumed&&!defenseResultHandled)PermissionAudit.get(this).scan();defenseResultHandled=false;defenseResumed=true;refreshDefenseReader();if(!launchRulesApplied){launchRulesApplied=true;Continuous.start(this);if(Continuous.enabled(this)&&Continuous.prefs(this).getBoolean("vpn_enabled",true)&&!Continuous.prefs(this).getBoolean("vpn_prompted",false)){Intent consent=android.net.VpnService.prepare(this);if(consent!=null){Continuous.prefs(this).edit().putBoolean("vpn_prompted",true).apply();startActivityForResult(consent,VPN_REQUEST);}}}}
+    private void applyLaunchRules(){
+        if(launchRulesApplied||!backgroundInitStarted)return;
+        launchRulesApplied=true;
+        try{Continuous.start(this);}catch(Throwable t){EventStore.lastError="Démarrage collecte : "+t.getClass().getSimpleName();}
+        try{
+            if(Continuous.enabled(this)&&Continuous.prefs(this).getBoolean("vpn_enabled",true)&&!Continuous.prefs(this).getBoolean("vpn_prompted",false)){
+                Intent consent=android.net.VpnService.prepare(this);
+                if(consent!=null){Continuous.prefs(this).edit().putBoolean("vpn_prompted",true).apply();startActivityForResult(consent,VPN_REQUEST);}
+            }
+        }catch(Throwable t){NetworkCaptureService.lastError="Préparation VPN : "+t.getClass().getSimpleName();}
+    }
+    @Override protected void onResume(){super.onResume();if(reader!=null)reader.onResume();if(defenseResumed&&!defenseResultHandled)PermissionAudit.get(this).scan();defenseResultHandled=false;defenseResumed=true;refreshDefenseReader();applyLaunchRules();}
     private void refreshDefenseReader(){if(reader!=null)reader.evaluateJavascript("window.AivDefenseRefresh && window.AivDefenseRefresh()",null);}
 
     private long lastBackPressMs;
