@@ -461,10 +461,22 @@ body{padding:0!important;margin:0!important;max-width:none!important}
 </div>
 <div class="jc-home-hero">
       <div class="jc-home-eyebrow" id="jc-home-eyebrow">Écarts moyens de visibilité</div>
-      <div class="jc-score-ring jc-legacy-ring" id="jc-score-ring" role="img" aria-label="Indice de cohérence en attente de données">
-        <div class="jc-score-inner"><div class="jc-score-number" id="jc-score-number">—</div><div class="jc-score-label" id="jc-score-label">moyenne par application</div></div>
+      <div class="jc-overview-grid">
+        <div class="jc-score-column">
+          <div class="jc-score-ring jc-legacy-ring" id="jc-score-ring" role="button" tabindex="0" aria-label="Répartition globale des permissions L1 à L5">
+            <div class="jc-score-inner"><div class="jc-score-number" id="jc-score-number">—</div><div class="jc-score-label" id="jc-score-label">permissions classées</div></div>
+          </div>
+          <div class="jc-pie-caption">Téléphone complet</div>
+        </div>
+        <div class="jc-level-legend" id="jc-level-legend" aria-label="Légende des niveaux">
+          <div class="jc-level-item"><span class="jc-level-dot" style="background:#48d597"></span><strong>L1</strong><span>Visible et concordant</span><span class="jc-level-count" id="jc-l1-count">0</span></div>
+          <div class="jc-level-item"><span class="jc-level-dot" style="background:#f0cf5a"></span><strong>L2</strong><span>Moins visible / non déclaré</span><span class="jc-level-count" id="jc-l2-count">0</span></div>
+          <div class="jc-level-item"><span class="jc-level-dot" style="background:#ff9f43"></span><strong>L3</strong><span>Peut agir sans intervention immédiate</span><span class="jc-level-count" id="jc-l3-count">0</span></div>
+          <div class="jc-level-item"><span class="jc-level-dot" style="background:#ff5c6c"></span><strong>L4</strong><span>Avertissement Android / AOSP</span><span class="jc-level-count" id="jc-l4-count">0</span></div>
+          <div class="jc-level-item"><span class="jc-level-dot" style="background:#d94cff"></span><strong>L5</strong><span>Portée système ou autres applications</span><span class="jc-level-count" id="jc-l5-count">0</span></div>
+        </div>
       </div>
-      <div id="jc-group-rings" class="jc-group-rings" aria-label="Scores Android, système et utilisateur"></div>
+      <div id="jc-group-rings" class="jc-group-rings" aria-label="Répartition Android, système et utilisateur"></div>
       <h3 class="jc-home-title" id="jc-home-title">Calcul en attente de données AIV</h3>
       <p class="jc-home-sub" id="jc-home-sub">Ce chiffre documente la cohérence des observations disponibles. Ce n’est pas un verdict de sécurité.</p>
     </div>
@@ -504,7 +516,7 @@ body{padding:0!important;margin:0!important;max-width:none!important}
       <p class="jc-sub">Toutes les fonctions restent disponibles. L’accueil demeure simple; les outils détaillés sont rangés ici.</p>
     </div>
     <div class="jc-menu-grid">
-      <button type="button" class="jc-menu-card" data-menu-target="penalty"><strong>Barème AIV</strong><span>Multiplicateurs, couleurs, règles et import/export des observations.</span></button>
+      <button type="button" class="jc-menu-card" data-menu-target="penalty"><strong>Règles AIV</strong><span>Niveaux L1–L5, règles personnalisées et configuration avancée.</span></button>
       <button type="button" class="jc-menu-card" data-menu-target="audit"><strong>Applications</strong><span>Inventaire réel, permissions déclarées, comparaison et export journal-autorisations.json.</span></button>
       <button type="button" class="jc-menu-card" data-menu-target="journal"><strong>Journal</strong><span>Chronologie des événements et connexions observées.</span></button>
       <button type="button" class="jc-menu-card" data-menu-target="flows"><strong>Flux</strong><span>Relier directement la sortie et le retour d’une connexion, avec UID, DNS/SNI et volumes observés.</span></button>
@@ -558,8 +570,11 @@ body{padding:0!important;margin:0!important;max-width:none!important}
     </div>
     <div id="jc-empty" class="jc-empty"><span class="jc-empty-symbol" aria-hidden="true">0</span><h3>Prêt à recevoir ton journal</h3><p>Aucun événement du téléphone reçu. Les permissions Bixby déjà relevées sont consultables dans leur onglet.</p><button type="button" id="jc-see-bixby">Voir les permissions Bixby</button></div>
     <div id="jc-detail" class="jc-detail" hidden></div>
-    <ol id="jc-events" class="jc-events" aria-label="Événements importés"></ol>
-    <div id="jc-pagination" class="jc-pagination" hidden><button type="button" id="jc-prev">Précédent</button><span id="jc-page" class="jc-count"></span><button type="button" id="jc-next">Suivant</button></div>
+    <div class="jc-journal-table-wrap">
+      <div class="jc-journal-head" aria-hidden="true"><span>Heure</span><span>Application</span><span>UID</span><span>Événement</span><span>Destination / IP</span><span>Tracker</span><span>Réseau</span><span></span></div>
+      <ol id="jc-events" class="jc-events" aria-label="Événements importés"></ol>
+    </div>
+    <div id="jc-pagination" class="jc-pagination" hidden><button type="button" id="jc-prev">← Plus récent</button><span id="jc-page" class="jc-count"></span><button type="button" id="jc-next">Plus ancien →</button></div>
     <div id="jc-export-panel" class="jc-form" hidden><div class="jc-row jc-between"><h3>Copie du journal</h3><button type="button" id="jc-export-close">Fermer</button></div><p class="jc-sub">Si le téléchargement est bloqué ici, sélectionne et copie ce contenu pour le conserver.</p><textarea id="jc-export-text" readonly aria-label="Journal complet à copier"></textarea><button type="button" id="jc-select-export">Sélectionner le contenu</button></div>
   </section>
   <section class="jc-pane" id="jc-pane-anomalies" aria-label="Anomalies et traces observables" hidden>
@@ -571,7 +586,7 @@ body{padding:0!important;margin:0!important;max-width:none!important}
       <strong>Nettoyage Shizuku L4/L5</strong>
       <p id="jc-shizuku-status" class="jc-sub" role="status">État Shizuku…</p>
       <div class="jc-actions">
-        <button type="button" id="jc-shizuku-run" class="jc-primary">Retirer les permissions L4/L5</button>
+        <button type="button" id="jc-shizuku-run" class="jc-primary">Retirer les droits admissibles</button>
         <button type="button" id="jc-shizuku-restore">Restaurer le dernier nettoyage</button>
       </div>
     </div>
@@ -1997,12 +2012,95 @@ if(typeof module!=='undefined')module.exports=PenaltyModel;
   }
   const stableRows=renderRows;
   renderRows=function(rows){stableRows(rows);[...$('jc-events').children].forEach((node,i)=>{if(rows[i])appIdentity(node,rows[i].original);});};
+
+  // V31 first-pass UI: blue palette, permission pies and filterable journal table.
+  const v31LevelColors={1:'#48d597',2:'#f0cf5a',3:'#ff9f43',4:'#ff5c6c',5:'#d94cff'};
+  function v31PermissionDistribution(rows){
+    const counts={1:0,2:0,3:0,4:0,5:0};
+    for(const row of rows||[]){
+      const findings=row&&row.exposure&&Array.isArray(row.exposure.findings)?row.exposure.findings:[];
+      for(const finding of findings){const level=Number(finding.level);if(level>=1&&level<=5)counts[level]++;}
+    }
+    return {counts,total:Object.values(counts).reduce((a,b)=>a+b,0)};
+  }
+  function v31ApplyPie(node,dist){
+    if(!node)return;
+    if(!dist.total){node.style.background='#26384a';return;}
+    let at=0;const parts=[];
+    for(let level=1;level<=5;level++){const count=dist.counts[level]||0;if(!count)continue;const next=at+count/dist.total*360;parts.push(v31LevelColors[level]+' '+at+'deg '+next+'deg');at=next;}
+    node.style.background='conic-gradient('+parts.join(',')+')';
+  }
+  function v31DistributionText(dist){return [1,2,3,4,5].map(n=>'L'+n+' '+(dist.counts[n]||0)).join(' · ');}
+  const v31RenderPenaltyHome=renderPenaltyHome;
+  renderPenaltyHome=function(){
+    v31RenderPenaltyHome();
+    try{
+      const {result:r}=penaltyLoad(),ring=$('jc-score-ring'),global=v31PermissionDistribution(r.apps);
+      v31ApplyPie(ring,global);ring.dataset.penaltyColor='';ring.querySelectorAll('.jp-multiplier').forEach(n=>n.remove());
+      $('jc-score-number').textContent=penaltyNumber(global.total);$('jc-score-label').textContent='permissions classées';
+      $('jc-home-eyebrow').textContent='Répartition des permissions L1–L5';
+      $('jc-home-title').textContent='Vue globale du téléphone';
+      $('jc-home-sub').textContent=v31DistributionText(global)+' · touche Android, Système ou Utilisateur pour filtrer la liste dessous.';
+      for(let n=1;n<=5;n++){const el=$('jc-l'+n+'-count');if(el)el.textContent=penaltyNumber(global.counts[n]||0);}
+      ring.onclick=()=>{homeGroup='all';homeLimit=25;renderPenaltyHome();};ring.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();ring.click();}};
+      const holder=$('jc-group-rings');holder.replaceChildren();
+      for(const group of r.groups){
+        const rows=r.apps.filter(a=>a.group===group.id),dist=v31PermissionDistribution(rows);
+        const b=penaltyButton('',()=>{homeGroup=group.id;homeLimit=25;renderPenaltyHome();});b.className='jc-group-card';b.dataset.group=group.id;b.setAttribute('aria-pressed',String(homeGroup===group.id));
+        const disc=element('span',undefined,'jc-group-disc'),center=element('span',undefined,'jc-v31-pie-center');center.append(element('strong',penaltyNumber(dist.total)),element('small','permissions'));disc.append(center);v31ApplyPie(disc,dist);
+        b.append(element('strong',groupNames[group.id]),disc,element('span',v31DistributionText(dist),'jc-group-meta'));holder.append(b);
+      }
+      $('jc-home-list-title').textContent=(homeGroup==='all'?'Toutes les applications':groupNames[homeGroup])+' · toucher une application pour sa fiche';
+      $('jc-home-alert-title').textContent='Lecture L1–L5';
+      $('jc-home-alert-text').textContent='Les parts représentent les permissions classées dans l’inventaire actuel. L5 est violet dans cette interface; les données source et le classement restent inchangés.';
+      for(const b of $('jc-home-app-list').querySelectorAll('.jc-home-app')){
+        const a=r.apps.find(x=>x.package_name===b.dataset.package),impact=b.querySelector('.jc-home-impact');
+        if(a&&impact){const level=a.exposure?Number(a.exposure.level)||0:0;impact.textContent=level?'L'+level+' · '+(a.exposure.label||'niveau classé'):'Indéterminé';impact.style.setProperty('--home-app-color',level?v31LevelColors[level]:'#79b5dd');if(level===5)b.dataset.penaltyColor='gray';}
+      }
+    }catch(e){/* Preserve the functional V30 home if the visual projection cannot be built. */}
+  };
+
+  function v31JournalFilter(kind,value){
+    if(!value)return;state.page=0;state.selected=null;nativeAnchor=0;
+    if(kind==='app'){
+      const select=$('jc-app'),found=[...select.options].some(o=>o.value===value);
+      if(found){select.value=value;$('jc-search').value='';}else $('jc-search').value=value;
+    }else $('jc-search').value=value;
+    if(nativeBridge)renderNative();else renderJournal();
+  }
+  function v31TrackerInfo(event){
+    if(!nativeBridge||!nativeBridge.trackerMatch)return {host:'',hits:[]};
+    const raw=event.original||{},d=raw.details||{};
+    let host='',kind='TLS_SNI';
+    if(raw.category==='dns'){host=d.question||event.destination||'';kind='DNS_QUERY_ONLY';}
+    else {host=d.tls_sni||'';kind=d.ech_extension_present?'TLS_OUTER_NAME':'TLS_SNI';}
+    if(!host)return {host:'',hits:[]};
+    try{const hits=JSON.parse(nativeBridge.trackerMatch(String(host),kind));return {host,hits:Array.isArray(hits)?hits:[]};}catch(e){return {host,hits:[]};}
+  }
+  renderRows=function(rows){
+    const list=$('jc-events');list.replaceChildren();
+    for(const event of rows){
+      const raw=event.original||{},d=raw.details||{},uid=d.uid??raw.uid,tracker=v31TrackerInfo(event);
+      const li=element('li',undefined,'jc-journal-row');if(tracker.hits.length)li.classList.add('jc-has-tracker');
+      const cell=(cls)=>element('span',undefined,'jc-journal-cell '+(cls||''));
+      const time=cell('jc-journal-time');time.textContent=timeText(event);
+      const app=cell();const appButton=element('button',event.actor||'Acteur inconnu');appButton.type='button';appButton.title='Filtrer le journal sur cette application';appButton.onclick=()=>v31JournalFilter('app',event.actor);app.append(appButton);appIdentity(app,event.original);
+      const uidCell=cell();const uidButton=element('button',uid==null||Number(uid)<0?'—':'UID '+uid);uidButton.type='button';uidButton.title='Filtrer sur cet UID';uidButton.onclick=()=>v31JournalFilter('search',String(uid));uidCell.append(uidButton);
+      const action=cell();action.textContent=event.action||raw.action||'—';
+      const dest=cell();const destButton=element('button',event.destination||'—');destButton.type='button';destButton.title='Filtrer sur cette destination';destButton.onclick=()=>v31JournalFilter('search',event.destination);dest.append(destButton);
+      const trackerCell=cell();if(tracker.hits.length){for(const hit of tracker.hits.slice(0,2)){const tb=element('button',hit.name||('Tracker '+hit.tracker_id),'jc-tracker-chip');tb.type='button';tb.title='Filtrer sur l’hôte observé '+tracker.host;tb.onclick=()=>v31JournalFilter('search',tracker.host);trackerCell.append(tb);}}else trackerCell.append(element('span','—','jc-tracker-none'));
+      const network=cell();network.textContent=event.transport||'—';
+      const detail=cell();const detailButton=element('button','⋯','jc-detail-open');detailButton.type='button';detailButton.setAttribute('aria-label','Afficher le détail de cet événement');detailButton.onclick=()=>{state.selected=event.key;renderDetail();$('jc-detail').scrollIntoView({block:'nearest'});};detail.append(detailButton);
+      li.append(time,app,uidCell,action,dest,trackerCell,network,detail);list.append(li);
+    }
+  };
+
   const nav=root.querySelector('.jc-user-nav');nav.replaceChildren();
   for(const [tab,label] of [['home','Accueil'],['journal','Journal'],['anomalies','Anomalies'],['decisions','Décisions'],['audit','Applications'],['menu','Paramètres']]){
     const b=penaltyButton(label,()=>setTab(tab));b.dataset.jcTab=tab;b.setAttribute('aria-pressed',String(tab==='home'));nav.append(b);
   }
   const menu=$('jc-pane-menu');menu.replaceChildren(element('h2','Paramètres'));
-  for(const [tab,label] of [['penalty','Barème et formules'],['references','Référentiels']]){
+  for(const [tab,label] of [['penalty','Règles et JSON avancé'],['references','Référentiels']]){
     const detail=element('details'),pane=$('jc-pane-'+tab);detail.append(element('summary',label),pane);menu.append(detail);
     detail.addEventListener('toggle',()=>{if(detail.open){pane.hidden=false;if(tab==='penalty')renderPenaltySettings();else renderAivStatus();}});
   }
