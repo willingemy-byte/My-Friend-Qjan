@@ -1,0 +1,65 @@
+name: AIV V23 Android build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [aiv-v23-defense]
+    paths:
+      - "aiv-v19/**"
+      - ".github/workflows/aiv-v23-build.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Cache Android toolchain
+        uses: actions/cache@v4
+        with:
+          path: aiv-v19/.toolchain
+          key: aiv-v20-android35-ndk27d
+
+      - name: Build V23 audit APK
+        working-directory: aiv-v19
+        env:
+          AIV_BUILD_MODE: unsigned
+        run: |
+          chmod +x bootstrap-clean-build.sh
+          ./bootstrap-clean-build.sh
+
+      - name: Targeted reference and regression tests
+        run: bash aiv-v19/tests/run-v23.sh
+
+      - name: Verify V23 artifact
+        run: |
+          test -f aiv-v19/build/AIV-0.6.23-unsigned.apk
+          test -f aiv-v19/build/AIV-0.6.23-unsigned.apk.sha256
+          cat aiv-v19/build/AIV-0.6.23-unsigned.apk.sha256
+
+      - name: Upload V23 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: AIV-0.6.23-unsigned-test
+          path: |
+            aiv-v19/build/AIV-0.6.23-unsigned.apk
+            aiv-v19/build/AIV-0.6.23-unsigned.apk.sha256
+          retention-days: 30
+
+      - name: Upload verified Android signing tool
+        uses: actions/upload-artifact@v4
+        with:
+          name: AIV-0.6.23-signing-tool
+          path: aiv-v19/.toolchain/sdk/build-tools/35.0.0/lib/apksigner.jar
+          retention-days: 30
