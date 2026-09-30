@@ -1,10 +1,16 @@
 <!doctype html>
-<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src 'none'; child-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; font-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"><title>Journal du cellulaire</title><style>body{margin:0;padding:16px;font-family:system-ui,sans-serif;background:light-dark(#f0f4f2,#101516);color-scheme:light dark}main{max-width:800px;margin:0 auto}h2{font-size:1.35rem}h3{font-size:1.05rem}button,input,select,textarea{font-size:1rem}@media(max-width:460px){body{padding:8px}}</style>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src 'none'; child-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; font-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"><title>Journal du cellulaire</title><style>body{margin:0;padding:16px;font-family:system-ui,sans-serif;background:light-dark(#f0f4f2,#101516);color-scheme:light dark}main{max-width:800px;margin:0 auto}h2{font-size:1.35rem}h3{font-size:1.05rem}button,input,select,textarea{font-size:1rem}@media(max-width:460px){body{padding:8px}}#jc-reader .ja-unknown{border-color:#79b5dd;color:#b4d8ed}
+#jc-reader .ja-gray,#jc-reader [data-penalty-color="gray"]{border-color:#a6a9ad}
+#jc-reader [data-penalty-color="gray"].jc-score-ring,#jc-reader [data-penalty-color="gray"].jc-group-disc{background:#797c82}
+</style>
 <style id="aiv-v20-design-override">
 :root{color-scheme:dark;--aiv-bg:#05090d;--aiv-surface:#0c161c;--aiv-surface-2:#0f2420;--aiv-line:#1e2f33;--aiv-ink:#eaf5f2;--aiv-sub:#93a8ab;--aiv-accent:#4fe0c9;--aiv-warn:#f0b64c;--aiv-danger:#ff5470}
 html,body{background:#05090d!important;color:#eaf5f2!important}
 body{max-width:1120px;margin-inline:auto}
 button,.button,[role="button"]{border-radius:14px!important}
+#jc-reader .ja-unknown{border-color:#79b5dd;color:#b4d8ed}
+#jc-reader .ja-gray,#jc-reader [data-penalty-color="gray"]{border-color:#a6a9ad}
+#jc-reader [data-penalty-color="gray"].jc-score-ring,#jc-reader [data-penalty-color="gray"].jc-group-disc{background:#797c82}
 </style>
 </head><body><main><style>
 #jc-reader { --jc-bg:light-dark(#fbfcfc,#151a1b); --jc-ink:light-dark(#202b2c,#edf4f2); --jc-sub:light-dark(#506565,#b4c6c4); --jc-line:light-dark(#d6e2df,#364845); --jc-accent:light-dark(#096558,#81dbc4); --jc-wash:light-dark(#e9f5f0,#223c35); --jc-paper:light-dark(#ffffff,#1c2425); --jc-warn:light-dark(#8c570f,#f3c680); --jc-danger:light-dark(#a32336,#ffadb8); color:var(--jc-ink); background:var(--jc-bg); border:1px solid var(--jc-line); border-radius:18px; font-family:system-ui,sans-serif; overflow-wrap:anywhere; color-scheme:light dark; }
@@ -67,6 +73,9 @@ button,.button,[role="button"]{border-radius:14px!important}
 #jc-reader .jc-meta { display:flex; gap:8px; flex-wrap:wrap; color:var(--jc-sub); }
 #jc-reader .jc-count { font-variant-numeric:tabular-nums; }
 @media (max-width:460px) { #jc-reader .jc-top,#jc-reader .jc-pane { padding:16px; } #jc-reader .jc-state,#jc-reader .jc-foot { padding:12px 16px; } #jc-reader .jc-toolbar { grid-template-columns:minmax(0,1fr); } #jc-reader .jc-fields { grid-template-columns:minmax(0,1fr); gap:4px; } #jc-reader .jc-fields dd { margin-bottom:8px; } #jc-reader .jc-tabs { padding-inline:8px; } }
+#jc-reader .ja-unknown{border-color:#79b5dd;color:#b4d8ed}
+#jc-reader .ja-gray,#jc-reader [data-penalty-color="gray"]{border-color:#a6a9ad}
+#jc-reader [data-penalty-color="gray"].jc-score-ring,#jc-reader [data-penalty-color="gray"].jc-group-disc{background:#797c82}
 </style>
 <style>#jc-reader .jc-home{--home-score:#6d7f89;--home-surface:light-dark(#f5f9f8,#0b171c);background:var(--home-surface);transition:background .25s ease}
 #jc-reader .jc-view-switch{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0 auto 16px;max-width:440px}
@@ -224,6 +233,9 @@ button,.button,[role="button"]{border-radius:14px!important}
 @media(max-width:600px){#jc-reader[data-view-mode] .jc-group-rings{grid-template-columns:1fr}#jc-reader[data-view-mode] .jc-group-card{display:grid;grid-template-columns:145px minmax(0,1fr);gap:8px 18px;padding:24px 12px 14px}#jc-reader #jc-score-number{font-size:3.8rem}}
 
 #jc-recalculation{position:fixed;inset:0;z-index:10000;background:#07101e;color:#eef6ff;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center}
+#jc-reader .ja-unknown{border-color:#79b5dd;color:#b4d8ed}
+#jc-reader .ja-gray,#jc-reader [data-penalty-color="gray"]{border-color:#a6a9ad}
+#jc-reader [data-penalty-color="gray"].jc-score-ring,#jc-reader [data-penalty-color="gray"].jc-group-disc{background:#797c82}
 </style>
 <div id="jc-reader" lang="fr">
   <header class="jc-top">
@@ -247,7 +259,7 @@ button,.button,[role="button"]{border-radius:14px!important}
     <button type="button" data-jc-tab="menu" aria-pressed="false" aria-controls="jc-pane-menu">Menu</button>
   </nav>
   <section class="jc-pane jc-home" id="jc-pane-home" aria-label="Accueil AIV">
-    <p class="jc-clean-build-tag" aria-label="Version de compilation">AIV 0.6.21 · PÉNALITÉS CONFIGURABLES</p>
+    <p class="jc-clean-build-tag" aria-label="Version de compilation">AIV 0.6.22 · PÉNALITÉS CONFIGURABLES</p>
     <div class="jc-view-switch" aria-label="Choisir la vue de démonstration">
       <button type="button" id="jc-mode-user" aria-pressed="true">Utilisateur</button>
       <button type="button" id="jc-mode-ti" aria-pressed="false">TI · démo</button>
@@ -439,13 +451,13 @@ button,.button,[role="button"]{border-radius:14px!important}
     <h3>Signalements par application</h3><p>Ratio des événements WATCH ou DENIED parmi les événements évalués; inclut les observations insuffisantes, ne mesure pas une intention.</p><div id="aiv-apps"></div>
     <details><summary>Règles locales versionnées</summary><h4>Couleurs des points AIV</h4><p>Seuils du multiplicateur, communs aux applications, aux groupes et au global. Enregistrement local sans nouvelle APK.</p><div id="aiv-score-colors"></div><h4>Règles R1 à R6 et règles personnalisées</h4><div id="aiv-rules"></div><label>Configuration JSON d’une règle<textarea id="aiv-config" rows="9" style="width:100%" spellcheck="false"></textarea></label><button id="aiv-save">Enregistrer une nouvelle version</button></details>
   </section>
-  <section class="jc-pane" id="jc-pane-references" hidden><h2>Référentiels</h2><p>La référence locale estimée suit le dernier inventaire, sans import obligatoire. Calibration V6 puis classification des permissions nouvelles ou modifiées. Les observations de visibilité saisies dans les fiches restent prioritaires. Les catalogues importés sont conservés séparément.</p><button id="aiv-import">Importer un référentiel JSON</button><button id="aiv-ref-refresh">Actualiser l’inventaire et la référence</button><button id="aiv-ref-export">Exporter la référence actuelle</button><p id="aiv-local-ref-status"></p><div id="aiv-references"></div></section>
+  <section class="jc-pane" id="jc-pane-references" hidden><h2>Référentiels</h2><p>Bayton et Exodus sont intégrés localement. Les états de permissions viennent du téléphone; les descriptions et signatures viennent des catalogues datés. La visibilité réelle sur Google Play reste indéterminée sans une liste de cette version. L1 vert · L2 jaune · L3 orange · L4 rouge · L5 gris. Bleu : indéterminé.</p><button id="aiv-import">Importer un référentiel JSON</button><button id="aiv-ref-refresh">Actualiser l’inventaire et la référence</button><button id="aiv-ref-export">Exporter la référence actuelle</button><p id="aiv-local-ref-status"></p><div id="aiv-references"></div><div id="v22-reference-status"></div><h3>Correspondances Exodus dans le journal</h3><input id="v22-tracker-query" type="search" placeholder="Application, domaine ou traqueur"><button id="v22-tracker-search">Chercher</button><button id="v22-tracker-resume">Reprendre les analyses AIV</button><button id="v22-tracker-export">Exporter les correspondances</button><p id="v22-tracker-status"></p><div id="v22-tracker-results"></div><button id="v22-tracker-more">Suite</button></section>
 
 <section class="jc-pane" id="jc-pane-penalty" aria-label="Barème AIV" hidden>
   <h2>Barème AIV</h2>
   <p>Les points montent avec les pénalités. Le nombre central est la moyenne des écarts des applications concernées : somme H / nombre d’applications avec H > 0. Il ne contient pas le multiplicateur. Le multiplicateur du groupe vaut total pondéré / total de base. Toutes les modifications sont enregistrées sur ce téléphone.</p>
   <div class="ja-form ja-card" id="jp-controls"></div>
-  <p class="jc-note">Les mêmes seuils du multiplicateur déterminent les couleurs des applications, des groupes et du global. Tu peux aussi les modifier avec les règles R1 à R6 dans Paramètres, avec les règles locales. Ce barème ne représente pas une probabilité de danger.</p>
+  <p class="jc-note">Les couleurs V22 suivent les niveaux de capacité L1 à L5. Les réglages numériques historiques ci-dessous restent conservés séparément et ne changent pas ces couleurs. Aucun niveau ne constitue une preuve de malveillance.</p>
   <details class="ja-card"><summary>Réglages complets en JSON · règles et observations</summary>
     <p>Les règles peuvent viser une permission exacte ou un préfixe, imposer un état accordé et attribuer plusieurs niveaux. Chaque règle conserve sa source et sa raison. L4 additionne les portées des capacités distinctes par défaut. L5 utilise les relations d’installation seulement pour un accès spécial actif explicitement confirmé. Le catalogue automatique est modifiable dans automatic.catalog.</p>
     <label>Configuration complète<textarea id="jp-json" rows="22" spellcheck="false" style="width:100%;font-family:monospace"></textarea></label>
@@ -503,6 +515,9 @@ main{max-width:1120px}
 #jc-reader .ja-description{margin:12px 0;padding:14px;border:1px solid #284253;border-radius:10px;background:#081623}
 #jc-reader pre{white-space:pre-wrap;overflow-wrap:anywhere}
 @media(max-width:560px){#jc-reader .jc-pane{padding:16px 12px}#jc-reader .ja-counters{gap:6px}#jc-reader .ja-counter{padding:9px;font-size:.8rem}#jc-reader .ja-counter b{font-size:1.2rem}#jc-reader .ja-form{grid-template-columns:1fr}#jc-reader .jc-top{padding:18px 12px}#jc-reader .jc-fields{grid-template-columns:1fr}}
+#jc-reader .ja-unknown{border-color:#79b5dd;color:#b4d8ed}
+#jc-reader .ja-gray,#jc-reader [data-penalty-color="gray"]{border-color:#a6a9ad}
+#jc-reader [data-penalty-color="gray"].jc-score-ring,#jc-reader [data-penalty-color="gray"].jc-group-disc{background:#797c82}
 </style><script>
 (function () {
   'use strict';
@@ -789,6 +804,9 @@ main{max-width:1120px}
         for(const [k,v] of [['Premier sortant',flowTime(f.first_outbound_ms)],['Premier retour',flowTime(f.first_inbound_ms)],['Envoyé',`${flowBytes(f.tx_bytes)} · ${Number(f.tx_packets)||0} paquet(s)`],['Reçu',`${flowBytes(f.rx_bytes)} · ${Number(f.rx_packets)||0} paquet(s)`],['État',f.closed===true?'Fermé':f.closed===false?'Ouvert / observé':'État final non observé'],['Même flux',f.same_flow_return?'Oui · sortie et retour reliés':'Retour non observé dans les données disponibles']]){const d=element('div');d.append(element('span',k,'jc-sub'),element('strong',v));grid.append(d);}card.append(grid);
         if(Array.isArray(f.dns)&&f.dns.length)card.append(element('p','DNS observé : '+f.dns.join(', '),'jc-flow-evidence'));
         if(f.tls_sni)card.append(element('p','SNI TLS observé : '+f.tls_sni,'jc-flow-evidence'));
+        if(f.tracker_matches?.length)card.append(element('p','Exodus · '+f.tracker_matches.map(t=>t.name+(t.domain_boundary_match?'':' (signature partielle)')).join(', '),'jc-flow-evidence'));
+        if(f.tracker_dns_candidates?.length)card.append(element('p','DNS seulement · '+f.tracker_dns_candidates.map(t=>t.name).join(', '),'jc-sub'));
+        if(f.tracker_matches?.length||f.tracker_dns_candidates?.length)card.append(element('p',f.tracker_scope,'jc-note'));
         if(f.tls_observation)card.append(element('p','TLS : '+f.tls_observation,'jc-sub'));
         card.append(element('p',f.limits||'Aucun contenu chiffré n’est lu.','jc-sub'),element('code',String(f.flow_correlation_id||''),'jc-flow-id'));
         list.append(card);
@@ -958,7 +976,7 @@ const AuditRules=(()=>{
 if(typeof module!=='undefined')module.exports=AuditRules;
 
   function auditAppComparison(app){
-    if(nativeBridge&&nativeBridge.penaltyData){try{const row=penaltyLoad().result.apps.find(a=>a.package_name===app.package_name);if(row)return {level:row.color==='unknown'?'gray':row.color==='critical'?'red':row.color,label:row.points===null?'Non évaluée':penaltyNumber(row.H)+' points de base × '+penaltyCompact(row.multiplier),penaltyText:row.H===null?row.reason:penaltyNumber(row.points)+' points pondérés · couleur selon le multiplicateur'};}catch(e){return {level:'gray',label:'Calcul indisponible',penaltyText:e.message};}}
+    if(nativeBridge&&nativeBridge.penaltyData){try{const row=penaltyLoad().result.apps.find(a=>a.package_name===app.package_name);if(row?.exposure)return {level:row.color,label:row.exposure.label,penaltyText:'Capacités déclarées · visibilité '+row.exposure.visibility_status};if(row)return {level:row.color==='unknown'?'unknown':row.color==='critical'?'red':row.color,label:row.points===null?'Non évaluée':penaltyNumber(row.H)+' points de base × '+penaltyCompact(row.multiplier),penaltyText:row.H===null?row.reason:penaltyNumber(row.points)+' points pondérés · couleur selon la capacité déclarée'};}catch(e){return {level:'unknown',label:'Calcul indisponible',penaltyText:e.message};}}
     return AuditRules.compare(app.count,app.reference,app.version_code);
   }
   let auditOffset=0,auditStarted=false;
@@ -986,6 +1004,8 @@ if(typeof module!=='undefined')module.exports=AuditRules;
     try{
       const data=auditRead(nativeBridge.auditDetail(pkg)),a=data.app,ref=data.reference||{},r=auditAppComparison({...a,reference:ref}),pane=$('ja-detail');pane.replaceChildren();
       const head=element('div',undefined,'ja-card ja-'+r.level);head.append(element('h3',a.label),element('p',a.package_name,'jc-sub'),auditBadge(r),element('p',`Version ${a.version_name||'INCONNU'} (${a.version_code}) · UID ${a.uid} · profil ${a.profile_id}`,'ja-data'),element('p',`Attribution : ${a.attribution}. Application ${a.enabled?'activée':'désactivée'}.`,'jc-sub'));appIdentity(head,a);pane.append(head);
+      const pedigree=element('details',undefined,'ja-card');pedigree.append(element('summary','Pédigrée APK · signature, installation et SDK'),element('pre',JSON.stringify({version:a.version_name,version_code:a.version_code,min_sdk:a.min_sdk,target_sdk:a.target_sdk,install_source:a.install_source,certificates:a.certificates,apk:a.apk_evidence},null,2)));pane.append(pedigree);
+      const exposure=PenaltyModel.exposure(a,ref);pane.append(element('p',exposure.label,'ja-badge ja-'+exposure.color),element('p',exposure.scope,'jc-note'));
       renderCoherenceDetail(pane,pkg);
       const flowButton=element('button','Voir les flux réseau de cette application');flowButton.type='button';flowButton.onclick=()=>flowOpen(pkg);pane.append(flowButton);
       if(nativeBridge.openAuditedApp){const actions=element('div',undefined,'jc-row');for(const [label,settings] of [['Ouvrir l’application',false],['Fiche Android et autorisations',true]]){const button=element('button',label);button.type='button';button.onclick=()=>nativeBridge.openAuditedApp(pkg,settings);actions.append(button);}pane.append(actions);}
@@ -1002,7 +1022,7 @@ if(typeof module!=='undefined')module.exports=AuditRules;
       const events=element('button','Voir les événements attribués à ce paquet');events.id='ja-events';events.type='button';events.onclick=()=>{$('jc-package').value=pkg;$('jc-app-scope').value='';$('jc-app').value='';$('jc-search').value='';$('jc-kind').value='apps';$('jc-transport').value='';state.page=0;nativeAnchor=0;state.selected=null;setTab('journal');renderNative();};pane.append(events);
       pane.append(element('h3',a.permissions.length+' autorisations déclarées'));
       const permissionSearch=element('input');permissionSearch.id='ja-permission-search';permissionSearch.type='search';permissionSearch.placeholder='Chercher un droit ou sa description';permissionSearch.setAttribute('aria-label','Chercher une autorisation');const permissions=element('div');permissions.id='ja-permissions';
-      const showPermissions=()=>{permissions.replaceChildren();for(const p of a.permissions){if(!JSON.stringify(p).toLowerCase().includes(permissionSearch.value.toLowerCase()))continue;const item=element('details',undefined,'ja-description');item.append(element('summary',`${p.label||p.name} · ${p.granted===true?'accordée':p.granted===false?'non accordée':'état INCONNU'}`),element('p',p.name,'jc-sub'),element('p',p.description),element('p',`Protection : ${p.protection} (${p.protection_level}). Définie par : ${p.defined_by||'INCONNU'}.`,'jc-sub'),element('p',p.revocation,'jc-sub'));permissions.append(item);}};permissionSearch.oninput=showPermissions;pane.append(permissionSearch,permissions);showPermissions();
+      const showPermissions=()=>{permissions.replaceChildren();for(const p of a.permissions){if(!JSON.stringify(p).toLowerCase().includes(permissionSearch.value.toLowerCase()))continue;const item=element('details',undefined,'ja-description');item.append(element('summary',`${p.label||p.name} · ${p.granted===true?'accordée':p.granted===false?'non accordée':'état INCONNU'}`),element('p',p.name,'jc-sub'),element('p',p.description),element('p',`Protection : ${p.protection} (${p.protection_level}). Définie par : ${p.defined_by||'INCONNU'}.`,'jc-sub'),element('p',p.revocation,'jc-sub'));if(p.bayton)item.append(element('p','Bayton / AOSP : '+(p.bayton.description||p.bayton.label||'Description indisponible')+' · API de référence '+p.bayton.reference_api_level,'jc-sub'));const finding=exposure.findings.find(f=>f.permission===p.name);if(finding)item.append(element('p','L'+finding.level+' · '+finding.reason,'ja-badge ja-'+finding.color));else item.append(element('p','Niveau indéterminé · preuve de visibilité ou règle de capacité manquante','ja-badge ja-unknown'));permissions.append(item);}};permissionSearch.oninput=showPermissions;pane.append(permissionSearch,permissions);showPermissions();
       pane.append(element('p','Le droit INTERNET concerne la connexion réseau. Ce journal ne permet pas de déduire quelle permission a fourni les données d’un flux. Lire ou modifier le journal d’appels, utiliser le micro et ouvrir une connexion sont des opérations distinctes.','jc-note'));
       const history=element('details',undefined,'ja-card');history.append(element('summary','Historique du dossier — 100 dernières entrées'));for(const h of data.history)history.append(element('pre',JSON.stringify(h,null,2)));pane.append(history);
       const imported=element('details',undefined,'ja-card');imported.append(element('summary','Constats du rapport importé — 50 derniers'),element('p',data.import_scope,'jc-sub'));for(const f of data.imported_findings){const item=element('div',undefined,'ja-card ja-'+r.level);item.append(element('strong',f.title||f.rule||'Constat'),auditBadge(r),element('pre',JSON.stringify(f,null,2)));imported.append(item);}pane.append(imported);
@@ -1026,6 +1046,41 @@ if(typeof module!=='undefined')module.exports=AuditRules;
   let aivBefore=0,aivNext=0,aivLastPoll=0;
   function aivRead(method,...args){if(!nativeBridge||typeof nativeBridge[method]!=='function')return null;const data=JSON.parse(nativeBridge[method](...args));if(data.error)throw new Error(data.error);return data;}
   function aivError(e){$('aiv-status').textContent=e.message||String(e);}
+  let trackerBefore=0;
+  function renderTrackerStatus(){
+    if(!nativeBridge?.trackerStatus)return;
+    try{const s=auditRead(nativeBridge.trackerStatus()),box=$('v22-reference-status');box.replaceChildren();
+      box.append(element('p',`${s.catalog.bayton_permissions} permissions Bayton · ${s.catalog.exodus_trackers} traqueurs Exodus · catalogue du ${s.catalog.fetched_utc}.`));
+      box.append(element('p',`Android du téléphone : API ${s.catalog.device_api_level} · descriptions de référence : API ${s.catalog.bayton_api_level}. ${s.catalog.notice}`,'jc-sub'));
+      box.append(element('p',`APK : ${s.apk.cached_packages} dossiers en cache · ${s.apk.busy?'analyse de '+s.apk.current_package:'en attente du prochain passage'}. ${s.apk.error||''}`));
+      box.append(element('p',s.apk.scope,'jc-sub'));
+      $('v22-tracker-status').textContent=`${s.index.enabled?'Analyse active':'Analyse en pause'} · journal analysé jusqu’à ${s.index.checkpoint} / ${s.index.latest_event} · ${s.index.candidate_flows} flux avec correspondance ou candidat. ${s.index.error||s.index.notice}`;
+    }catch(e){$('v22-tracker-status').textContent=e.message;}
+  }
+  function renderTrackerPage(append=false){
+    if(!nativeBridge?.trackerPage)return;
+    try{const result=auditRead(nativeBridge.trackerPage($('v22-tracker-query').value,append?trackerBefore:0)),box=$('v22-tracker-results');if(!append)box.replaceChildren();
+      trackerBefore=result.next_before||0;renderTrackerStatus();
+      for(const f of result.rows){const card=element('article',undefined,'ja-card');card.append(element('h4',f.app||'Acteur inconnu'));
+        card.append(element('p',f.attribution_unique?'UID '+f.uid+' · '+(f.packages||[]).join(', '):'Auteur applicatif non attribuable; UID '+f.uid,'jc-sub'));
+        for(const t of f.tracker_matches||[])card.append(element('p',`${t.name} · ${t.host} · ${t.evidence} · ${t.domain_boundary_match?'signature réseau concordante':'signature partielle à examiner'}`));
+        if(f.current_apk_tracker_ids?.length)card.append(element('p','Aussi présent dans l’APK actuel : identifiants Exodus '+f.current_apk_tracker_ids.join(', ')+'. '+f.apk_correlation_scope,'jc-note'));
+        for(const t of f.tracker_dns_candidates||[])card.append(element('p',`${t.name} · question DNS ${t.host} · contact ultérieur non établi`,'jc-sub'));
+        card.append(element('p',`Flux : ↑ ${flowBytes(f.tx_bytes)} / ↓ ${flowBytes(f.rx_bytes)} · premier vu ${flowTime(f.first_observed_ms)} · dernier paquet ${flowTime(f.last_packet_ms)}.`));
+        card.append(element('p','Les volumes concernent le flux entier. Une correspondance ne prouve pas le contenu envoyé ni quel SDK a appelé le réseau.','jc-note'));
+        card.append(element('code',f.flow_correlation_id),penaltyButton('Voir ce flux dans le journal',()=>flowOpen(f.flow_correlation_id)));
+        if(f.attribution_unique&&f.packages?.length===1)card.append(penaltyButton('Pédigrée et SDK de l’APK',()=>{setTab('audit');renderAuditDetail(f.packages[0]);}));
+        box.append(card);
+      }
+      if(!result.rows.length&&!append)box.append(element('p','Aucune correspondance dans la partie déjà analysée pour ce filtre. Cela ne prouve pas l’absence de traqueurs.'));
+      $('v22-tracker-more').hidden=result.rows.length<25;
+    }catch(e){$('v22-tracker-status').textContent=e.message;}
+  }
+  $('v22-tracker-export').onclick=()=>nativeBridge?.command('export-trackers');
+  $('v22-tracker-search').onclick=()=>renderTrackerPage(false);
+  $('v22-tracker-more').onclick=()=>renderTrackerPage(true);
+  $('v22-tracker-resume').onclick=()=>{nativeBridge?.trackerResume?.();renderTrackerStatus();renderTrackerPage(false);};
+
   function renderAivStatus(){try{
     const s=aivRead('aivSummary');if(!s)return;aivLastPoll=Date.now();
     if($('aiv-tab'))$('aiv-tab').textContent='Décisions · '+(s.stats_complete===false?'calcul partiel':s.findings);
@@ -1034,6 +1089,7 @@ if(typeof module!=='undefined')module.exports=AuditRules;
     $('aiv-status').style.color=String(s.verification).startsWith('BROKEN')?'#ff5964':'';
     const apps=$('aiv-apps');apps.replaceChildren();if(s.stats_complete===false)apps.append(element('p','Statistiques partielles : '+s.stats_evaluated+' décisions comptabilisées. Le calcul reprend avec l’analyse AIV.'));for(const a of s.apps){apps.append(element('p',a.app+' : '+a.findings+'/'+a.evaluated+' ('+(100*a.ratio).toFixed(1)+' %)'));}
     if(nativeBridge.auditSummary){const inventory=JSON.parse(nativeBridge.auditSummary());$('aiv-local-ref-status').textContent=(inventory.busy?'Inventaire en cours. ': '')+(inventory.scan_id?'Référence estimée basée sur le dernier inventaire terminé : '+inventory.scan_id+'.':'Appuie sur Actualiser pour créer la référence locale.')+(inventory.error?' '+inventory.error:'');}
+    renderTrackerStatus();
     const refs=$('aiv-references');refs.replaceChildren();for(const source of s.sources){refs.append(element('p',source.source+' · '+source.apps+' apps · '+source.status+' · '+(source.last_sync_ms?new Date(source.last_sync_ms).toISOString():'jamais mis à jour')));}
     const rules=$('aiv-rules');rules.replaceChildren();for(const r of s.rules){const b=element('button',r.name+' v'+r.version+' · '+r.decision+' · priorité '+r.priority+(r.enabled?'':' · désactivée'));b.onclick=()=>{$('aiv-config').value=JSON.stringify({name:r.name,decision:r.decision,priority:r.priority,enabled:r.enabled===1,condition:JSON.parse(r.condition)},null,2);};rules.append(b);}
   }catch(e){aivError(e);}}
@@ -1270,7 +1326,9 @@ const PenaltyModel = (() => {
       keys(e.visibility, ['principal','toutes'], 'Visibilité');
       for (const [name, v] of Object.entries(e.visibility)) {
         if (v === null) continue;
-        keys(v, ['count','kind','source','same_version','version_code'], name);
+        keys(v, ['count','kind','source','same_version','version_code','permission_names','surface'], name);
+        if(v.permission_names!==undefined&&(!Array.isArray(v.permission_names)||v.permission_names.length>10000||v.permission_names.some(n=>typeof n!=='string'||!n||n.length>512)||new Set(v.permission_names).size!==v.permission_names.length||v.permission_names.length!==v.count))throw Error('Liste de permissions distinctes et nombre concordant requis');
+        if(v.surface!==undefined&&!['google_play','android_settings','unknown'].includes(v.surface))throw Error('Surface invalide');
         if (!integer(v.count,100000) || !['permissions','groups','unknown'].includes(v.kind) || !text(v.source) || typeof v.same_version !== 'boolean' || !integer(v.version_code,Number.MAX_SAFE_INTEGER)) throw Error(name + ' : nombre, unité, source et version requis');
       }
     }
@@ -1352,6 +1410,36 @@ const PenaltyModel = (() => {
       }byOwner.set(profile+':'+owner.package_name,[...routes.values()]);
     }return byOwner;
   }
+  // V22 capability/disclosure levels are independent of the retained legacy numeric formula.
+  function exposure(a, ref={}) {
+    const permissions=new Map((a.permissions||[]).map(p=>[typeof p==='string'?p:p.name,typeof p==='string'?{name:p}:p]));
+    const ev=ref.penalty_evidence?.visibility||{};
+    const exact=v=>v&&v.kind==='permissions'&&v.same_version===true&&v.version_code===a.version_code&&text(v.source)&&Array.isArray(v.permission_names)&&new Set(v.permission_names).size===v.count;
+    const principal=exact(ev.principal)?new Set(ev.principal.permission_names):null;
+    const all=exact(ev.toutes)?new Set(ev.toutes.permission_names):null;
+    const consistent=!(principal&&all&&[...principal].some(n=>!all.has(n)))&&!(principal&&[...principal].some(n=>!permissions.has(n)))&&!(all&&[...all].some(n=>!permissions.has(n)));
+    const full=consistent&&ev.principal?.surface==='google_play'&&principal&&principal.size===permissions.size&&[...permissions.keys()].every(n=>principal.has(n));
+    const system=new Set(['WRITE_SETTINGS','WRITE_SECURE_SETTINGS','GRANT_RUNTIME_PERMISSIONS','REVOKE_RUNTIME_PERMISSIONS','ADJUST_RUNTIME_PERMISSIONS_POLICY','MANAGE_APP_OPS_MODES','UPDATE_APP_OPS_STATS','INSTALL_PACKAGES','DELETE_PACKAGES','CLEAR_APP_USER_DATA','CHANGE_COMPONENT_ENABLED_STATE','SET_PREFERRED_APPLICATIONS','FORCE_STOP_PACKAGES','MANAGE_USERS','CREATE_USERS','INTERACT_ACROSS_USERS','INTERACT_ACROSS_USERS_FULL','MANAGE_DEVICE_ADMINS','MANAGE_PROFILE_AND_DEVICE_OWNERS','MANAGE_DEVICE_POLICY_RUNTIME_PERMISSIONS','MANAGE_DEVICE_POLICY_APPS_CONTROL','SYSTEM_ALERT_WINDOW']);
+    const autonomous=new Set(['RECEIVE_BOOT_COMPLETED','READ_LOGS','READ_PHONE_STATE','PACKAGE_USAGE_STATS']);
+    const colors={0:'unknown',1:'green',2:'yellow',3:'orange',4:'red',5:'gray'};
+    const titles={0:'Indéterminé',1:'L1 · Déclarations concordantes',2:'L2 · Toutes les autorisations',3:'L3 · Action sans intervention',4:'L4 · Avertissement de détournement',5:'L5 · Portée système ou autres applications'};
+    const findings=[];let level=full?1:0;
+    for(const p of permissions.values()){
+      const descriptions=[{text:p.description||'',source:'Description Android du téléphone'},{text:p.bayton?.description||'',source:'Bayton / AOSP · API '+(p.bayton?.reference_api_level||'?')}];
+      const short=p.name.startsWith('android.permission.')?p.name.slice(19):'';let n=0,reason='',source='';
+      if(consistent&&principal?.has(p.name)&&ev.principal?.surface==='google_play'){n=1;reason='Permission présente dans la liste Google Play fournie pour cette version.';source=ev.principal.source;}
+      if(consistent&&principal&&all&&!principal.has(p.name)&&all.has(p.name)){n=2;reason='Présente dans Toutes les autorisations, absente de la liste principale fournie pour cette version.';source=ev.toutes.source;}
+      for(const d of descriptions){if(/(à votre insu|sans votre (intervention|confirmation)|without (your|user) (knowledge|confirmation|interaction)|without asking)/i.test(d.text)&&!/(ne permet pas|does not allow)/i.test(d.text)){n=Math.max(n,3);reason=d.text;source=d.source;}}
+      if(autonomous.has(short)&&n<3){n=3;reason='Capacité de fonctionnement ou d’observation sans action immédiate dans l’application; usage non démontré.';source='Règle AIV V22 · définition Android';}
+      for(const d of descriptions){if(/(malveillant|malicious)/i.test(d.text)){n=Math.max(n,4);reason=d.text;source=d.source;}}
+      if(system.has(short)){n=5;reason='Permission permettant de modifier le système, la configuration ou le fonctionnement d’autres applications.';source='Règle AIV V22 · définition Android';}
+      if(n>0)findings.push({permission:p.name,level:n,color:colors[n],reason,source,granted:p.granted??null,effective_status:p.granted===false?'NON_ACCORDEE':p.granted===true?'ACCORD_ANDROID_APP_OPS_NON_VERIFIES':'INCONNU',operation_observed:false});
+      level=Math.max(level,n);
+    }
+    if(level===1&&!full)level=0;
+    return {schema:'aiv-exposure/22',level,color:colors[level],label:titles[level],findings,disclosure_verified:!!full,visibility_status:!consistent?'CONTRADICTOIRE':full?'LISTES_CONCORDANTES':principal?'PARTIELLE':'INCONNUE',counts:Object.fromEntries([2,3,4,5].map(n=>[n,findings.filter(f=>f.level===n).length])),scope:'Niveau de capacité déclarée et de visibilité. Une permission refusée reste indiquée comme telle. Aucune action, malveillance ou donnée transmise n’est déduite du niveau.'};
+  }
+
   function calculate(a, ref, p, links, installedCount, routes) {
     const permissions = new Map();
     for (const raw of a.permissions || []) {const v = typeof raw === 'string' ? {name:raw} : raw; if (v && text(v.name)) permissions.set(v.name,v);}
@@ -1440,25 +1528,28 @@ const PenaltyModel = (() => {
     const included=rows.filter(r=>r.H!==null&&r.H>0&&r.points!==null);
     const sum=included.reduce((s,r)=>s+BigInt(r.points),0n),base=included.reduce((s,r)=>s+BigInt(r.H),0n),n=BigInt(included.length);
     const evaluated=rows.filter(r=>r.H!==null).length;
+    const levels22=rows.filter(r=>r.exposure),peak=Math.max(0,...levels22.map(r=>r.exposure.level));
+    const semantic=levels22.length?{exposure_level:peak,exposure_levels:Object.fromEntries([2,3,4,5].map(n=>[n,levels22.filter(r=>r.exposure.findings.some(f=>f.level===n)).length])),color:peak>1?({2:'yellow',3:'orange',4:'red',5:'gray'}[peak]):levels22.length===rows.length&&levels22.every(r=>r.exposure.level===1)?'green':'unknown'}:{};
     return {total:rows.length,concerned:included.length,unknown:rows.length-evaluated,zero:rows.filter(r=>r.H===0).length,
       hidden:Number(base),base:evaluated?String(base):null,base_mean:n?decimal(base,n):evaluated?'0.00':null,sum:String(sum),mean:decimal(sum,n),
       multiplier:base?decimal(sum,base):evaluated?'1.00':null,multiplier_numerator:base?String(sum):evaluated?'1':null,multiplier_denominator:base?String(base):evaluated?'1':null,
       maximum:included.reduce((m,r)=>BigInt(r.points)>m?BigInt(r.points):m,0n).toString(),color:base?(sum===base&&included.some(r=>r.coverage_partial)?'unknown':colorFor(sum,base,p)):evaluated?'green':'unknown',
-      levels:Object.fromEntries([2,3,4,5].map(n=>[n,rows.filter(r=>r.counts[n]>0).length]))};
+      levels:Object.fromEntries([2,3,4,5].map(n=>[n,rows.filter(r=>r.counts[n]>0).length])),...semantic};
   }
   function evaluate(input,policy) {
     const p=validatePolicy(policy || defaults), seen=new Set(), apps=[];
     for(const a of input.apps || []) {const key=(a.profile_id??Math.floor(a.uid/100000))+':'+a.package_name;if(!seen.has(key)){seen.add(key);apps.push(a);}}
     const totals=new Map();for(const a of apps){const profile=a.profile_id??Math.floor(a.uid/100000);totals.set(profile,(totals.get(profile)||0)+1);}
     const links=graph(apps,p),routes=componentGraph(apps), rows=apps.map(a=>calculate(a,(input.references || {})[a.package_name] || {},p,links,totals.get(a.profile_id??Math.floor(a.uid/100000)),routes.get((a.profile_id??Math.floor(a.uid/100000))+':'+a.package_name)||[]));
+    for(const row of rows){const raw=apps.find(a=>a.package_name===row.package_name&&a.uid===row.uid);if(raw?.audit_schema==='aiv-audit/22'){row.exposure=exposure(raw,(input.references||{})[row.package_name]||{});row.numeric_color=row.color;row.color=row.exposure.color;}}
     rows.sort((a,b)=>a.points===null?(b.points===null?a.package_name.localeCompare(b.package_name):1):b.points===null?-1:BigInt(a.points)===BigInt(b.points)?a.package_name.localeCompare(b.package_name):BigInt(a.points)>BigInt(b.points)?-1:1);
     return {schema:'aiv-penalty-result/2',policy:p,scan_id:input.scan_id,apps:rows,summary:aggregate(rows,p),groups:['android','system','user'].map(id=>({id,...aggregate(rows.filter(r=>r.group===id),p)}))};
   }
-  return {defaults:()=>clone(defaults),validatePolicy,validateEvidence,evaluate,group};
+  return {defaults:()=>clone(defaults),validatePolicy,validateEvidence,evaluate,group,exposure};
 })();
 if(typeof module!=='undefined')module.exports=PenaltyModel;
 
-  const penaltyColors={unknown:'#87949e',green:'#47d89f',yellow:'#e3c35b',orange:'#ef9a4d',red:'#ff5964',critical:'#ff3344'};
+  const penaltyColors={gray:'#a6a9ad',unknown:'#79b5dd',green:'#47d89f',yellow:'#e3c35b',orange:'#ef9a4d',red:'#ff5964',critical:'#ff3344'};
   let penaltyCache=null,penaltyImportTimer=0;
   function penaltyRead(method,...args){const raw=nativeBridge&&nativeBridge[method]&&nativeBridge[method](...args);if(!raw)throw Error('Ce calcul nécessite AIV 0.6.14.');const r=JSON.parse(raw);if(r.error)throw Error(r.error);return r;}
   function penaltySettings(){const c=penaltyRead('penaltyConfig');c.policy=PenaltyModel.validatePolicy(c.policy||{});c.references=c.references||{};return c;}
@@ -1473,7 +1564,7 @@ if(typeof module!=='undefined')module.exports=PenaltyModel;
   function penaltySnapshot(input,settings){
     const stable=x=>Array.isArray(x)?x.map(stable):x&&typeof x==='object'?Object.fromEntries(Object.keys(x).sort().map(k=>[k,stable(x[k])])):x;
     // Scan identifiers/times are not evidence changes. Every app field and reference is.
-    const identity=JSON.stringify(stable({engine:'aiv-penalty/0.6.19-snapshots-1',apps:input.apps,references:input.references,policy:settings.policy}));
+    const identity=JSON.stringify(stable({engine:'aiv-penalty/0.6.22-exposure-1',apps:input.apps,references:input.references,policy:settings.policy}));
     if(nativeBridge.calculationLoad){const saved=penaltyRead('calculationLoad',identity);if(saved.cached&&saved.result?.schema==='aiv-penalty-result/2')return {...saved.result,scan_id:input.scan_id};}
     const result=PenaltyModel.evaluate(input,settings.policy);
     if(nativeBridge.calculationSave){try{penaltyRead('calculationSave',identity,JSON.stringify(result));}catch(e){penaltyStatus('Calcul terminé; instantané non enregistré : '+e.message);}}
@@ -1493,25 +1584,14 @@ if(typeof module!=='undefined')module.exports=PenaltyModel;
   function penaltyDisc(disc,row,policy){
     disc.dataset.penaltyColor=row.color;
     let badge=disc.querySelector('.jp-multiplier');if(!badge){badge=element('span',undefined,'jp-multiplier');disc.append(badge);}
-    badge.textContent=row.multiplier===null?'× —':'×'+penaltyCompact(row.multiplier);
-    badge.title='Multiplicateur : '+penaltyNumber(row.multiplier)+(row.multiplier_denominator?' ; rapport exact '+row.multiplier_numerator+'/'+row.multiplier_denominator:'');
+    badge.textContent=row.exposure?('L'+row.exposure.level):row.exposure_level!==undefined?(row.exposure_level?'L'+row.exposure_level:'?'):row.multiplier===null?'× —':'×'+penaltyCompact(row.multiplier);if(row.exposure?.level===0)badge.textContent='?';
+    badge.title=(row.exposure?.label||'Capacité déclarée; score numérique historique')+' · Multiplicateur : '+penaltyNumber(row.multiplier)+(row.multiplier_denominator?' ; rapport exact '+row.multiplier_numerator+'/'+row.multiplier_denominator:'');
     badge.classList.toggle('jp-critical-symbol',row.color==='critical'&&policy.colors.blink_critical);
   }
   function penaltyButton(label,action){const b=element('button',label);b.type='button';b.onclick=action;return b;}
   function penaltyStatus(text){$('jp-status').textContent=text;}
   function renderPenaltyColors(){
-    const box=$('aiv-score-colors');if(!box)return;
-    box.replaceChildren();
-    try{
-      const settings=penaltySettings(),keys=['yellow_ratio','orange_ratio','red_ratio','critical_ratio'],fields=[];
-      keys.forEach((key,i)=>{const label=element('label',['Jaune à partir de ×','Orange à partir de ×','Rouge à partir de ×','Critique à partir de ×'][i]),input=element('input');input.type='number';input.step='any';input.min='0';input.value=settings.policy.colors[key];input.dataset.colorKey=key;label.append(input);box.append(label);fields.push(input);});
-      const status=element('p');status.setAttribute('role','status');
-      box.append(penaltyButton('Enregistrer les couleurs',()=>{try{
-        const fresh=penaltySettings();keys.forEach((key,i)=>{fresh.policy.colors[key]=Number(fields[i].value);});
-        penaltySave(fresh);const updated=penaltyLoad(true).result.summary;
-        status.textContent='Couleurs enregistrées et recalculées : '+penaltyNumber(updated.base)+' points de base × '+penaltyNumber(updated.multiplier)+'.';
-      }catch(e){status.textContent=e.message;}}),status);
-    }catch(e){box.append(element('p',e.message));}
+    const box=$('aiv-score-colors');if(box)box.replaceChildren(element('p','V22 : L1 vert · L2 jaune · L3 orange · L4 rouge · L5 gris. Bleu : indéterminé. Les couleurs représentent les capacités déclarées; les nombres conservent le calcul V21.'));
   }
   function renderPenaltySettings(){
     try{
@@ -1564,14 +1644,14 @@ if(typeof module!=='undefined')module.exports=PenaltyModel;
       const scan=penaltyRead('auditSummary');if(penaltyCache&&penaltyCache.input.scan_id!==scan.scan_id)penaltyCache=null;
       const {result:r,input}=penaltyLoad(),g=r.summary,p=r.policy,ring=$('jc-score-ring'),list=$('jc-home-app-list');
       $('jc-endpoint-config').hidden=true;$('jc-pane-home').dataset.lowScore=String(g.color==='critical');$('jc-pane-home').style.background='';
-      $('jc-mode-banner').textContent='Départ à zéro. +1 point par permission moins visible. Les niveaux 2 à 5 sont comptés séparément; le multiplicateur détermine la couleur.';
+      $('jc-mode-banner').textContent='V22 · L1 vert, L2 jaune, L3 orange, L4 rouge, L5 gris. Bleu : indéterminé. Les couleurs indiquent la capacité déclarée; le calcul numérique V21 reste disponible.';
       $('jc-home-eyebrow').textContent='Indice de pénalité AIV';$('jc-score-label').textContent='moyenne par application avec écart';
       $('jc-score-number').textContent=penaltyCompact(g.base_mean);$('jc-score-number').title=penaltyNumber(g.base_mean);$('jc-score-number').style.fontSize='';penaltyDisc(ring,g,p);
       ring.style.setProperty('--score-color',penaltyColors[g.color]);ring.style.setProperty('--score-angle',g.base===null?'0deg':'360deg');ring.setAttribute('aria-label',penaltyNumber(g.base_mean)+' points moyens de base, multiplicateur '+penaltyNumber(g.multiplier));
       $('jc-home-title').textContent=g.concerned?`${g.concerned} applications avec du caché sur ${g.total}`:'Aucune application avec caché évalué pour le moment';
       $('jc-home-sub').textContent=`${penaltyNumber(g.base)} écarts ÷ ${g.concerned} applications concernées = ${penaltyNumber(g.base_mean)} de moyenne. Cumul pondéré : ${penaltyNumber(g.base)} × ${penaltyNumber(g.multiplier)}${g.base&&g.multiplier_numerator && BigInt(g.multiplier_numerator)%BigInt(g.multiplier_denominator)!==0?' (arrondi)':''} = ${penaltyNumber(g.sum)} points pondérés. ${g.zero} sans écart et ${g.unknown} non évaluées restent hors du calcul du multiplicateur.`;
       $('jc-home-alert').style.setProperty('--score-color',penaltyColors[g.color]);$('jc-home-alert-title').textContent='Composition et portée du résultat';
-      $('jc-home-alert-text').textContent=`L2 : ${g.levels[2]} apps · L3 : ${g.levels[3]} · L4 : ${g.levels[4]} · L5 : ${g.levels[5]}. Maximum individuel : ${penaltyNumber(g.maximum)} points. ${p.name}. Les points sont une pondération AIV, pas un pourcentage de danger.`;
+      $('jc-home-alert-text').textContent=`L2 : ${(g.exposure_levels||g.levels)[2]} apps · L3 : ${(g.exposure_levels||g.levels)[3]} · L4 : ${(g.exposure_levels||g.levels)[4]} · L5 : ${(g.exposure_levels||g.levels)[5]}. Maximum individuel : ${penaltyNumber(g.maximum)} points. ${p.name}. Les points sont une pondération AIV, pas un pourcentage de danger.`;
       const ids=['jc-home-total','jc-home-evaluated','jc-home-unknown','jc-home-findings','jc-home-app-count'];
       [g.total,g.concerned,g.unknown,g.hidden,g.zero].forEach((v,i)=>{$(ids[i]).textContent=penaltyNumber(v);});
       ['paquets inventoriés','avec écart · incluses','non évalués','éléments moins visibles','sans écart · exclus'].forEach((v,i)=>{$(['jc-home-counter-0','jc-home-counter-1','jc-home-counter-u','jc-home-counter-2','jc-home-counter-3'][i]).textContent=v;});
@@ -1583,7 +1663,7 @@ if(typeof module!=='undefined')module.exports=PenaltyModel;
       const q=$('jc-home-search').value.trim().toLocaleLowerCase('fr');const rows=r.apps.filter(a=>(homeGroup==='all'||a.group===homeGroup)&&(!q||[a.label,a.package_name].join(' ').toLocaleLowerCase('fr').includes(q)));
       list.replaceChildren();for(const a of rows.slice(0,homeLimit)){const b=penaltyButton('',()=>{setTab('audit');renderAuditDetail(a.package_name);});b.className='jc-home-app';b.dataset.package=a.package_name;
         const info=element('span');info.append(element('strong',a.label),element('span',groupNames[a.group]+' · '+a.package_name+' · UID '+(a.uid??'inconnu'),'jc-sub'),element('span',a.H===null?a.reason:`${a.H} moins visibles${a.estimated ? " (estimation)" : ""}${a.coverage_partial?' · analyse partielle':''}`,'jc-sub'));
-        const impact=element('span',a.points===null?'Non évaluée':penaltyNumber(a.H)+' pts de base','jc-home-impact');if(a.H!==null){const multiplier=element('strong','×'+penaltyCompact(a.multiplier),'jp-app-multiplier');multiplier.title='Multiplicateur exact : ×'+penaltyNumber(a.multiplier);if(a.color==='critical'&&p.colors.blink_critical)multiplier.classList.add('jp-critical-symbol');impact.append(multiplier,element('small',penaltyCompact(a.points)+' points pondérés'));}b.dataset.penaltyColor=a.color;impact.style.setProperty('--home-app-color',penaltyColors[a.color]);
+        const impact=element('span',a.exposure?a.exposure.label:a.points===null?'Non évaluée':penaltyNumber(a.H)+' pts de base','jc-home-impact');if(a.H!==null){const multiplier=element('strong','×'+penaltyCompact(a.multiplier),'jp-app-multiplier');multiplier.title='Multiplicateur exact : ×'+penaltyNumber(a.multiplier);if(a.color==='critical'&&p.colors.blink_critical)multiplier.classList.add('jp-critical-symbol');impact.append(multiplier,element('small',penaltyCompact(a.points)+' points pondérés'));}b.dataset.penaltyColor=a.color;impact.style.setProperty('--home-app-color',penaltyColors[a.color]);
         if(a.color==='critical'){const symbol=element('span',' ⊘');symbol.className=p.colors.blink_critical?'jp-critical-symbol':'';symbol.setAttribute('aria-label','Critique');impact.append(symbol);}b.append(info,impact);list.append(b);}
       if(!rows.length)list.append(element('p','Aucune application pour ce filtre.','jc-sub'));
       $('jc-group-all').setAttribute('aria-pressed',String(homeGroup==='all'));$('jc-home-more').hidden=rows.length<=homeLimit;
@@ -1598,7 +1678,7 @@ if(typeof module!=='undefined')module.exports=PenaltyModel;
       const current=penaltyLoad(),row=current.result.apps.find(a=>a.package_name===pkg);if(!row)throw Error('Paquet absent du dernier inventaire');
       const raw=current.input.apps.find(a=>a.package_name===pkg),reference=current.input.references[pkg]||{},saved=reference.penalty_evidence||{};
       if(row.estimated)box.append(element('p','Référence estimée automatiquement — calibration V6 et dernier inventaire. Ce nombre ne mesure pas directement les écrans de permissions Android.'));
-      box.append(element('h3','Pénalité AIV · '+(row.points===null?'non évaluée':penaltyNumber(row.H)+' points de base × '+penaltyNumber(row.multiplier))));
+      box.append(element('h3','Calcul numérique conservé de V21 · '+(row.points===null?'non évaluée':penaltyNumber(row.H)+' points de base × '+penaltyNumber(row.multiplier))));
       box.append(element('p',row.H===null?row.reason:`${row.H} moins visibles × ${row.factors[0]} L2 × ${row.factors[1]} L3 × ${row.factors[2]} L4 × ${row.factors[3]} L5 = ${penaltyNumber(row.points)} points`));
       box.append(element('p',`R : ${row.R} permissions déclarées · vue principale : ${row.layers.principal.value??'inconnue'} · toutes : ${row.layers.toutes.value??'inconnue'}.`));
       box.append(element('p',`Écart principal : ${row.layers.principal.hidden??'inconnu'} · écart toutes : ${row.layers.toutes.hidden??'inconnu'}. Ratio descriptif réel/visible : ${row.ratio??'inconnu'} (ne détermine pas la couleur).`,'jc-sub'));
@@ -1626,17 +1706,17 @@ if(typeof module!=='undefined')module.exports=PenaltyModel;
         const kind=element('select');for(const [value,title]of [['unknown','Unité à préciser'],['permissions','Permissions individuelles'],['groups','Groupes / catégories']])kind.append(new Option(title,value));kind.value=v.kind||'unknown';kind.setAttribute('aria-label',label+' : unité');group.append(kind);
         const source=element('input');source.value=v.source||'';source.placeholder='Lien ou nom de capture avec date';source.setAttribute('aria-label',label+' : source');group.append(source);
         const checked=element('input');checked.type='checkbox';checked.checked=v.same_version===true&&v.version_code===raw.version_code;const l=element('label','J’ai vérifié la même version installée');l.prepend(checked);group.append(l);
-        inputs[key]={count,kind,source,checked};form.append(group);
+        const names=element('textarea');names.rows=3;names.placeholder='Noms exacts des permissions, un par ligne (facultatif)';names.value=(v.permission_names||[]).join('\n');group.append(names);const surface=element('select');for(const [id,title]of [['unknown','Source à préciser'],['google_play','Google Play'],['android_settings','Paramètres Android']])surface.append(new Option(title,id));surface.value=v.surface||'unknown';group.append(surface);inputs[key]={count,kind,source,checked,names,surface};form.append(group);
       }
       box.append(form,element('p','Un champ vide reste inconnu. Un zéro explicitement renseigné signifie aucune permission visible dans cette vue. Les groupes ne sont pas comparés à des permissions individuelles.','jc-sub'));
-      const observations=element('details');observations.append(element('summary','Constats L2 à L5 · JSON modifiable'));
+      const observations=element('details');observations.append(element('summary','Constats du calcul V21 · JSON modifiable'));
       const editor=element('textarea');editor.rows=12;editor.style.width='100%';editor.spellcheck=false;editor.value=JSON.stringify(saved.findings||[],null,2);observations.append(editor);
       observations.append(penaltyButton('Ajouter un constat à compléter',()=>{try{const list=JSON.parse(editor.value);list.push({id:'observation-'+Date.now(),levels:[4],source:'',reason:'',hidden:true,active:null,version_code:raw.version_code,observed_at:new Date().toISOString()});editor.value=JSON.stringify(list,null,2);}catch(e){message.textContent=e.message;}}));
-      observations.append(element('p','L2 : action à l’insu de l’utilisateur. L3 : action à son insu avec avertissement Android documenté. L4 : partage de capacité avec d’autres applications. Lier le constat à une permission moins visible (nom ou hidden=true justifié). share_count permet de renseigner une portée propre au constat; sinon le barème utilise le nombre de paquets inventoriés. Chaque capacité L4 distincte multiplie le résultat. Les anciens L5 restent conservés, sans facteur automatique.','jc-sub'));
+      observations.append(element('p','Anciennes catégories du calcul V21, conservées pour tes réglages. Les couleurs V22 sont calculées séparément : L2 visibilité, L3 autonomie, L4 avertissement documenté, L5 portée système. Lier le constat à une permission moins visible (nom ou hidden=true justifié). share_count permet de renseigner une portée propre au constat; sinon le barème utilise le nombre de paquets inventoriés. Chaque capacité L4 distincte multiplie le résultat. Les anciens L5 restent conservés, sans facteur automatique.','jc-sub'));
       box.append(observations);const message=element('p',undefined,'jc-note');message.setAttribute('role','status');
       box.append(penaltyButton('Enregistrer les observations et recalculer',()=>{try{
         const evidence={visibility:{},findings:JSON.parse(editor.value),note:saved.note||''};
-        for(const [key,v]of Object.entries(inputs)){const value=v.count.value.trim();evidence.visibility[key]=value===''?null:{count:Number(value),kind:v.kind.value,source:v.source.value,same_version:v.checked.checked,version_code:raw.version_code};}
+        for(const [key,v]of Object.entries(inputs)){const value=v.count.value.trim();evidence.visibility[key]=value===''?null:{count:Number(value),kind:v.kind.value,source:v.source.value,same_version:v.checked.checked,version_code:raw.version_code,surface:v.surface.value,...(v.names.value.trim()?{permission_names:v.names.value.trim().split(/\n/).map(s=>s.trim()).filter(Boolean)}:{})};}
         PenaltyModel.validateEvidence(evidence);const c=penaltySettings();c.references[pkg]=evidence;penaltySave(c);renderAuditDetail(pkg);
       }catch(e){message.textContent=e.message;}}),message,penaltyButton('Modifier le barème global',()=>setTab('penalty')));
     }catch(e){box.append(element('p',e.message,'jc-error'));}

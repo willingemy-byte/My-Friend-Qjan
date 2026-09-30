@@ -48,7 +48,7 @@ public final class RecorderService extends Service {
         record("collecteur","Journal local","Signal de vie","Collecteur","Interne","Service local",EventStore.object("elapsed_ms",elapsed,"network_health",health==null?JSONObject.NULL:health.sample(),"collector_pid",android.os.Process.myPid()));
         long rx=TrafficStats.getTotalRxBytes(),tx=TrafficStats.getTotalTxBytes();
         if(rx>=0 && tx>=0)record("reseau","Journal local","Lecture des compteurs réseau Android","Compteurs depuis le démarrage","Global","TrafficStats",EventStore.object("rx_bytes",rx,"tx_bytes",tx,"attribution","Lecture périodique par le collecteur, tout l’appareil; ni applications ni destinations identifiées"));
-        JournalSegments.request(RecorderService.this);AnomalyMonitor.request(RecorderService.this);
+        JournalSegments.request(RecorderService.this);AnomalyMonitor.request(RecorderService.this);TrackerIndex.get(RecorderService.this).request();ApkEvidence.get(RecorderService.this).request();
         long lastInventory=prefs.getLong("last_inventory_request",0);
         if(System.currentTimeMillis()-lastInventory>900000){prefs.edit().putLong("last_inventory_request",System.currentTimeMillis()).apply();PermissionAudit.get(RecorderService.this).scan();}
         worker.postDelayed(this,60000);

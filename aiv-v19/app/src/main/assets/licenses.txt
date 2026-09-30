@@ -844,3 +844,6 @@ may consider it more useful to permit linking proprietary applications with
 the library.  If this is what you want to do, use the GNU Lesser General
 Public License instead of this License.  But first, please read
 <https://www.gnu.org/licenses/why-not-lgpl.html>.
+
+V22: bundled Bayton/AOSP and Exodus Privacy reference datasets.
+See catalogs/NOTICE.txt and catalogs/BAYTON-LICENSE.txt for provenance and terms.

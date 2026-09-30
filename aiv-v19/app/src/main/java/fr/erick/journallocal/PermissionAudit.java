@@ -40,14 +40,14 @@ public final class PermissionAudit extends SQLiteOpenHelper {
     private void saveReference(String pkg,JSONObject r){ContentValues v=new ContentValues();v.put("package_name",pkg);v.put("payload",r.toString());getWritableDatabase().insertWithOnConflict("references_data",null,v,SQLiteDatabase.CONFLICT_REPLACE);}
     public void scan(){
         if(!busy.compareAndSet(false,true))return;error="";
-        new Thread(()->{try{collect();}catch(Exception e){error="Inventaire interrompu : "+e.getClass().getSimpleName()+". Dernier relevé complet conservé.";}finally{busy.set(false);}},"journal-inventory").start();
+        new Thread(()->{try{collect();}catch(Exception e){error="Inventaire interrompu : "+e.getClass().getSimpleName()+". Dernier relevé complet conservé.";}finally{busy.set(false);ApkEvidence.get(context).request();}},"journal-inventory").start();
     }
     private JSONObject permission(PackageManager pm,String name,Object granted)throws Exception{
         JSONObject p=EventStore.object("name",name,"granted",granted,"protection_level",-1,"protection","INCONNU","description","Description indisponible","revocation","INCONNU : politique de révocation non collectée");
         try{PermissionInfo i=pm.getPermissionInfo(name,0);CharSequence label=i.loadLabel(pm),description=i.loadDescription(pm);
             p.put("label",label==null?name:label.toString());p.put("description",description==null?"Description non fournie par Android":description.toString());p.put("protection_level",i.protectionLevel);p.put("defined_by",i.packageName);p.put("group",i.group==null?JSONObject.NULL:i.group);p.put("flags",i.flags);
             int base=i.protectionLevel&15;p.put("protection",base==0?"Normale":base==1?"Dangereuse / exécution":base==2?"Signature":base==4?"Interne":"Type Android "+base);
-        }catch(PackageManager.NameNotFoundException e){p.put("definition_error","Définition non accessible; nom conservé");}return p;
+        }catch(PackageManager.NameNotFoundException e){p.put("definition_error","Définition non accessible; nom conservé");}JSONObject catalog=ReferenceCatalog.get(context).permission(name);if(catalog!=null)p.put("bayton",new JSONObject(catalog.toString()).put("source","Jason Bayton / AOSP").put("reference_api_level",ReferenceCatalog.get(context).bayton.optInt("api_level")));return p;
     }
     private JSONObject installSource(PackageManager pm,String pkg)throws Exception{
         JSONObject out=EventStore.object("source_available",false,"reason","ANDROID_NOT_EXPOSED","observed_ms",System.currentTimeMillis(),
@@ -102,17 +102,17 @@ public final class PermissionAudit extends SQLiteOpenHelper {
         return EventStore.object("components",components,"components_collected",true,"package_name",info.packageName,"label",String.valueOf(a.loadLabel(pm)),"uid",a.uid,"profile_id",a.uid/100000,"uid_packages",candidates,"attribution",a.uid%100000==1000||candidates.length()!=1?"Partagée ou indéterminée":"Un paquet retourné pour cet UID",
             "system_app",(a.flags&(ApplicationInfo.FLAG_SYSTEM|ApplicationInfo.FLAG_UPDATED_SYSTEM_APP))!=0,"updated_system_app",(a.flags&ApplicationInfo.FLAG_UPDATED_SYSTEM_APP)!=0,"enabled",a.enabled,"enabled_setting",pm.getApplicationEnabledSetting(info.packageName),
             "version_name",info.versionName==null?JSONObject.NULL:info.versionName,"version_code",android.os.Build.VERSION.SDK_INT>=28?info.getLongVersionCode():info.versionCode,"last_update_ms",info.lastUpdateTime,"first_install_ms",info.firstInstallTime,
-            "install_source",installSource(pm,info.packageName),"permissions",permissions,"defined_permissions",defined,"count",permissions.length(),"source","PackageManager.GET_PERMISSIONS + MATCH_DISABLED_COMPONENTS","observed_ms",System.currentTimeMillis(),"removable_in_settings","INCONNU","disableable_in_settings","INCONNU","permission_lock_flags","INCONNU","operations_observed","Non déterminées par cet inventaire");
+            "min_sdk",a.minSdkVersion,"target_sdk",a.targetSdkVersion,"debuggable",(a.flags&ApplicationInfo.FLAG_DEBUGGABLE)!=0,"allow_backup",(a.flags&ApplicationInfo.FLAG_ALLOW_BACKUP)!=0,"certificates",ApkEvidence.certificates(info),"audit_schema","aiv-audit/22","install_source",installSource(pm,info.packageName),"permissions",permissions,"defined_permissions",defined,"count",permissions.length(),"source","PackageManager.GET_PERMISSIONS + MATCH_DISABLED_COMPONENTS","observed_ms",System.currentTimeMillis(),"removable_in_settings","INCONNU","disableable_in_settings","INCONNU","permission_lock_flags","INCONNU","operations_observed","Non déterminées par cet inventaire");
     }
     /** Sorted permission identities/states, independent of labels and array ordering. */
     private String fingerprint(JSONObject a)throws Exception{
         TreeMap<String,String> values=new TreeMap<>();JSONArray ps=a.getJSONArray("permissions");for(int i=0;i<ps.length();i++){JSONObject p=ps.getJSONObject(i);values.put(p.getString("name"),String.valueOf(p.opt("granted"))+":"+p.optInt("protection_level",-1));}
         JSONObject ins=a.optJSONObject("install_source");String sourceKey=ins==null?"":ins.optString("installing_package")+":"+ins.optString("initiating_package")+":"+ins.optString("update_owner_package");
-        return String.valueOf(a.optJSONArray("components"))+":"+sourceKey + ":" + a.optString("version_code")+":"+a.optBoolean("enabled")+":"+a.optInt("uid")+":"+values.toString();
+        return String.valueOf(a.optJSONObject("certificates"))+":"+String.valueOf(a.optJSONArray("components"))+":"+sourceKey + ":" + a.optString("version_code")+":"+a.optBoolean("enabled")+":"+a.optInt("uid")+":"+values.toString();
     }
     private void collect()throws Exception{
         long start=System.currentTimeMillis(),old=latest(),id=old+1;PackageManager pm=context.getPackageManager();JSONArray result=new JSONArray();
-        for(PackageInfo p:pm.getInstalledPackages(PackageManager.GET_PERMISSIONS|PackageManager.GET_PROVIDERS|PackageManager.GET_SERVICES|PackageManager.GET_ACTIVITIES|PackageManager.GET_RECEIVERS|PackageManager.MATCH_DISABLED_COMPONENTS))if(p.applicationInfo!=null)result.put(inspect(pm,p));
+        for(PackageInfo p:pm.getInstalledPackages((android.os.Build.VERSION.SDK_INT>=28?PackageManager.GET_SIGNING_CERTIFICATES:PackageManager.GET_SIGNATURES)|PackageManager.GET_PERMISSIONS|PackageManager.GET_PROVIDERS|PackageManager.GET_SERVICES|PackageManager.GET_ACTIVITIES|PackageManager.GET_RECEIVERS|PackageManager.MATCH_DISABLED_COMPONENTS))if(p.applicationInfo!=null)result.put(inspect(pm,p));
         SQLiteDatabase db=getWritableDatabase();db.beginTransaction();try{
             for(int i=0;i<result.length();i++){JSONObject a=result.getJSONObject(i);String pkg=a.getString("package_name");JSONObject before=stored(old,pkg);
                 ContentValues v=new ContentValues();v.put("scan_id",id);v.put("package_name",pkg);v.put("label",a.getString("label"));v.put("system_app",a.getBoolean("system_app")?1:0);v.put("uid",a.getInt("uid"));v.put("count",a.getInt("count"));v.put("version_code",a.getLong("version_code"));v.put("search_text",a.toString().toLowerCase(Locale.ROOT));v.put("payload",a.toString());db.insertOrThrow("apps",null,v);
@@ -149,9 +149,9 @@ public final class PermissionAudit extends SQLiteOpenHelper {
         try(Cursor c=getReadableDatabase().rawQuery("SELECT a.payload,r.payload FROM apps a LEFT JOIN references_data r ON r.package_name=a.package_name WHERE a.scan_id=? ORDER BY a.package_name",new String[]{""+scan})){
             while(c.moveToNext()){
                 JSONObject raw=new JSONObject(c.getString(0)),out=new JSONObject();
-                for(String key:new String[]{"package_name","label","uid","profile_id","uid_packages","system_app","version_code","install_source","enabled","components","components_collected"})if(raw.has(key))out.put(key,raw.get(key));
+                for(String key:new String[]{"package_name","label","uid","profile_id","uid_packages","system_app","version_code","install_source","enabled","components","components_collected","audit_schema","certificates"})if(raw.has(key))out.put(key,raw.get(key));
                 JSONArray perms=new JSONArray(),source=raw.optJSONArray("permissions");
-                if(source!=null)for(int i=0;i<source.length();i++){JSONObject perm=source.getJSONObject(i);JSONObject view=EventStore.object("name",perm.optString("name"),"granted",perm.opt("granted"),"protection_level",perm.optInt("protection_level",-1));String description=perm.optString("description");String lower=description.toLowerCase(Locale.ROOT);if(lower.contains("malveillant")||lower.contains("malicious"))view.put("warning",description);if("android".equals(perm.optString("defined_by"))&&(lower.contains("à votre insu")||lower.contains("sans votre intervention")||lower.contains("sans votre confirmation")||lower.contains("without your knowledge")||lower.contains("without your confirmation")))view.put("autonomy_description",description);perms.put(view);}
+                if(source!=null)for(int i=0;i<source.length();i++){JSONObject perm=source.getJSONObject(i);JSONObject view=EventStore.object("name",perm.optString("name"),"granted",perm.opt("granted"),"protection_level",perm.optInt("protection_level",-1));view.put("description",perm.optString("description"));if(perm.has("bayton"))view.put("bayton",perm.get("bayton"));String description=perm.optString("description");String lower=description.toLowerCase(Locale.ROOT);if(lower.contains("malveillant")||lower.contains("malicious"))view.put("warning",description);if("android".equals(perm.optString("defined_by"))&&(lower.contains("à votre insu")||lower.contains("sans votre intervention")||lower.contains("sans votre confirmation")||lower.contains("without your knowledge")||lower.contains("without your confirmation")))view.put("autonomy_description",description);perms.put(view);}
                 out.put("permissions",perms);out.put("local_reference",baseline.derive(raw));apps.put(out);
                 if(!c.isNull(1))refs.put(raw.getString("package_name"),new JSONObject(c.getString(1)));
             }
@@ -195,6 +195,7 @@ public final class PermissionAudit extends SQLiteOpenHelper {
         JSONObject a=stored(latest(),pkg);if(a==null)throw new IllegalArgumentException("Paquet absent du dernier inventaire");JSONArray h=new JSONArray(),findings=new JSONArray();
         try(Cursor c=getReadableDatabase().rawQuery("SELECT timestamp_ms,payload FROM history WHERE package_name=? ORDER BY id DESC LIMIT 100",new String[]{pkg})){while(c.moveToNext())h.put(new JSONObject(c.getString(1)).put("timestamp_ms",c.getLong(0)));}
         try(Cursor c=getReadableDatabase().rawQuery("SELECT import_id,payload FROM imported_findings WHERE package_name=? ORDER BY id DESC LIMIT 50",new String[]{pkg})){while(c.moveToNext())findings.put(new JSONObject(c.getString(1)).put("import_id",c.getString(0)));}
+        a.put("apk_evidence",ApkEvidence.get(context).read(pkg,a.optLong("version_code"),a.optLong("last_update_ms")));
         return EventStore.object("app",a,"reference",reference(pkg),"history",h,"imported_findings",findings,"import_scope","Rapprochement par le profil du rapport importé; attribution réseau non vérifiée par l’import");
     }
     public synchronized JSONObject save(String pkg,String json)throws Exception{
@@ -234,7 +235,7 @@ public final class PermissionAudit extends SQLiteOpenHelper {
         SQLiteDatabase db=getReadableDatabase();db.beginTransaction();try{
             writer.write("{\"schema\":\"journal-permission-audit/1\",\"export_scope\":\""+(full?"full_history":"latest_snapshot")+"\"");for(String table:new String[]{"scans","apps","references_data","history","imported_findings","penalty_config"}){
                 writer.write(",\""+table+"\":[");boolean first=true;try(Cursor c=db.rawQuery("SELECT * FROM "+table+(!full ? (table.equals("apps")?" WHERE scan_id="+latest():table.equals("scans")?" WHERE id="+latest():table.equals("history")||table.equals("imported_findings")?" WHERE 0":"") : ""),null)){while(c.moveToNext()){JSONObject row=new JSONObject();for(int i=0;i<c.getColumnCount();i++){Object v=c.isNull(i)?JSONObject.NULL:c.getType(i)==Cursor.FIELD_TYPE_INTEGER?Long.valueOf(c.getLong(i)):c.getColumnName(i).equals("payload")?new JSONObject(c.getString(i)):c.getString(i);row.put(c.getColumnName(i),v);}if(!first)writer.write(",");writer.write(row.toString());first=false;}}writer.write("]");
-            }writer.write("}");db.setTransactionSuccessful();
+            }writer.write(",\"v22_catalogs\":");writer.write(ReferenceCatalog.get(context).summary().toString());writer.write(",\"v22_apk_evidence\":");ApkEvidence.get(context).export(writer);writer.write("}");db.setTransactionSuccessful();
         }finally{db.endTransaction();}
     }
 }

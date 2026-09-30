@@ -212,12 +212,17 @@ public final class NetworkCaptureService extends VpnService {
     public void onTlsHello(long id,String name,int status,boolean ech){
         Flow f=flows.get(id);if(f==null)return;identify(f);f.tlsName=name;f.ech=ech;
         f.tlsStatus=status==1?(name.isEmpty()?"ClientHello sans nom SNI":"ClientHello observé"):status==-1?"Début de flux non TLS":status==-2?"ClientHello non décodable":status==-3?"Limite de 32 Kio atteinte":status==-4?"Retransmission contradictoire":status==-6?"Mémoire d’observation indisponible":"ClientHello incomplet ou non reçu";
-        if(status==1)record("trafic",f.actor,ech?"Nom TLS externe possible (ECH/GREASE)":name.isEmpty()?"TLS sans nom visible":"Nom TLS observé",destination(f),details(id,f));
+        if(status==1)record("trafic",f.actor,ech?"Nom TLS externe possible (ECH/GREASE)":name.isEmpty()?"TLS sans nom visible":"Nom TLS observé",destination(f),trackerDetails(details(id,f),name,ech?"TLS_OUTER_NAME":"TLS_SNI"));
     }
     public void onDnsQuestion(long id,String name,int type){
         Flow f=flows.get(id);if(f==null)return;JSONObject d=details(id,f);
         try{d.put("question",name).put("query_type",type).put("scope","Question DNS UDP en clair; ne prouve ni le contenu échangé ni le domaine des autres flux");}catch(JSONException e){throw new IllegalStateException(e);}
-        record("dns",f.actor,"Question DNS observée",name,d);
+        record("dns",f.actor,"Question DNS observée",name,trackerDetails(d,name,"DNS_QUERY_ONLY"));
+    }
+    private JSONObject trackerDetails(JSONObject d,String host,String kind){
+        try{ReferenceCatalog c=ReferenceCatalog.get(this);d.put("tracker_matches",c.network(host,kind));d.put("tracker_catalog_revision",c.revision());}
+        catch(Exception e){try{d.put("tracker_error",e.getClass().getSimpleName());}catch(JSONException ignored){}}
+        return d;
     }
     public void onNativeProblem(String label,long count){record("collecteur","Journal local",label,"Relais local",EventStore.object("count",count,"coverage_gap",true));}
     @Override public void onRevoke(){Continuous.prefs(this).edit().putBoolean("vpn_enabled",false).apply();stopped=true;main.post(()->stopSelf());}
