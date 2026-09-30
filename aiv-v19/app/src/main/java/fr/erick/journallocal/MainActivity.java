@@ -132,6 +132,8 @@ public final class MainActivity extends Activity {
                 startupState="Préparation de la référence";
                 startupResult=audit.penaltyData().toString();
                 startupState="Prêt";
+                // Once the inventory is ready, arm the existing guarded Shizuku cleanup automatically.
+                scheduleShizukuCleanup();
                 AnomalyMonitor.request(this);TrackerIndex.get(this).request();ApkEvidence.get(this).request();
             }catch(Exception e){startupError=e.getMessage()==null?e.getClass().getSimpleName():e.getMessage();startupState="Erreur";}
         },"aiv-initialisation").start();
