@@ -1,0 +1,47 @@
+name: AIV reference engine tests
+on:
+  workflow_dispatch:
+  push:
+    branches: [aiv-reference-engine]
+    paths:
+      - "reference-engine/**"
+      - ".github/workflows/aiv-reference-tests.yml"
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Unit tests
+        run: python -m unittest discover -s reference-engine/tests -v
+      - name: Build merged fixture
+        run: |
+          python reference-engine/aiv_reference_merge.py \
+            --device reference-engine/tests/fixtures/device.json \
+            --bayton reference-engine/tests/fixtures/bayton.json \
+            --exodus reference-engine/tests/fixtures/exodus.json \
+            --output reference-engine/tests/merged.json
+          python -m json.tool reference-engine/tests/merged.json >/dev/null
+      - name: Bayton live schema smoke test
+        run: |
+          python - <<'PY'
+          import json,urllib.request
+          u="https://bayton.org/api/permissions.json"
+          try:
+              with urllib.request.urlopen(u,timeout=20) as r: d=json.load(r)
+          except Exception as e:
+              print("Bayton live smoke skipped/unavailable:",e)
+          else:
+              assert isinstance(d.get("permissions"),dict) and len(d["permissions"])>100
+              print("Bayton permissions:",len(d["permissions"]))
+          PY
+      - name: Exodus fixture contract
+        run: |
+          python - <<'PY'
+          import json
+          d=json.load(open("reference-engine/tests/fixtures/exodus.json"))
+          t=next(iter(d["trackers"].values()))
+          assert "network_signature" in t and "code_signature" in t
+          PY

@@ -1,0 +1,33 @@
+name: AIV V24 export apksigner
+
+on:
+  push:
+    branches: [aiv-v24-shizuku]
+    paths:
+      - ".github/workflows/aiv-v24-export-apksigner.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  export-apksigner:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Download pinned Android build-tools 35
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 5 --retry-delay 2 --connect-timeout 30             https://dl.google.com/android/repository/build-tools_r35_linux.zip             -o build-tools_r35_linux.zip
+          echo "bd3a4966912eb8b30ed0d00b0cda6b6543b949d5ffe00bea54c04c81e1561d88  build-tools_r35_linux.zip" | sha256sum -c -
+          unzip -j build-tools_r35_linux.zip 'android-15/lib/apksigner.jar' -d export
+          sha256sum export/apksigner.jar | tee export/apksigner.jar.sha256
+
+      - name: Upload official apksigner
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-build-tools-35-apksigner
+          path: |
+            export/apksigner.jar
+            export/apksigner.jar.sha256
+          retention-days: 1
