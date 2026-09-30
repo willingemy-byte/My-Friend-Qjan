@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src 'none'; child-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; font-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"><title>Journal du cellulaire</title><style>body{margin:0;padding:16px;font-family:system-ui,sans-serif;background:light-dark(#f0f4f2,#101516);color-scheme:light dark}main{max-width:800px;margin:0 auto}h2{font-size:1.35rem}h3{font-size:1.05rem}button,input,select,textarea{font-size:1rem}@media(max-width:460px){body{padding:8px}}#jc-reader .ja-unknown{border-color:#79b5dd;color:#b4d8ed}
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src 'none'; child-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; font-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"><title>Journal du cellulaire</title><style>body{margin:0;padding:16px;font-family:system-ui,sans-serif;background:light-dark(#f0f4f2,#101516);color-scheme:light dark}main{max-width:800px;margin:0 auto}h2{font-size:1.35rem}h3{font-size:1.05rem}button,input,select,textarea{font-size:1rem}@media(max-width:460px){body{padding:8px}}#jc-reader .ja-unknown{border-color:#79b5dd;color:#b4d8ed}
 #jc-reader .ja-gray,#jc-reader [data-penalty-color="gray"]{border-color:#a6a9ad}
 #jc-reader [data-penalty-color="gray"].jc-score-ring,#jc-reader [data-penalty-color="gray"].jc-group-disc{background:#797c82}
 </style>
@@ -188,6 +188,24 @@ body{padding:0!important;margin:0!important;max-width:none!important}
 .jt-segment-status{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}.jt-stat{border:1px solid var(--jc-line);border-radius:10px;padding:7px 10px;background:#0b1822;font-size:.78rem}.jt-stat strong{display:block;font-size:1rem}
 .jt-groups{display:grid;gap:10px}.jt-group{display:grid;gap:8px;text-align:left;width:100%;padding:12px;border:1px solid var(--jc-line);border-radius:12px;background:linear-gradient(145deg,#0c1924,#08111a);color:inherit}.jt-group:hover,.jt-group:focus{border-color:#5b9bc0}.jt-group-top{display:flex;gap:8px;justify-content:space-between;align-items:flex-start;flex-wrap:wrap}.jt-group-title{font-weight:750}.jt-metrics{display:flex;gap:6px;flex-wrap:wrap}.jt-chip{border:1px solid #314e61;border-radius:999px;padding:3px 7px;font-size:.68rem;white-space:nowrap}.jt-dests{display:flex;gap:5px;flex-wrap:wrap}.jt-dest{background:#0c2635;border-radius:7px;padding:4px 7px;font-size:.7rem;max-width:100%;overflow:hidden;text-overflow:ellipsis}.jt-detail{border:1px solid #3c647b;border-radius:13px;padding:12px;margin:10px 0;background:#081923}.jt-journey{width:100%;text-align:left;display:grid;gap:5px;padding:10px;margin:7px 0;border:1px solid var(--jc-line);border-radius:10px;background:#0a151f;color:inherit}.jt-trail{display:grid;gap:7px;margin-top:10px}.jt-step{display:grid;grid-template-columns:82px 1fr;gap:8px;border-left:2px solid #416b83;padding:5px 8px}.jt-step-time{font-size:.68rem;color:var(--jc-sub)}.jt-step-main{font-size:.78rem}.jt-back{margin-bottom:8px}
 @media(max-width:600px){#jc-reader.v32-ui .jc-toolbar{grid-template-columns:minmax(140px,1fr) auto!important}.v33-jump{width:100%;justify-content:center}}
+</style>
+<style id="aiv-v41-light-rescue">
+:root{color-scheme:light!important;--v32-bg:#f4f7fb;--v32-panel:#ffffff;--v32-panel2:#eef4fa;--v32-line:#c9d8e6;--v32-text:#15202b;--v32-muted:#5d6f82;--v32-blue:#1676c4}
+html,body{background:#f4f7fb!important;color:#15202b!important}
+#jc-reader,#jc-reader.v32-ui{background:#f4f7fb!important;color:#15202b!important}
+#jc-reader.v32-ui .jc-top,#jc-reader.v32-ui .jc-user-nav{background:rgba(255,255,255,.98)!important;border-color:#c9d8e6!important}
+#jc-reader.v32-ui .v32-brand,#jc-reader.v32-ui h1,#jc-reader.v32-ui h2,#jc-reader.v32-ui h3,#jc-reader.v32-ui strong{color:#15202b!important}
+#jc-reader.v32-ui .jc-sub,#jc-reader.v32-ui .v32-muted,#jc-reader.v32-ui .v32-frame-title span,#jc-reader.v32-ui .v32-group span{color:#5d6f82!important}
+#jc-reader.v32-ui .v32-frame,#jc-reader.v32-ui .v32-level,#jc-reader.v32-ui .v32-group,#jc-reader.v32-ui .v32-app,
+#jc-reader.v32-ui .jc-home-alert,#jc-reader.v32-ui .jc-home-counters>div,#jc-reader.v32-ui .jc-menu-card,#jc-reader.v32-ui .jc-form,
+#jc-reader.v32-ui .ja-card,#jc-reader.v32-ui .jc-flow-card,#jc-reader.v32-ui .v32-table-wrap,#jc-reader.v32-ui .v32-table-row,
+#jc-reader.v32-ui .v32-settings-pane,#jc-reader.v32-ui .v32-rule{background:#ffffff!important;border-color:#c9d8e6!important;color:#15202b!important;box-shadow:none!important}
+#jc-reader.v32-ui .v32-table-row:nth-child(even){background:#f7fafc!important}
+#jc-reader.v32-ui .v32-table-head{background:#e8f1f8!important;color:#203040!important;border-color:#bfd0df!important}
+#jc-reader.v32-ui input,#jc-reader.v32-ui select,#jc-reader.v32-ui textarea{background:#ffffff!important;color:#15202b!important;border-color:#b7cadb!important}
+#jc-reader.v32-ui button{background:#eef5fb!important;color:#164a70!important;border-color:#9fc0d8!important}
+#jc-reader.v32-ui button[aria-pressed="true"],#jc-reader.v32-ui button.jc-primary{background:#d9efff!important;color:#083b61!important;border-color:#5aaee5!important}
+#jc-startup,#jc-recalculation{background:#f4f7fb!important;color:#15202b!important}
 </style>
 </head><body><main><style>
 #jc-reader { --jc-bg:light-dark(#fbfcfc,#151a1b); --jc-ink:light-dark(#202b2c,#edf4f2); --jc-sub:light-dark(#506565,#b4c6c4); --jc-line:light-dark(#d6e2df,#364845); --jc-accent:light-dark(#096558,#81dbc4); --jc-wash:light-dark(#e9f5f0,#223c35); --jc-paper:light-dark(#ffffff,#1c2425); --jc-warn:light-dark(#8c570f,#f3c680); --jc-danger:light-dark(#a32336,#ffadb8); color:var(--jc-ink); background:var(--jc-bg); border:1px solid var(--jc-line); border-radius:18px; font-family:system-ui,sans-serif; overflow-wrap:anywhere; color-scheme:light dark; }
@@ -436,7 +454,7 @@ body{padding:0!important;margin:0!important;max-width:none!important}
     <button type="button" data-jc-tab="menu" aria-pressed="false" aria-controls="jc-pane-menu">Menu</button>
   </nav>
   <section class="jc-pane jc-home" id="jc-pane-home" aria-label="Accueil AIV">
-    <p class="jc-clean-build-tag" aria-label="Version de compilation">AIV 0.6.38 · DESIGN COMPLET · FONCTIONS CONSERVÉES</p>
+    <p class="jc-clean-build-tag" aria-label="Version de compilation">AIV 0.6.41 · AFFICHAGE NON BLOQUANT · SQLITE LECTURE SEULE</p>
     <div class="jc-view-switch" aria-label="Choisir la vue de démonstration">
       <button type="button" id="jc-mode-user" aria-pressed="true">Utilisateur</button>
       <button type="button" id="jc-mode-ti" aria-pressed="false">TI · démo</button>
@@ -2150,12 +2168,27 @@ if(typeof module!=='undefined')module.exports=PenaltyModel;
   }
   function beginStartup(){
     if(!nativeBridge||!nativeBridge.startupStatus){finishStartup();return;}
-    root.inert=true;const overlay=element('div');overlay.id='jc-startup';overlay.setAttribute('role','status');
-    overlay.append(element('div',undefined,'jc-spinner'),element('h2','Initialisation'),element('p','Calcul en cours'));document.body.append(overlay);overlay.append(penaltyButton('Consulter le journal pendant le calcul',()=>{overlay.remove();root.inert=false;setTab('journal');}));
-    const poll=()=>{try{const status=JSON.parse(nativeBridge.startupStatus());overlay.querySelector('p').textContent=status.state;
+    root.inert=false;
+    const oldOverlay=document.getElementById('jc-startup');if(oldOverlay)oldOverlay.remove();
+    const total=$('jc-total');
+    if(total)total.textContent='Initialisation en arrière-plan · interface disponible';
+    const poll=()=>{try{
+      const status=JSON.parse(nativeBridge.startupStatus());
+      const parts=[];
+      if(status.progress_stage)parts.push(status.progress_stage);
+      if(status.apps_total>0)parts.push('applications '+status.apps_done+'/'+status.apps_total);
+      if(status.permissions_total>0)parts.push('permissions '+status.permissions_done+'/'+status.permissions_total);
+      const detail=parts.length?parts.join(' · '):(status.state||'Calcul en cours');
+      if(total&&!status.ready)total.textContent=detail+' · interface disponible';
       if(status.ready){finishStartup(JSON.parse(nativeBridge.startupData()));return;}
-      if(status.error)throw Error(status.error);setTimeout(poll,250);
-    }catch(e){overlay.querySelector('p').textContent='Initialisation incomplète : '+e.message;overlay.append(penaltyButton('Réessayer',()=>{if(nativeBridge.startupRetry)nativeBridge.startupRetry();overlay.remove();beginStartup();}),penaltyButton('Consulter le dernier relevé',()=>finishStartup()));}};
+      if(status.error){
+        if(total)total.textContent='Initialisation partielle : '+status.error+' · interface maintenue ouverte';
+        return;
+      }
+      setTimeout(poll,250);
+    }catch(e){
+      if(total)total.textContent='Initialisation partielle : '+e.message+' · interface maintenue ouverte';
+    }};
     setTimeout(poll,50);
   }
   // Paint the pending state before configuration writes and synchronous recalculation.
