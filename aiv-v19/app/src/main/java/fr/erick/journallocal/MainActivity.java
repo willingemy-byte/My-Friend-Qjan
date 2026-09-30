@@ -142,7 +142,17 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public String uiState(){return getSharedPreferences("ui",MODE_PRIVATE).getString("reader_state","");}
         @JavascriptInterface public boolean saveUiState(String value){if(value==null||value.length()>16384)return false;getSharedPreferences("ui",MODE_PRIVATE).edit().putString("reader_state",value).apply();return true;}
         @JavascriptInterface public String continuousStatus(){return EventStore.object("enabled",Continuous.enabled(MainActivity.this),"collector",RecorderService.running,"vpn",NetworkCaptureService.running,"analysis",WatcherService.analysisActive,"vpn_error",NetworkCaptureService.lastError,"error",EventStore.lastError).toString();}
-        @JavascriptInterface public String startupStatus(){return EventStore.object("state",startupState,"ready",!startupResult.isEmpty(),"error",startupError).toString();}
+        @JavascriptInterface public String startupStatus(){
+            try{
+                org.json.JSONObject audit=PermissionAudit.get(MainActivity.this).summary();
+                return EventStore.object("state",startupState,"ready",!startupResult.isEmpty(),"error",startupError,
+                    "progress_stage",audit.optString("progress_stage"),
+                    "apps_done",audit.optInt("progress_apps_done"),"apps_total",audit.optInt("progress_apps_total"),
+                    "permissions_done",audit.optInt("progress_permissions_done"),"permissions_total",audit.optInt("progress_permissions_total")).toString();
+            }catch(Exception e){
+                return EventStore.object("state",startupState,"ready",!startupResult.isEmpty(),"error",startupError).toString();
+            }
+        }
         @JavascriptInterface public void startupRetry(){if("Erreur".equals(startupState)){startupError="";startupState="Calcul en cours";prepareStartup();}}
         @JavascriptInterface public String startupData(){return startupResult;}
         @JavascriptInterface public String shizukuCleanupStatus(){return ShizukuCleanup.status();}
