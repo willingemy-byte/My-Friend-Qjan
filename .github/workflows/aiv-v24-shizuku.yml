@@ -25,6 +25,20 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      - name: Reject Supabase Claude MCP integrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git ls-files | grep -Ei '(^|/)(supabase|claude|anthropic|\.mcp)(/|$)'; then
+            echo "Forbidden remote-integration path detected."
+            exit 1
+          fi
+          if git grep -nEi 'supabase|@supabase|anthropic|claude|modelcontextprotocol|mcpServers' --               aiv-v19/app               aiv-v19/build.py               aiv-v19/bootstrap-clean-build.sh; then
+            echo "Forbidden Supabase/Claude/MCP reference detected in AIV runtime/build code."
+            exit 1
+          fi
+          echo "AIV runtime/build code contains no Supabase, Claude, Anthropic or MCP integration."
+
       - name: Cache Android toolchain
         uses: actions/cache@v6
         with:
