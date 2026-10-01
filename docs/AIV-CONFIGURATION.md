@@ -88,3 +88,59 @@ Le choix du stockage distant et de la rétention reste à fixer. Aucun upload, a
 Chemins à réunir lors de la prochaine migration : asset du frontend, répertoire d'exports temporaires, sauvegardes persistantes, fichiers SQLite, snapshots de permissions, catalogues et destination distante. Les chemins Android sont à dériver de `Context`/URI, pas d'un chemin absolu propre au téléphone. Changer un nom de base existante exige une migration ; cette extraction n'en crée pas une nouvelle par inadvertance.
 
 Deux noms de chemins sont désormais centralisés : cache d’exports et snapshot de nettoyage. Les mêmes constantes servent à écrire et relire les fichiers. Les noms sont validés sans sous-dossier ni chemin absolu. Les valeurs actuelles sont conservées ; changer le nom du snapshot existant demanderait de prévoir sa migration.
+
+## Paliers d'accès
+
+Décision utilisateur du 1er octobre 2026 : `tier=1` gratuit, `tier=2` payant, `tier=3` réservé sans offre définie. Le palier n'est pas l'identifiant d'un utilisateur. Le fichier public `config/access-policy.json` associe chaque service nommé à son `minimum_tier` (valeur dans `service_minimum_tiers`). Le palier 2 inclut les services de palier 1. Un service inconnu ou un palier non défini est refusé par le moteur de politique.
+
+Les six fonctions locales actuelles sont initialisées à 1 pour conserver leur disponibilité. C'est une base de compatibilité, pas une tarification commerciale définitive. Aucun nouveau service payant n'est activé, aucun paiement n'est traité. Exemple futur : `"backup.remote": 2` donnerait accès à la sauvegarde distante pour un palier 2 vérifié ; il n'implémente pas la sauvegarde.
+
+`AccessPolicy.java` est généré depuis le fichier public. `JournalAndroid.accessPolicy()` fournit le même catalogue au frontend. Le moteur `allows(service, verifiedTier)` est disponible pour les points d'entrée natifs/serveur à protéger ; les commandes actuelles ne lui sont pas encore raccordées. Le frontend peut annoncer les fonctions disponibles, mais l'autorisation effective doit être vérifiée au point d'exécution. Le choix d'une formule ne donne jamais une permission Android/Shizuku.
+
+Le futur droit payant doit venir d'une preuve d'achat/abonnement vérifiée. Une préférence locale ou un nombre envoyé par le frontend n'est pas une preuve. Identité utilisateur, palier, permissions Android et choix personnels demeurent quatre notions distinctes.
+
+Vérification ajoutée : cinq tests de validation/génération, plus un test Java couvrant gratuit/payant, héritage des fonctions gratuites, palier 3 réservé, palier invalide et services inconnus. La compilation/exécution Java se fait dans le workflow GitHub.
+
+## Valeurs exactes actuellement centralisées
+
+Les noms ci-dessous sont ceux de `AivConfig.java`, générés depuis `config/defaults.json`.
+
+| Nom dans le code | Valeur | Correspondance |
+|---|---:|---|
+| `WORK_EVENTS` | `16` | Événements par lot coopératif |
+| `WORK_VERIFY_ROWS` | `128` | Lignes de vérification par lot |
+| `WORK_STATS_ROWS` | `64` | Lignes de statistiques par lot |
+| `WORK_SLICE_MS` | `40` | Budget coopératif de temps, ms |
+| `WORK_MIN_PAUSE_MS` | `1000` | Pause minimale entre travaux, ms |
+| `ANOMALY_WINDOW_MS` | `300000` | Fenêtre d'analyse de 5 minutes |
+| `ANOMALY_GROUP_MS` | `900000` | Regroupement d'analyse de 15 minutes |
+| `ANOMALY_FAILURE_COUNT_DEFAULT` | `8` | Seuil initial d'échecs répétés |
+| `ANOMALY_UPLOAD_MIB_DEFAULT` | `10` | Seuil initial de données envoyées, Mio |
+| `COLLECTION_GAP_MS` | `150000` | Intervalle signalant un trou entre relevés, 150 secondes |
+| `COLLECTION_CLOCK_DRIFT_MS` | `5000` | Écart entre temps civil et monotone, 5 secondes |
+| `COLLECTION_INVENTORY_INTERVAL_MS` | `900000` | Intervalle des demandes d'inventaire, 15 minutes |
+| `COLLECTION_HEARTBEAT_MS` | `60000` | Cadence des relevés du collecteur, 1 minute |
+| `MAIN_INVENTORY_MAX_AGE_MS` | `86400000` | Âge maximal applicable de l'inventaire, 24 heures |
+| `MAIN_THRESHOLD_BYTES_DEFAULT` | `10485760` | Seuil initial de règle, 10 Mio |
+| `MAIN_CONFIG_MAX_CHARS` | `32768` | Taille maximale d'une configuration de règle en caractères |
+| `MAIN_LIST_MAX_ITEMS` | `100` | Entrées maximales d'une liste de règle |
+| `REFERENCE_IMPORT_MAX_BYTES` | `16777216` | Taille maximale d'import référentiel, 16 Mio |
+| `REFERENCE_MAX_APPS` | `20000` | Apps maximales dans un import |
+| `REFERENCE_APP_MAX_CHARS` | `262144` | Taille maximale d'une fiche d'app en caractères |
+| `REFERENCE_MAX_EXPECTED_IPS` | `100` | Adresses attendues maximales par fiche |
+| `PATHS_EXPORTS_CACHE` | `"exports"` | Nom du sous-dossier de cache privé des exports |
+| `PATHS_CLEANUP_SNAPSHOT` | `"aiv-shizuku-cleanup-last.json"` | Nom du snapshot local de nettoyage |
+
+`AivConfig.SHA256` est calculé automatiquement à partir de la configuration publique. Il sert à identifier sa version ; ce n'est ni un secret ni une preuve d'authenticité.
+
+| Nom dans la politique d'accès | Valeur | Correspondance |
+|---|---:|---|
+| `TIER_FREE` | `1` | Palier gratuit |
+| `TIER_PAID` | `2` | Palier payant |
+| `TIER_RESERVED` | `3` | Réservé, aucun accès défini |
+| `journal.read` | `1` | Lecture locale du journal |
+| `journal.record` | `1` | Collecte locale |
+| `network.capture` | `1` | Capture VPN locale, avec consentement Android |
+| `permissions.audit` | `1` | Audit local des permissions |
+| `analysis.local` | `1` | Analyse locale |
+| `export.local` | `1` | Export local |

@@ -18,9 +18,12 @@ jobs:
           java-version: '17'
       - run: python3 aiv-v19/tools/build_frontend.py --check
       - run: python3 aiv-v19/tools/generate_config.py --check
+      - run: python3 aiv-v19/tools/generate_access_policy.py --check
+      - run: python3 -m unittest discover -s aiv-v19/tests -p test_access_policy.py -v
       - run: python3 -m unittest discover -s aiv-v19/tests -p test_config.py -v
       - name: Compile configured pure Java engines
         run: |
           mkdir -p /tmp/aiv-config-classes
-          javac -d /tmp/aiv-config-classes aiv-v19/app/src/main/java/fr/erick/journallocal/{AivConfig,AnomalyRules,WorkBudget}.java
+          javac -d /tmp/aiv-config-classes aiv-v19/app/src/main/java/fr/erick/journallocal/{AivConfig,AnomalyRules,WorkBudget,AccessPolicy}.java aiv-v19/tests/AccessPolicyTest.java
+          java -cp /tmp/aiv-config-classes fr.erick.journallocal.AccessPolicyTest
       - run: bash aiv-v19/tests/run-v23.sh

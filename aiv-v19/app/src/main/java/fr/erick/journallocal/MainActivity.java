@@ -94,6 +94,7 @@ public final class MainActivity extends Activity {
     private volatile String journalReply="";
     private volatile int journalReplyId=0;
     public final class Bridge {
+        @JavascriptInterface public String accessPolicy(){return AccessPolicy.CATALOG_JSON;}
         @JavascriptInterface public String defenseStatus(){try{return DefenseStore.get(MainActivity.this).status().put("file_status",fileStatus).put("inventory_busy",PermissionAudit.get(MainActivity.this).summary().optBoolean("busy")).toString();}catch(Exception e){return auditError(e);}}
         @JavascriptInterface public String defensePage(String scope,int offset){try{return DefenseStore.get(MainActivity.this).page(scope,offset).toString();}catch(Exception e){return auditError(e);}}
         @JavascriptInterface public String defenseDetail(String pkg,long before){try{return DefenseStore.get(MainActivity.this).detail(pkg,before).toString();}catch(Exception e){return auditError(e);}}

@@ -32,6 +32,7 @@ def run(*args,env=None):
     subprocess.run([str(x) for x in args],check=True,env=env)
 
 run('python3',root/'tools/generate_config.py')
+run('python3',root/'tools/generate_access_policy.py')
 run('python3',root/'tools/build_frontend.py')
 run('python3',root/'tools/connect_reader.py')
 
