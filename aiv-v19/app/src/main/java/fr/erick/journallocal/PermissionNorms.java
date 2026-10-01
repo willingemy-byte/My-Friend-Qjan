@@ -22,7 +22,7 @@ final class PermissionNorms {
         for(String name:ordered){boolean granted=pm.checkPermission(name,pkg)==PackageManager.PERMISSION_GRANTED;state.append('|').append(name).append('=').append(granted);if(!granted||!denied.contains(name))continue;
             PermissionInfo info=pm.getPermissionInfo(name,0);
             if((info.protectionLevel&PermissionInfo.PROTECTION_MASK_BASE)!=PermissionInfo.PROTECTION_DANGEROUS){unavailable.put(name);continue;}
-            changes.put(EventStore.object("permission",name,"before","granted","proposed","revoke","reason","Hors de la norme choisie explicitement pour cette application"));
+            changes.put(EventStore.object("permission",name,"label",String.valueOf(info.loadLabel(pm)),"before","granted","proposed","revoke","reason","Hors de la norme choisie explicitement pour cette application"));
         }
         String stamp=ChainStore.hex(MessageDigest.getInstance("SHA-256").digest(state.toString().getBytes(StandardCharsets.UTF_8)));
         return EventStore.object("package",pkg,"profile",profile,"label",norm.getString("label"),"stamp",stamp,"changes",changes,"not_runtime_revocable",unavailable,"scope","Permissions runtime seulement; ni effacement, ni désinstallation, ni réinitialisation du téléphone");

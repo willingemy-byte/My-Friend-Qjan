@@ -13,3 +13,4 @@ html,body{background:var(--aiv-deep)!important}
 @media(prefers-reduced-motion:reduce){.aiv-orange-orbit{animation:none}}
 #jc-pane-shizuku pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:340px;overflow:auto;font-size:.8rem}
 #jc-pane-shizuku input,#jc-pane-shizuku select{display:block;width:100%;margin:8px 0 14px}
+#jc-startup button.aiv-action{min-height:48px;padding:12px 20px;border-radius:12px;font-size:1rem;font-weight:700;cursor:pointer}
