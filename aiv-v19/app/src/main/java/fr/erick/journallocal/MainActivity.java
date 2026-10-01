@@ -80,6 +80,8 @@ public final class MainActivity extends Activity {
     private volatile int journalReplyId=0;
     public final class Bridge {
         @JavascriptInterface public String accessPolicy(){return AccessPolicy.CATALOG_JSON;}
+        @JavascriptInterface public String deviceIdentity(){return DeviceIdentity.describe().toString();}
+        @JavascriptInterface public String appIdentity(String pkg){try{return AppIdentity.forPackage(MainActivity.this,pkg).toString();}catch(Exception e){return auditError(e);}}
         @JavascriptInterface public String controlAccess(){return EventStore.object("allowed",AccessPolicy.allows("shizuku.control",AccessPolicy.DISTRIBUTION_TIER),"tier",AccessPolicy.DISTRIBUTION_TIER,"profile","personal/public build; subscription not implemented").toString();}
         @JavascriptInterface public String normalizationPreview(String pkg,String profile){try{return PermissionNorms.preview(MainActivity.this,pkg,profile).toString();}catch(Exception e){return auditError(e);}}
         @JavascriptInterface public String normalizationApply(String pkg,String profile,String stamp){try{return ShizukuCleanup.normalize(MainActivity.this,pkg,profile,stamp).toString();}catch(Exception e){return auditError(e);}}
