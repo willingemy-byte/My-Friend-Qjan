@@ -44,6 +44,7 @@ public final class NetworkCaptureService extends VpnService {
         String local,remote,actor="Application non identifiée",attribution="UID non disponible",journalGroup="android";
         boolean systemApp=false,updatedSystemApp=false;
         JSONArray packages=new JSONArray(),security=new JSONArray();
+        JSONObject cryptographicIdentity=EventStore.object("schema","aiv-app-identity/1","type","unresolved","status","UID_NOT_RESOLVED");
         String tlsName="",tlsStatus="non_observe";boolean ech=false;
     }
     @Override public void onCreate(){
@@ -156,6 +157,7 @@ public final class NetworkCaptureService extends VpnService {
             f.uid=connectivity.getConnectionOwnerUid(f.protocol,new InetSocketAddress(InetAddress.getByName(f.local),f.localPort),new InetSocketAddress(InetAddress.getByName(f.remote),f.remotePort));
             if(f.uid<0){f.attribution="Android n’a pas identifié le propriétaire de cette connexion";return;}
             String[] packages=getPackageManager().getPackagesForUid(f.uid);
+            f.cryptographicIdentity=AppIdentity.forUid(this,f.uid,packages);
             if(packages==null||packages.length==0){f.actor="Android · UID "+f.uid;f.journalGroup="android";f.attribution="UID Android observé; nom du paquet non accessible";return;}
             for(String name:packages)f.packages.put(name);
             f.security=SecurityContext.forPackages(this,f.packages);
@@ -178,7 +180,7 @@ public final class NetworkCaptureService extends VpnService {
             "ip_version",f.version,
             "protocol",f.protocol==6?"TCP":f.protocol==17?"UDP":f.protocol==1?"ICMP":f.protocol==58?"ICMPv6":String.valueOf(f.protocol),
             "local_ip",f.local,"local_port",f.localPort,"remote_ip",f.remote,"port",f.remotePort,"uid",f.uid,"packages",f.packages,"package_list_scope","Paquets retournés par Android; visibilité éventuellement limitée",
-            "attribution",f.attribution,"journal_group",f.journalGroup,"system_app",f.systemApp,"updated_system_app",f.updatedSystemApp,"package_list_scope","Paquets retournés par Android; visibilité éventuellement limitée",
+            "attribution",f.attribution,"journal_group",f.journalGroup,"system_app",f.systemApp,"updated_system_app",f.updatedSystemApp,"package_list_scope","Paquets retournés par Android; visibilité éventuellement limitée","app_identity",f.cryptographicIdentity,
             "cross_analysis",EventStore.object("status",f.uid<0?"uid_inconnu":(f.packages.length()>1||f.uid==1000)?"uid_partage_non_resolu":"uid_observe","pid",JSONObject.NULL,"process_name",JSONObject.NULL,"service",JSONObject.NULL,
                 "automatic_system_logcat","Non accessible à cette application ordinaire","diagnostic_correlation","Disponible à la demande après import d’un diagnostic horodaté; une coïncidence temporelle ne prouve pas la propriété d’un socket"),
             "security_context",f.security,"tls_sni",f.tlsName,"tls_observation",f.protocol==6?f.tlsStatus:"Non analysé (UDP/QUIC et autres protocoles)","ech_extension_present",f.ech,"sni_scope",f.ech?"Nom externe possible; ECH ou GREASE, nom interne non observable":"Nom annoncé dans le ClientHello; service ou contenu non prouvé","transport",current==null?"Inconnu":current.transport,
