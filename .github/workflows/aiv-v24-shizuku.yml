@@ -31,7 +31,7 @@ jobs:
           path: aiv-v19/.toolchain
           key: aiv-v32-android35-ndk27d-shizuku-13.1.5
 
-      - name: Build AIV 1.1.2 unsigned
+      - name: Build AIV 1.1.3 unsigned
         working-directory: aiv-v19
         env:
           AIV_BUILD_MODE: unsigned
