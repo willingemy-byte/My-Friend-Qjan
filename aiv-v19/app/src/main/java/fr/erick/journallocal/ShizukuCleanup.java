@@ -112,7 +112,7 @@ public final class ShizukuCleanup {
         for(int i=0;i<candidates.length();i++){
             JSONObject row=candidates.getJSONObject(i),app=row.getJSONObject("app"),assessment=row.getJSONObject("assessment");
             String pkg=app.optString("package_name");
-            if(!validPackage(pkg)||pkg.equals(c.getPackageName())){skipped++;continue;}
+            if(!controlTargetAllowed(c,pkg)){skipped++;continue;}
             JSONArray findings=assessment.optJSONArray("findings");
             if(findings!=null)for(int j=0;j<findings.length();j++){
                 JSONObject finding=findings.getJSONObject(j);
@@ -121,13 +121,15 @@ public final class ShizukuCleanup {
                 if(!validPermission(permission)){skipped++;continue;}
                 attempted++;
                 JSONObject change=EventStore.object("package",pkg,"kind","permission","name",permission,"before","granted","command","pm revoke");
+                change.put("inverse","pm grant --user current "+q(pkg)+" "+q(permission));
+                snapshot.getJSONArray("changes").put(change);writeSnapshot(c,snapshot);
                 try{
                     ExecResult r=exec("pm revoke --user current "+q(pkg)+" "+q(permission));
                     boolean denied=c.getPackageManager().checkPermission(permission,pkg)!=PackageManager.PERMISSION_GRANTED;
                     change.put("exit",r.code).put("stdout",r.out).put("stderr",r.err).put("after",denied?"denied":"still_granted");
                     if(denied){change.put("inverse","pm grant --user current "+q(pkg)+" "+q(permission));changed++;}else failed++;
                 }catch(Throwable t){change.put("error",t.getClass().getSimpleName()+": "+String.valueOf(t.getMessage()));failed++;}
-                snapshot.getJSONArray("changes").put(change);writeSnapshot(c,snapshot);log(c,"CLEANUP_PERMISSION",change);
+                writeSnapshot(c,snapshot);log(c,"CLEANUP_PERMISSION",change);
             }
             JSONArray actions=assessment.optJSONArray("special_actions");
             if(actions!=null)for(int j=0;j<actions.length();j++){
@@ -136,9 +138,13 @@ public final class ShizukuCleanup {
                 attempted++;
                 JSONObject before=queryAppOp(pkg,op);
                 JSONObject change=EventStore.object("package",pkg,"kind","appop","name",op,"before",before);
+                String originalMode=before.optString("mode");
+                if(originalMode.isEmpty()||!validMode(originalMode)){skipped++;continue;}
+                change.put("inverse","cmd appops set --user current "+q(pkg)+" "+op+" "+originalMode);
+                snapshot.getJSONArray("changes").put(change);writeSnapshot(c,snapshot);
                 try{
                     String mode=before.optString("mode");
-                    if("deny".equals(mode)||"ignore".equals(mode)){change.put("after",mode).put("unchanged",true);snapshot.getJSONArray("changes").put(change);continue;}
+                    if("deny".equals(mode)||"ignore".equals(mode)){change.remove("inverse");change.put("after",mode).put("unchanged",true);writeSnapshot(c,snapshot);continue;}
                     ExecResult r=exec("cmd appops set --user current "+q(pkg)+" "+op+" deny");
                     JSONObject after=queryAppOp(pkg,op);
                     change.put("exit",r.code).put("stdout",r.out).put("stderr",r.err).put("after",after);
@@ -148,7 +154,7 @@ public final class ShizukuCleanup {
                         changed++;
                     }else failed++;
                 }catch(Throwable t){change.put("error",t.getClass().getSimpleName()+": "+String.valueOf(t.getMessage()));failed++;}
-                snapshot.getJSONArray("changes").put(change);writeSnapshot(c,snapshot);log(c,"CLEANUP_APPOP",change);
+                writeSnapshot(c,snapshot);log(c,"CLEANUP_APPOP",change);
             }
         }
         snapshot.put("finished_ms",System.currentTimeMillis()).put("attempted",attempted).put("changed",changed).put("failed",failed).put("skipped",skipped);
@@ -168,7 +174,21 @@ public final class ShizukuCleanup {
         if(changes!=null)for(int i=changes.length()-1;i>=0;i--){
             JSONObject change=changes.optJSONObject(i);if(change==null)continue;
             String inverse=change.optString("inverse");if(inverse.isEmpty())continue;
-            try{ExecResult r=exec(inverse);if(r.code==0)restored++;else failed++;log(c,"CLEANUP_RESTORE",EventStore.object("package",change.optString("package"),"name",change.optString("name"),"exit",r.code,"stderr",r.err));}
+            try{
+                String pkg=change.getString("package"),name=change.getString("name");
+                if(!controlTargetAllowed(c,pkg))throw new SecurityException("Cible de restauration réservée");
+                String command;
+                if("permission".equals(change.optString("kind"))&&validPermission(name))command="pm grant --user current "+q(pkg)+" "+q(name);
+                else if("appop".equals(change.optString("kind"))&&OP.matcher(name).matches()){
+                    String mode=change.getJSONObject("before").getString("mode");
+                    if(!validMode(mode))throw new SecurityException("Mode de restauration invalide");
+                    command="cmd appops set --user current "+q(pkg)+" "+name+" "+mode;
+                }else throw new SecurityException("Restauration inconnue");
+                ExecResult r=exec(command);
+                boolean verified="permission".equals(change.optString("kind"))?c.getPackageManager().checkPermission(name,pkg)==PackageManager.PERMISSION_GRANTED:change.getJSONObject("before").getString("mode").equals(queryAppOp(pkg,name).optString("mode"));
+                if(verified)restored++;else failed++;
+                log(c,"CLEANUP_RESTORE",EventStore.object("package",pkg,"name",name,"exit",r.code,"verified",verified,"stderr",r.err));
+            }
             catch(Throwable t){failed++;log(c,"CLEANUP_RESTORE_ERROR",EventStore.object("package",change.optString("package"),"name",change.optString("name"),"error",t.getClass().getSimpleName()));}
         }
         PermissionAudit.get(c).scan();
@@ -189,7 +209,7 @@ public final class ShizukuCleanup {
             int changed=0,failed=0;JSONObject snapshot=EventStore.object("schema","aiv-shizuku-cleanup/24","created_ms",System.currentTimeMillis(),"profile",profile,"changes",new JSONArray());
             try {writeSnapshot(app,snapshot);
                 for(int i=0;i<changes.length();i++){
-                    String permission=changes.getJSONObject(i).getString("permission");JSONObject change=EventStore.object("package",pkg,"kind","permission","name",permission,"before","granted");
+                    String permission=changes.getJSONObject(i).getString("permission");JSONObject change=EventStore.object("package",pkg,"kind","permission","name",permission,"before","granted","inverse","pm grant --user current "+q(pkg)+" "+q(permission));
                     snapshot.getJSONArray("changes").put(change);writeSnapshot(app,snapshot);
                     try {ExecResult result=exec("pm revoke --user current "+q(pkg)+" "+q(permission));boolean revoked=app.getPackageManager().checkPermission(permission,pkg)!=PackageManager.PERMISSION_GRANTED;
                         change.put("exit",result.code).put("after",revoked?"denied":"still_granted");if(revoked){change.put("inverse","pm grant --user current "+q(pkg)+" "+q(permission));changed++;}else failed++;
@@ -222,6 +242,14 @@ public final class ShizukuCleanup {
     }
 
     private static boolean validPackage(String s){return s!=null&&PACKAGE.matcher(s).matches();}
+    static boolean controlTargetAllowed(Context c,String pkg){
+        if(!validPackage(pkg)||pkg.equals(c.getPackageName())||"com.android.shell".equals(pkg))return false;
+        try{
+            int uid=c.getPackageManager().getApplicationInfo(pkg,0).uid;
+            String[] peers=c.getPackageManager().getPackagesForUid(uid);
+            return uid%100000>=10000&&uid/100000==android.os.Process.myUid()/100000&&uid!=android.os.Process.myUid()&&peers!=null&&peers.length==1;
+        }catch(Exception e){return false;}
+    }
     private static boolean validPermission(String s){return s!=null&&PERMISSION.matcher(s).matches();}
     private static boolean validMode(String s){return Arrays.asList("allow","deny","ignore","default","foreground").contains(s);}
     private static String q(String s){if(!validPackage(s)&&!validPermission(s))throw new IllegalArgumentException("Identité shell refusée");return "'"+s.replace("'","")+"'" ;}

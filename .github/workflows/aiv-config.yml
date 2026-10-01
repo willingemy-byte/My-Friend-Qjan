@@ -71,5 +71,35 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: aiv-config-logo-unsigned
-          path: aiv-v19/build/*unsigned.apk
+          path: |
+            aiv-v19/build/*unsigned.apk
+            aiv-v19/build/*unsigned.apk.sha256
+          if-no-files-found: error
+      - name: Compile free distribution profile
+        working-directory: aiv-v19
+        env:
+          AIV_BUILD_MODE: unsigned
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('config/access-policy.json')
+          data=json.loads(p.read_text())
+          data['distribution_profile']='public'
+          p.write_text(json.dumps(data,indent=2)+'\n')
+          PY
+          bash bootstrap-clean-build.sh
+          mkdir -p build/free
+          cp build/AIV-1.1.4-unsigned.apk build/free/AIV-1.1.4-free-unsigned.apk
+          cd build/free
+          sha256sum AIV-1.1.4-free-unsigned.apk > AIV-1.1.4-free-unsigned.apk.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aiv-free-unsigned
+          path: aiv-v19/build/free/*
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aiv-signing-tool-public
+          path: aiv-v19/.toolchain/sdk/build-tools/35.0.0/lib/apksigner.jar
           if-no-files-found: error

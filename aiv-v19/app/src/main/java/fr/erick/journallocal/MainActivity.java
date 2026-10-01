@@ -52,22 +52,7 @@ public final class MainActivity extends Activity {
         }catch(Exception e){new AlertDialog.Builder(this).setTitle("Lecteur indisponible").setMessage(e.getClass().getSimpleName()).setPositiveButton("Fermer",(d,w)->finish()).show();}
     }
     private volatile String startupState="Calcul en cours", startupResult="", startupError="";
-    private volatile boolean cleanupRecalcSeen=false;
-    private final android.os.Handler cleanupHandler=new android.os.Handler(android.os.Looper.getMainLooper());
-    private volatile boolean delayedCleanupScheduled=false;
-    private final Runnable delayedCleanup=()->{
-        delayedCleanupScheduled=false;
-        ShizukuCleanup.requestOrRun();
-        refreshDefenseReader();
-    };
-    private void scheduleShizukuCleanup(){
-        cleanupHandler.removeCallbacks(delayedCleanup);
-        delayedCleanupScheduled=true;
-        cleanupHandler.postDelayed(delayedCleanup,60000);
-    }
     private void runShizukuCleanupNow(){
-        cleanupHandler.removeCallbacks(delayedCleanup);
-        delayedCleanupScheduled=false;
         ShizukuCleanup.requestOrRun();
         refreshDefenseReader();
     }
@@ -125,13 +110,13 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public String shizukuCleanupStatus(){return ShizukuCleanup.status();}
         @JavascriptInterface public String shizukuCleanupState(){try{
             org.json.JSONObject s=ShizukuCleanup.state(MainActivity.this);
-            s.put("auto_pending",delayedCleanupScheduled);
+            s.put("auto_pending",false);
             return s.toString();
         }catch(Exception e){return auditError(e);}}
         @JavascriptInterface public String shizukuCleanupRun(){try{
             runShizukuCleanupNow();
             org.json.JSONObject s=ShizukuCleanup.state(MainActivity.this);
-            s.put("auto_pending",delayedCleanupScheduled);
+            s.put("auto_pending",false);
             return s.toString();
         }catch(Exception e){return auditError(e);}}
         @JavascriptInterface public String shizukuCleanupRestore(){try{return ShizukuCleanup.restore(MainActivity.this).toString();}catch(Exception e){return auditError(e);}}
@@ -205,9 +190,6 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public void command(String command){runOnUiThread(()->handleCommand(command));}
         @JavascriptInterface public String analysisSummary(){try{
             org.json.JSONObject s=AnomalyMonitor.get(MainActivity.this).summary();
-            boolean recalculating=s.optBoolean("recalculating");
-            if(recalculating)cleanupRecalcSeen=true;
-            else if(cleanupRecalcSeen){cleanupRecalcSeen=false;ShizukuCleanup.requestOrRun();}
             return s.toString();
         }catch(Exception e){return EventStore.object("error","Lecture de l’analyse impossible : "+e.getClass().getSimpleName()).toString();}}
         @JavascriptInterface public String analysisPage(String kind,boolean unread,int offset){try{return AnomalyMonitor.get(MainActivity.this).page(kind,unread,offset).toString();}catch(Exception e){return EventStore.object("error","Lecture des signalements impossible : "+e.getClass().getSimpleName()).toString();}}
@@ -332,5 +314,5 @@ public final class MainActivity extends Activity {
         Toast.makeText(this,"Appuie encore pour fermer · ta position est conservée",Toast.LENGTH_SHORT).show();
     }
     @Override protected void onPause(){if(reader!=null){reader.evaluateJavascript("window.AivPersistUi&&window.AivPersistUi()",null);reader.onPause();}super.onPause();}
-    @Override protected void onDestroy(){cleanupHandler.removeCallbacks(delayedCleanup);delayedCleanupScheduled=false;try{ShizukuCleanup.detach();}catch(Throwable ignored){}try{DefenseMonitor.stop(this);}catch(Throwable ignored){}journalReads.shutdownNow();if(reader!=null){reader.removeJavascriptInterface("JournalAndroid");reader.destroy();}super.onDestroy();}
+    @Override protected void onDestroy(){try{ShizukuCleanup.detach();}catch(Throwable ignored){}try{DefenseMonitor.stop(this);}catch(Throwable ignored){}journalReads.shutdownNow();if(reader!=null){reader.removeJavascriptInterface("JournalAndroid");reader.destroy();}super.onDestroy();}
 }

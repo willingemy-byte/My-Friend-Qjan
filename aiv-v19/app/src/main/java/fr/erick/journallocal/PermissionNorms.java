@@ -15,7 +15,7 @@ final class PermissionNorms {
         if(!"aiv-permission-baselines/1".equals(policy.getString("schema")))throw new IllegalArgumentException("Normes invalides");
         JSONObject norm=policy.getJSONObject("profiles").getJSONObject(profile);
         PackageManager pm=c.getPackageManager();PackageInfo app=pm.getPackageInfo(pkg,PackageManager.GET_PERMISSIONS);
-        if(app.applicationInfo==null||app.applicationInfo.uid%100000<10000||app.applicationInfo.uid/100000!=android.os.Process.myUid()/100000)throw new IllegalArgumentException("UID système réservé : intervention refusée");
+        if(!ShizukuCleanup.controlTargetAllowed(c,pkg))throw new IllegalArgumentException("Cible système, UID partagé ou autre profil : intervention refusée");
         Set<String> denied=new HashSet<>();JSONArray names=norm.getJSONArray("denied_permissions");for(int i=0;i<names.length();i++)denied.add(names.getString(i));
         List<String> ordered=new ArrayList<>();if(app.requestedPermissions!=null)Collections.addAll(ordered,app.requestedPermissions);Collections.sort(ordered);
         JSONArray changes=new JSONArray(),unavailable=new JSONArray();StringBuilder state=new StringBuilder(pkg).append('|').append(profile).append('|').append(app.versionCode).append('|').append(norm.toString());
