@@ -1,0 +1,8 @@
+<resources>
+    <style name="AivTheme" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#04102f</item>
+        <item name="android:statusBarColor">#04102f</item>
+        <item name="android:navigationBarColor">#04102f</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

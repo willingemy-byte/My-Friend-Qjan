@@ -1,6 +1,7 @@
 
 (function () {
   'use strict';
+  const aivLogoSource=document.querySelector('.aiv-logo').src;
   // JOURNAL_CORE_START: parsing and normalization have no DOM or network dependencies.
   const MAX_BYTES = 10 * 1024 * 1024;
   const MAX_EVENTS = 50000;
@@ -1298,11 +1299,12 @@ if(typeof module!=='undefined')module.exports=PenaltyModel;
     const overlay=document.getElementById('jc-startup');if(overlay)overlay.remove();root.inert=false;
     if(nativeBridge&&nativeBridge.defenseStatus){renderDefense(true);if(nativeBridge.defenseOpenRequested&&nativeBridge.defenseOpenRequested())openDefense();}
   }
+  let startupJournalBypass=false;
   function beginStartup(){
     if(!nativeBridge||!nativeBridge.startupStatus){finishStartup();return;}
     root.inert=true;const overlay=element('div');overlay.id='jc-startup';overlay.setAttribute('role','status');
-    overlay.append(element('div',undefined,'jc-spinner'),element('h2','Initialisation'),element('p','Calcul en cours'));document.body.append(overlay);overlay.append(penaltyButton('Consulter le journal pendant le calcul',()=>{overlay.remove();root.inert=false;setTab('journal');}));
-    const poll=()=>{try{const status=JSON.parse(nativeBridge.startupStatus());overlay.querySelector('p').textContent=status.state;
+    const brand=element('div',undefined,'aiv-startup-brand');const logo=element('img',undefined,'aiv-startup-logo');logo.alt='AIV';logo.src=aivLogoSource;brand.append(logo,element('div',undefined,'aiv-orange-orbit'));overlay.append(brand,element('h2','Initialisation'),element('p','Calcul en cours'));document.body.append(overlay);const skip=penaltyButton('Ouvrir le journal maintenant',()=>{startupJournalBypass=true;overlay.remove();root.inert=false;setTab('journal');});skip.classList.add('aiv-action');overlay.append(skip);
+    const poll=()=>{try{const status=JSON.parse(nativeBridge.startupStatus());if(overlay.isConnected)overlay.querySelector('p').textContent=status.state;
       if(status.ready){finishStartup(JSON.parse(nativeBridge.startupData()));return;}
       if(status.error)throw Error(status.error);setTimeout(poll,250);
     }catch(e){overlay.querySelector('p').textContent='Initialisation incomplète : '+e.message;overlay.append(penaltyButton('Réessayer',()=>{if(nativeBridge.startupRetry)nativeBridge.startupRetry();overlay.remove();beginStartup();}),penaltyButton('Consulter le dernier relevé',()=>finishStartup()));}};
@@ -1427,7 +1429,7 @@ if(typeof module!=='undefined')module.exports=PenaltyModel;
   function v32InstallHeader(){
     const top=root.querySelector('.jc-top');if(!top)return;
     top.replaceChildren();
-    top.append(element('div','AIV','v32-logo'),element('div','ALL IN VISIBLE','v32-brand'));
+    const logo=element('img',undefined,'v32-logo aiv-logo');logo.alt='AIV';logo.src=aivLogoSource;top.append(logo,element('div','ALL IN VISIBLE','v32-brand'));
     const engine=element('div',undefined,'v32-engine');
     const calc=element('button');calc.type='button';calc.append(element('i',undefined,'v32-dot'),document.createTextNode('Collecte'));
     const corr=element('button');corr.type='button';corr.append(element('i',undefined,'v32-dot'),document.createTextNode('Corrélation'));
@@ -1449,7 +1451,7 @@ if(typeof module!=='undefined')module.exports=PenaltyModel;
   }
   function v32InstallNav(){
     const n=root.querySelector('.jc-user-nav');if(!n)return;n.replaceChildren();
-    for(const [tab,label] of [['home','Présentation'],['journal','Journal'],['flows','Flux'],['trackers','Traqueurs'],['anomalies','Anomalies'],['audit','Applications'],['menu','Paramètres']]){
+    for(const [tab,label] of [['home','Présentation'],['journal','Journal'],['flows','Flux'],['trackers','Traqueurs'],['anomalies','Anomalies'],['shizuku','Shizuku'],['audit','Applications'],['menu','Paramètres']]){
       const b=penaltyButton(label,()=>setTab(tab));b.dataset.jcTab=tab;b.setAttribute('aria-pressed',String(tab==='home'));n.append(b);
     }
   }
@@ -1780,9 +1782,30 @@ if(typeof module!=='undefined')module.exports=PenaltyModel;
   setTab=function(tab){v332CaptureX();v332SetTabBase(tab);if(tab==='flows'&&v332FlowReady)$('jf-snapshot').textContent='Vue figée au journal ID '+v332FlowSnapshot+' · la collecte continue en arrière-plan.';if(tab==='trackers')v332RenderTrackers(false);v332RestoreX(tab);v332SaveSoon();};
 
   function v332RestoreState(){if(v332Restored)return;v332Restored=true;let s={};try{const raw=nativeBridge?.uiState?.();if(raw)s=JSON.parse(raw);}catch(e){}try{PAGE_SIZE=Math.max(1,Math.min(500,Number(s.journalPageSize)||100));$('jc-page-size').value=String(PAGE_SIZE);state.page=Math.max(0,Number(s.journalPage)||0);$('jc-search').value=s.journalSearch||'';if($('jc-segment'))$('jc-segment').value=String(Math.max(0,Number(s.journalSegment)||0));$('jf-search').value=s.flowSearch||'';$('jf-page-size').value=String([25,100,250,500].includes(Number(s.flowPageSize))?Number(s.flowPageSize):100);v332FlowSnapshot=Math.max(0,Number(s.flowSnapshot)||0);v332FlowCursor=Math.max(0,Number(s.flowCursor)||v332FlowSnapshot);v332FlowReady=!!s.flowReady;$('jt-search').value=s.trackerSearch||'';$('jt-page-size').value=String([12,25,30,50].includes(Number(s.trackerPageSize))?Number(s.trackerPageSize):25);v332TrackerOffset=Math.max(0,Number(s.trackerOffset)||0);v332TrackerReady=!!s.trackerReady;v332TrackerNetworkBaseline=Math.max(0,Number(s.trackerNetworkBaseline)||0);v332TrackerLatestBaseline=Math.max(0,Number(s.trackerLatestBaseline)||0);v332AnalysisPageSize=[25,100,250,500].includes(Number(s.analysisPageSize))?Number(s.analysisPageSize):500;$('jc-analysis-size').value=String(v332AnalysisPageSize);analysisPage=Math.max(0,Number(s.analysisPage)||0);$('jc-analysis-search').value=s.analysisSearch||'';$('jc-analysis-kind').value=s.analysisKind==='trace'?'trace':'anomaly';$('jc-analysis-unread').checked=!!s.analysisUnread;Object.assign(v332Scroll,s.scrollX||{});const tab=['home','journal','flows','trackers','anomalies','audit','menu'].includes(s.tab)?s.tab:'home';if(tab==='flows')v332FlowReady=false;if(tab==='trackers')v332TrackerReady=false;setTab(tab);requestAnimationFrame(()=>{scrollTo(0,Math.max(0,Number(s.scrollY)||0));v332RestoreX(tab);});}catch(e){setTab('home');}}
-  const v332FinishStartupBase=finishStartup;finishStartup=function(input){v332FinishStartupBase(input);v332RestoreState();};
+  const v332FinishStartupBase=finishStartup;finishStartup=function(input){v332FinishStartupBase(input);if(!startupJournalBypass)v332RestoreState();};
 
 
+
+
+  // AIV observation/control split. A subscription never grants Android privileges.
+  const shizukuPane=element('section');shizukuPane.id='jc-pane-shizuku';shizukuPane.className='jc-pane';shizukuPane.hidden=true;
+  shizukuPane.append(element('h3','Shizuku · reprendre le contrôle'),element('p','Les actions passent par les droits réellement disponibles sur ce téléphone. Le journal et l’analyse restent consultables.','jc-sub'));
+  const cleanup=$('jc-shizuku-cleanup');shizukuPane.append(cleanup);root.append(shizukuPane);
+  if(defensePanel)shizukuPane.append(defensePanel);
+  const normal=element('div',undefined,'jc-form');normal.innerHTML='<h3>Réinitialiser les permissions selon une norme</h3><p class="jc-sub">Aperçu avant action. Aucun effacement de données ni reset du téléphone.</p><label>Paquet Android<input id="aiv-normal-package" placeholder="com.sec.android.daemonapp"></label><label>Norme<select id="aiv-normal-profile"><option value="weather">Météo · norme proposée</option></select></label><div class="jc-actions"><button type="button" id="aiv-normal-preview">Examiner les écarts</button><button type="button" id="aiv-normal-apply" class="aiv-action" disabled>Appliquer les retraits affichés</button></div><pre id="aiv-normal-result" role="status">Choisis une app et examine ses permissions.</pre>';
+  shizukuPane.append(normal);let normalizationPreview=null;
+  function renderShizuku(){refreshShizukuCleanup();if(defensePanel){defensePanel.open=true;renderDefense(true);}const a=JSON.parse(nativeBridge?.controlAccess?.()||'{"allowed":false}');for(const id of ['jc-shizuku-run','jc-shizuku-restore'])$(id).disabled=!a.allowed;}
+  $('aiv-normal-preview').onclick=()=>{try{normalizationPreview=JSON.parse(nativeBridge.normalizationPreview($('aiv-normal-package').value.trim(),$('aiv-normal-profile').value));$('aiv-normal-result').textContent=normalizationPreview.error||JSON.stringify(normalizationPreview,null,2);const access=JSON.parse(nativeBridge.controlAccess());$('aiv-normal-apply').disabled=!!normalizationPreview.error||!access.allowed||!normalizationPreview.changes?.length;}catch(e){$('aiv-normal-result').textContent=e.message;$('aiv-normal-apply').disabled=true;}};
+  $('aiv-normal-apply').onclick=()=>{if(!normalizationPreview)return;if(!confirm('Retirer uniquement les permissions affichées pour '+normalizationPreview.package+' ?'))return;try{const result=JSON.parse(nativeBridge.normalizationApply(normalizationPreview.package,normalizationPreview.profile,normalizationPreview.stamp));$('aiv-normal-result').textContent=result.error||result.status;$('aiv-normal-apply').disabled=true;setTimeout(renderShizuku,1000);}catch(e){$('aiv-normal-result').textContent=e.message;}};
+  const fleetPane=element('section');fleetPane.id='jc-pane-fleet';fleetPane.className='jc-pane';fleetPane.hidden=true;
+  fleetPane.innerHTML='<h3>Mon parc · TI</h3><p class="jc-sub">Aucun parc connecté pour le moment. Les données de ton téléphone restent dans Mon appareil.</p><div class="jc-form"><strong>Appareils enrôlés : 0</strong><p>Le futur tableau de bord regroupera appareils en ligne, états inconnus, anomalies vérifiées, politiques et historique des actions.</p><p>Types prévus : téléphones, ordinateurs, serveurs et services web.</p></div>';root.append(fleetPane);
+  const scopes=element('div',undefined,'jc-actions aiv-scopes');const own=penaltyButton('Mon appareil',()=>setTab('home')),fleet=penaltyButton('Mon parc · TI',()=>setTab('fleet'));scopes.append(own,fleet);root.querySelector('.jc-top').append(scopes);
+  function canViewFleet(){try{return JSON.parse(nativeBridge.accessPolicy()).tiers.it<=JSON.parse(nativeBridge.controlAccess()).tier;}catch(e){return false;}}
+  fleet.disabled=!canViewFleet();$('jc-mode-user').textContent='Mon appareil';$('jc-mode-ti').textContent='Mon parc · TI';$('jc-mode-user').onclick=()=>setTab('home');$('jc-mode-ti').onclick=()=>setTab('fleet');$('jc-mode-ti').disabled=!canViewFleet();$('jc-home-details-ti').onclick=()=>setTab('fleet');
+  const beforeShizukuTab=setTab;setTab=function(tab){if(tab==='fleet'){if(!canViewFleet())return;state.tab=tab;root.querySelectorAll('.jc-pane').forEach(p=>p.hidden=p!==fleetPane);v32SetNav(tab);return;}fleetPane.hidden=true;if(tab==='shizuku'){state.tab=tab;root.querySelectorAll('.jc-pane').forEach(p=>p.hidden=p!==shizukuPane);v32SetNav(tab);renderShizuku();v332SaveSoon();}else{shizukuPane.hidden=true;beforeShizukuTab(tab);}};
+  openDefense=function(){setTab('shizuku');};
+  root.querySelectorAll('[data-jc-tab="trackers"],#jc-shizuku-run,#jc-shizuku-restore,#v23-shizuku-launch').forEach(b=>b.classList.add('aiv-action'));
+  root.querySelectorAll('[data-jc-tab="shizuku"]').forEach(b=>b.classList.add('aiv-action'));
 
   beginStartup();
 

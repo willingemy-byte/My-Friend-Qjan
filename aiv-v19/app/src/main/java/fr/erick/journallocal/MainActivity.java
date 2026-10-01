@@ -29,7 +29,7 @@ public final class MainActivity extends Activity {
         try{DefenseMonitor.start(this);}catch(Throwable ignored){}
         try{ShizukuCleanup.attach(this);}catch(Throwable ignored){}
         try{prepareStartup();}catch(Throwable e){startupState="Erreur";startupError="Initialisation : "+e.getClass().getSimpleName();}
-        reader=new WebView(this);reader.setBackgroundColor(0xFF05090D);
+        reader=new WebView(this);reader.setBackgroundColor(0xFF04102F);
         reader.setOnApplyWindowInsetsListener((view,insets)->{
             if(Build.VERSION.SDK_INT>=30){android.graphics.Insets bars=insets.getInsets(WindowInsets.Type.systemBars());view.setPadding(bars.left,bars.top,bars.right,bars.bottom);}
             else view.setPadding(insets.getSystemWindowInsetLeft(),insets.getSystemWindowInsetTop(),insets.getSystemWindowInsetRight(),insets.getSystemWindowInsetBottom());
@@ -95,12 +95,15 @@ public final class MainActivity extends Activity {
     private volatile int journalReplyId=0;
     public final class Bridge {
         @JavascriptInterface public String accessPolicy(){return AccessPolicy.CATALOG_JSON;}
+        @JavascriptInterface public String controlAccess(){return EventStore.object("allowed",AccessPolicy.allows("shizuku.control",AccessPolicy.DISTRIBUTION_TIER),"tier",AccessPolicy.DISTRIBUTION_TIER,"profile","personal/public build; subscription not implemented").toString();}
+        @JavascriptInterface public String normalizationPreview(String pkg,String profile){try{return PermissionNorms.preview(MainActivity.this,pkg,profile).toString();}catch(Exception e){return auditError(e);}}
+        @JavascriptInterface public String normalizationApply(String pkg,String profile,String stamp){try{return ShizukuCleanup.normalize(MainActivity.this,pkg,profile,stamp).toString();}catch(Exception e){return auditError(e);}}
         @JavascriptInterface public String defenseStatus(){try{return DefenseStore.get(MainActivity.this).status().put("file_status",fileStatus).put("inventory_busy",PermissionAudit.get(MainActivity.this).summary().optBoolean("busy")).toString();}catch(Exception e){return auditError(e);}}
         @JavascriptInterface public String defensePage(String scope,int offset){try{return DefenseStore.get(MainActivity.this).page(scope,offset).toString();}catch(Exception e){return auditError(e);}}
         @JavascriptInterface public String defenseDetail(String pkg,long before){try{return DefenseStore.get(MainActivity.this).detail(pkg,before).toString();}catch(Exception e){return auditError(e);}}
         @JavascriptInterface public String defenseDecide(String pkg,String stamp,boolean keep){try{return DefenseStore.get(MainActivity.this).decide(pkg,stamp,keep).toString();}catch(Exception e){return auditError(e);}}
         @JavascriptInterface public boolean defenseOpenRequested(){boolean open=getIntent().getBooleanExtra("open_defense",false);getIntent().removeExtra("open_defense");return open;}
-        @JavascriptInterface public void defenseAction(String pkg,String action,String stamp){runOnUiThread(()->{try{DefenseActions.launch(MainActivity.this,pkg,action,stamp);}catch(Exception e){Toast.makeText(MainActivity.this,e.getMessage()==null?"Action Android indisponible":e.getMessage(),Toast.LENGTH_LONG).show();}refreshDefenseReader();});}
+        @JavascriptInterface public void defenseAction(String pkg,String action,String stamp){if(!AccessPolicy.allows("shizuku.control",AccessPolicy.DISTRIBUTION_TIER))return;runOnUiThread(()->{try{DefenseActions.launch(MainActivity.this,pkg,action,stamp);}catch(Exception e){Toast.makeText(MainActivity.this,e.getMessage()==null?"Action Android indisponible":e.getMessage(),Toast.LENGTH_LONG).show();}refreshDefenseReader();});}
         @JavascriptInterface public String defenseRecover(){try{DefenseActions.recover(MainActivity.this);return DefenseStore.get(MainActivity.this).status().toString();}catch(Exception e){return auditError(e);}}
         @JavascriptInterface public int requestJournal(String args){
             int ticket=journalRequestId.incrementAndGet();

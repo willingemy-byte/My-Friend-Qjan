@@ -144,3 +144,19 @@ Les noms ci-dessous sont ceux de `AivConfig.java`, générés depuis `config/def
 | `permissions.audit` | `1` | Audit local des permissions |
 | `analysis.local` | `1` | Analyse locale |
 | `export.local` | `1` | Export local |
+
+## Design et contrôle — 1er octobre 2026
+
+Le logo fourni AIV est utilisé sans modification comme icône Android (`res/drawable/aiv_logo.png`), logo de l'en-tête et image d'initialisation. Le compilateur embarque les images dans la page locale sous forme data URI pour conserver la CSP et l'absence de chargement externe. Le thème natif et la WebView utilisent le fond `#04102f`. Les commandes d'observation gardent le bleu ; les actions de contrôle, l'onglet Shizuku et l'onglet Traqueurs utilisent l'orange. L'anneau d'initialisation tourne autour du logo avec respect de la préférence de mouvement réduit.
+
+« Ouvrir le journal maintenant » ferme immédiatement l'écran d'initialisation, laisse le calcul en cours et conserve la navigation actuelle lorsque le résultat arrive. Il ne désactive ni le journal ni l'analyse. Les scores restent dépendants de leur état de calcul.
+
+L'onglet Shizuku regroupe l'état du service, les contrôles existants et une norme proposée « météo ». L'utilisateur choisit explicitement une app et ce profil, examine les permissions concernées puis applique les retraits affichés. Le backend refait l'aperçu et refuse un état périmé. Seules les permissions runtime accordées et listées dans cette norme sont ciblées : téléphone, appels, caméra, micro, contacts. Localisation et Internet ne sont pas retirés par cette norme. Les droits non révocables par ce mécanisme sont signalés ; il n'y a pas d'effacement, de désinstallation ou de reset du téléphone. L'action utilise Shizuku, vérifie les résultats, écrit un snapshot et utilise la restauration existante. Ces normes sont configurables dans `assets/permission-baselines.json` ; ce sont des choix d'usage, pas une preuve automatique de malveillance. Le mécanisme ne traverse pas les profils Android.
+
+Répartition choisie : lecture du journal, flux, audit et anomalies au palier 1 ; actions Shizuku au palier 2. Lecture des traqueurs maintenue à 1 dans l'attente d'une décision commerciale. `distribution_profile="personal"` conserve les actions de l'app personnelle au palier 2 ; `"public"` démarre au palier 1. Ce profil n'est pas une preuve d'achat. L'abonnement payant vérifié reste à implémenter avant distribution commerciale. Les points d'exécution des commandes Shizuku contrôlent désormais la politique de palier ; Shizuku doit en plus être réellement autorisé.
+
+Tests ajoutés : navigateur avec données synthétiques (logo, fond, accès immédiat au journal, onglet dédié, aperçu sans action, refus des contrôles en mode gratuit) et build Android complet avec ressources. Aucune permission de téléphone réel n'est modifiée par les tests.
+
+### Mise à jour : le palier 3 est TI
+
+La décision suivante remplace le palier 3 réservé : `TIER_IT=3`, capacités `fleet.view`, `fleet.enroll`, `fleet.policy`, `fleet.report` de minimum 3. Les paliers 1 et 2 conservent leur sens. Le build personnel utilise désormais 3 pour permettre les essais des deux points de vue ; un build public démarre à 1 jusqu'au raccordement des droits vérifiés. Le bouton Mon parc présente un état vide explicite : aucun parc n'est encore enrôlé. L'architecture cible est décrite dans `AIV-ARCHITECTURE-PARC.md`.

@@ -1,0 +1,18 @@
+{
+  "schema": "aiv-permission-baselines/1",
+  "profiles": {
+    "weather": {
+      "label": "Météo — norme proposée, à examiner avant application",
+      "denied_permissions": [
+        "android.permission.CALL_PHONE",
+        "android.permission.READ_PHONE_STATE",
+        "android.permission.READ_CALL_LOG",
+        "android.permission.WRITE_CALL_LOG",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_CONTACTS",
+        "android.permission.WRITE_CONTACTS"
+      ]
+    }
+  }
+}

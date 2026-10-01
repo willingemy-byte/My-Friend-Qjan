@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Assemble local WebView assets without changing runtime loading or CSP."""
 import argparse
+import base64
 import json
 import re
 from pathlib import Path
@@ -19,6 +20,8 @@ def assemble():
         html=html.replace(token,(frontend/filename).read_text())
     if re.search(r'\{\{AIV_(STYLE|SCRIPT)_',html):
         raise ValueError('Missing frontend part')
+    logo=(ROOT/'app/src/main/res/drawable/aiv_logo.png').read_bytes()
+    html=html.replace('{{AIV_LOGO}}','data:image/png;base64,'+base64.b64encode(logo).decode())
     return html
 
 if __name__=='__main__':

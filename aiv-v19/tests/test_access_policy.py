@@ -14,7 +14,7 @@ class AccessTests(unittest.TestCase):
         self.data['service_minimum_tiers']['backup.remote']=2
         self.assertIn('case "backup.remote": return 2;',module.render(self.data))
     def test_reject_invalid_or_reserved_minimum(self):
-        for value in [True,0,3,'2',999]:
+        for value in [True,0,4,'2',999]:
             self.data['service_minimum_tiers']['journal.read']=value
             with self.assertRaises(ValueError): module.validate(self.data)
     def test_reject_injected_service_name(self):

@@ -91,10 +91,12 @@ run('javac','-encoding','UTF-8','-source','8','-target','8','-bootclasspath',boo
 run('java','-cp',a.build_tools/'lib/d8.jar','com.android.tools.r8.D8',
     '--min-api','26','--lib',a.android_jar,'--output',dex,*sorted(classes.rglob('*.class')),*dep_jars)
 
+resources=build/'resources.zip'
+run(a.build_tools/'aapt2','compile','--dir',root/'app/src/main/res','-o',resources)
 unsigned=build/'journal-local-unsigned.apk'
 run(a.build_tools/'aapt2','link','--manifest',root/'app/src/main/AndroidManifest.xml',
     '-I',a.android_jar,'-A',root/'app/src/main/assets','--min-sdk-version','26',
-    '--target-sdk-version','35','-o',unsigned)
+    '--target-sdk-version','35','-o',unsigned,resources)
 
 with zipfile.ZipFile(unsigned,'a',compression=zipfile.ZIP_DEFLATED) as z:
     for f in sorted(dex.glob('*.dex')):

@@ -34,5 +34,9 @@
   {
     "token": "{{AIV_SCRIPT_01}}",
     "file": "script-01.js"
+  },
+  {
+    "token": "{{AIV_STYLE_09}}",
+    "file": "style-09.css"
   }
 ]

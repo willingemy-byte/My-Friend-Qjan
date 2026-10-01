@@ -2,15 +2,25 @@
   "schema": "aiv-access-policy/1",
   "tiers": {
     "free": 1,
-    "paid": 2
+    "paid": 2,
+    "it": 3
   },
-  "reserved_tiers": [3],
+  "reserved_tiers": [],
   "service_minimum_tiers": {
     "journal.read": 1,
     "journal.record": 1,
     "network.capture": 1,
     "permissions.audit": 1,
     "analysis.local": 1,
-    "export.local": 1
-  }
+    "export.local": 1,
+    "anomaly.read": 1,
+    "tracker.inspect": 1,
+    "shizuku.control": 2,
+    "shizuku.restore": 2,
+    "fleet.view": 3,
+    "fleet.enroll": 3,
+    "fleet.policy": 3,
+    "fleet.report": 3
+  },
+  "distribution_profile": "personal"
 }

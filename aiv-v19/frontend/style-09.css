@@ -1,0 +1,15 @@
+:root{--aiv-observe:#58b8ff;--aiv-control:#ff9500;--aiv-deep:#04102f}
+html,body{background:var(--aiv-deep)!important}
+#jc-reader.v32-ui{background:linear-gradient(180deg,#06183e,#020a24)!important}
+#jc-reader.v32-ui .jc-top{background:#04102f!important}
+#jc-reader.v32-ui .v32-logo,#jc-reader .aiv-logo{width:52px;height:52px;object-fit:contain;border:0!important;border-radius:8px;background:transparent!important;box-shadow:none;padding:0}
+#jc-reader.v32-ui button.aiv-action,#jc-startup button.aiv-action{color:#fff4df!important;border-color:#ff9500!important;background:#442301!important}
+#jc-reader.v32-ui button.aiv-action[aria-pressed=true],#jc-startup button.aiv-action{color:#180e01!important;background:linear-gradient(#ffbd42,#ff9500)!important;border-color:#ffb331!important}
+#jc-startup{position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:#04102f!important;color:#ecf5ff;padding:24px;text-align:center}
+.aiv-startup-brand{position:relative;width:min(68vw,300px);aspect-ratio:1}
+.aiv-startup-logo{width:100%;height:100%;object-fit:contain}
+.aiv-orange-orbit{position:absolute;inset:7.5%;border-radius:50%;border:4px solid transparent;border-top-color:#ffe06c;border-right-color:#ff9500;box-shadow:0 0 18px #ff950066;animation:aiv-orbit 1.6s linear infinite}
+@keyframes aiv-orbit{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.aiv-orange-orbit{animation:none}}
+#jc-pane-shizuku pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:340px;overflow:auto;font-size:.8rem}
+#jc-pane-shizuku input,#jc-pane-shizuku select{display:block;width:100%;margin:8px 0 14px}

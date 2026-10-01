@@ -65,6 +65,7 @@ public final class ShizukuCleanup {
     }
 
     public static void requestOrRun(){
+        if(!AccessPolicy.allows("shizuku.control",AccessPolicy.DISTRIBUTION_TIER)){status="Contrôle Shizuku réservé au palier 2";pending=false;return;}
         pending=true;
         status="Préparation du nettoyage Shizuku";
         attemptRun();
@@ -158,6 +159,8 @@ public final class ShizukuCleanup {
     }
 
     public static synchronized JSONObject restore(Context c)throws Exception{
+        if(!AccessPolicy.allows("shizuku.restore",AccessPolicy.DISTRIBUTION_TIER))throw new SecurityException("Restauration réservée au palier 2");
+        if(running)throw new IllegalStateException("Une action est déjà en cours");
         File f=snapshotFile(c);
         if(!f.isFile())return EventStore.object("restored",0,"failed",0,"error","Aucun snapshot de nettoyage");
         JSONObject snapshot=new JSONObject(readAll(f)),result=EventStore.object("schema","aiv-shizuku-restore/24","started_ms",System.currentTimeMillis());
@@ -171,6 +174,32 @@ public final class ShizukuCleanup {
         PermissionAudit.get(c).scan();
         status="Restauration terminée : "+restored+" restauré(s), "+failed+" échec(s)";
         return result.put("finished_ms",System.currentTimeMillis()).put("restored",restored).put("failed",failed);
+    }
+
+    public static synchronized JSONObject normalize(Context c,String pkg,String profile,String stamp)throws Exception {
+        if(!AccessPolicy.allows("shizuku.control",AccessPolicy.DISTRIBUTION_TIER))throw new SecurityException("Contrôle réservé au palier 2");
+        if(running)throw new IllegalStateException("Une action est déjà en cours");
+        if(!Shizuku.pingBinder()||Shizuku.checkSelfPermission()!=PackageManager.PERMISSION_GRANTED)throw new IllegalStateException("Démarre et autorise Shizuku avant d’appliquer la norme");
+        JSONObject preview=PermissionNorms.preview(c,pkg,profile);
+        if(!preview.getString("stamp").equals(stamp))throw new IllegalStateException("Permissions modifiées : refaire l’aperçu");
+        JSONArray changes=preview.getJSONArray("changes");
+        if(changes.length()==0)return EventStore.object("status","Aucune permission à retirer");
+        Context app=c.getApplicationContext();running=true;status="Application de la norme choisie";
+        new Thread(()->{
+            int changed=0,failed=0;JSONObject snapshot=EventStore.object("schema","aiv-shizuku-cleanup/24","created_ms",System.currentTimeMillis(),"profile",profile,"changes",new JSONArray());
+            try {writeSnapshot(app,snapshot);
+                for(int i=0;i<changes.length();i++){
+                    String permission=changes.getJSONObject(i).getString("permission");JSONObject change=EventStore.object("package",pkg,"kind","permission","name",permission,"before","granted");
+                    snapshot.getJSONArray("changes").put(change);writeSnapshot(app,snapshot);
+                    try {ExecResult result=exec("pm revoke --user current "+q(pkg)+" "+q(permission));boolean revoked=app.getPackageManager().checkPermission(permission,pkg)!=PackageManager.PERMISSION_GRANTED;
+                        change.put("exit",result.code).put("after",revoked?"denied":"still_granted");if(revoked){change.put("inverse","pm grant --user current "+q(pkg)+" "+q(permission));changed++;}else failed++;
+                    }catch(Exception e){failed++;change.put("error",e.getClass().getSimpleName());}
+                    writeSnapshot(app,snapshot);log(app,"NORMALIZATION_PERMISSION",change);
+                }
+                snapshot.put("changed",changed).put("failed",failed).put("finished_ms",System.currentTimeMillis());writeSnapshot(app,snapshot);PermissionAudit.get(app).scan();status="Norme appliquée : "+changed+" droit(s) retiré(s), "+failed+" échec(s)";
+            }catch(Exception e){status="Norme interrompue : "+e.getClass().getSimpleName();log(app,"NORMALIZATION_ERROR",EventStore.object("error",e.getClass().getSimpleName()));}
+            finally{running=false;}
+        },"aiv-permission-normalization").start();return EventStore.object("status",status);
     }
 
     private static JSONObject queryAppOp(String pkg,String op){
@@ -200,6 +229,7 @@ public final class ShizukuCleanup {
     private static final class ExecResult{final int code;final String out,err;ExecResult(int c,String o,String e){code=c;out=o;err=e;}}
 
     private static ExecResult exec(String command)throws Exception{
+        if(!AccessPolicy.allows("shizuku.control",AccessPolicy.DISTRIBUTION_TIER))throw new SecurityException("Contrôle réservé au palier 2");
         if(!Shizuku.pingBinder()||Shizuku.checkSelfPermission()!=PackageManager.PERMISSION_GRANTED)throw new IllegalStateException("Shizuku non autorisé");
         Method m=Shizuku.class.getDeclaredMethod("newProcess",String[].class,String[].class,String.class);
         m.setAccessible(true);

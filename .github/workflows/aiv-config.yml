@@ -27,3 +27,49 @@ jobs:
           javac -d /tmp/aiv-config-classes aiv-v19/app/src/main/java/fr/erick/journallocal/{AivConfig,AnomalyRules,WorkBudget,AccessPolicy}.java aiv-v19/tests/AccessPolicyTest.java
           java -cp /tmp/aiv-config-classes fr.erick.journallocal.AccessPolicyTest
       - run: bash aiv-v19/tests/run-v23.sh
+  design:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned browser test dependency
+        run: |
+          npm install --prefix "$RUNNER_TEMP/aiv-browser" --no-save playwright@1.62.1
+          "$RUNNER_TEMP/aiv-browser/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Check startup and control interface
+        env:
+          NODE_PATH: ${{ runner.temp }}/aiv-browser/node_modules
+        run: node aiv-v19/tests/design-control.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: aiv-design-preview
+          path: |
+            /tmp/aiv-startup.png
+            /tmp/aiv-shizuku.png
+          if-no-files-found: ignore
+  android:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/cache@v4
+        with:
+          path: aiv-v19/.toolchain
+          key: aiv-v32-android35-ndk27d-shizuku-13.1.5
+      - name: Compile APK and native resources
+        working-directory: aiv-v19
+        env:
+          AIV_BUILD_MODE: unsigned
+        run: bash bootstrap-clean-build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aiv-config-logo-unsigned
+          path: aiv-v19/build/*unsigned.apk
+          if-no-files-found: error
