@@ -77,14 +77,13 @@ public final class MainActivity extends Activity {
                 PermissionAudit audit=PermissionAudit.get(this);
                 org.json.JSONObject summary=audit.summary();
                 if(summary.optLong("scan_id",0L)<=0L){
-                    startupState="Premier inventaire des applications et permissions";
+                    startupState="Premier inventaire lancé en arrière-plan";
                     audit.scan();
-                    long until=android.os.SystemClock.elapsedRealtime()+600000;
-                    while(audit.summary().optBoolean("busy") && android.os.SystemClock.elapsedRealtime()<until)Thread.sleep(150);
-                    if(audit.summary().optBoolean("busy"))throw new IOException("Inventaire toujours en cours. Réessayer dans un instant.");
-                }else startupState="Chargement du dernier inventaire";
-                startupState="Préparation de la référence";
-                startupResult=audit.penaltyData().toString();
+                    startupResult=audit.penaltyData().toString();
+                }else{
+                    startupState="Chargement du dernier inventaire";
+                    startupResult=audit.penaltyData().toString();
+                }
                 startupState="Prêt";
                 AnomalyMonitor.request(this);TrackerIndex.get(this).request();ApkEvidence.get(this).request();
             }catch(Exception e){startupError=e.getMessage()==null?e.getClass().getSimpleName():e.getMessage();startupState="Erreur";}
