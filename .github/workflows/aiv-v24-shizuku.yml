@@ -84,8 +84,8 @@ jobs:
         with:
           name: AIV-1.1.2-unsigned
           path: |
-            aiv-v19/build/AIV-0.6.37-unsigned.apk
-            aiv-v19/build/AIV-0.6.37-unsigned.apk.sha256
+            aiv-v19/build/AIV-1.1.2-unsigned.apk
+            aiv-v19/build/AIV-1.1.2-unsigned.apk.sha256
             aiv-v19/.toolchain/sdk/build-tools/35.0.0/lib/apksigner.jar
           retention-days: 14
           include-hidden-files: true
