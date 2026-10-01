@@ -1,0 +1,38 @@
+[
+  {
+    "token": "{{AIV_STYLE_01}}",
+    "file": "style-01.css"
+  },
+  {
+    "token": "{{AIV_STYLE_02}}",
+    "file": "style-02.css"
+  },
+  {
+    "token": "{{AIV_STYLE_03}}",
+    "file": "style-03.css"
+  },
+  {
+    "token": "{{AIV_STYLE_04}}",
+    "file": "style-04.css"
+  },
+  {
+    "token": "{{AIV_STYLE_05}}",
+    "file": "style-05.css"
+  },
+  {
+    "token": "{{AIV_STYLE_06}}",
+    "file": "style-06.css"
+  },
+  {
+    "token": "{{AIV_STYLE_07}}",
+    "file": "style-07.css"
+  },
+  {
+    "token": "{{AIV_STYLE_08}}",
+    "file": "style-08.css"
+  },
+  {
+    "token": "{{AIV_SCRIPT_01}}",
+    "file": "script-01.js"
+  }
+]

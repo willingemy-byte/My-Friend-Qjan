@@ -9,7 +9,7 @@ import org.json.JSONObject;
 final class ExportFiles {
     interface Write {void write(Writer writer)throws Exception;}
     static File stage(Context context,Write operation)throws Exception{
-        File dir=new File(context.getCacheDir(),"exports");if(!dir.isDirectory()&&!dir.mkdirs())throw new IOException("Cache indisponible");File[] old=dir.listFiles();if(old!=null)for(File f:old)if(System.currentTimeMillis()-f.lastModified()>7L*86400000)f.delete();File temp=File.createTempFile("snapshot-",".partial",dir);
+        File dir=new File(context.getCacheDir(),AivConfig.PATHS_EXPORTS_CACHE);if(!dir.isDirectory()&&!dir.mkdirs())throw new IOException("Cache indisponible");File[] old=dir.listFiles();if(old!=null)for(File f:old)if(System.currentTimeMillis()-f.lastModified()>7L*86400000)f.delete();File temp=File.createTempFile("snapshot-",".partial",dir);
         try{try(FileOutputStream bytes=new FileOutputStream(temp);Writer writer=new BufferedWriter(new OutputStreamWriter(bytes,StandardCharsets.UTF_8))){operation.write(writer);writer.flush();bytes.getFD().sync();}File ready=new File(dir,temp.getName().replace(".partial",".ready"));if(!temp.renameTo(ready))throw new IOException("Finalisation locale impossible");return ready;}catch(Exception e){temp.delete();throw e;}
     }
     static String copy(Context c,File ready,Uri destination)throws Exception{

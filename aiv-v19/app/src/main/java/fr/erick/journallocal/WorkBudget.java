@@ -5,8 +5,8 @@ import java.util.function.BooleanSupplier;
 /** Cooperative limits; an individual SQLite operation may exceed the time slice. */
 public final class WorkBudget {
     public interface Clock { long millis(); }
-    public static final int EVENTS=16, VERIFY_ROWS=128, STATS_ROWS=64;
-    public static final long SLICE_MS=40, MIN_PAUSE_MS=1000;
+    public static final int EVENTS=AivConfig.WORK_EVENTS, VERIFY_ROWS=AivConfig.WORK_VERIFY_ROWS, STATS_ROWS=AivConfig.WORK_STATS_ROWS;
+    public static final long SLICE_MS=AivConfig.WORK_SLICE_MS, MIN_PAUSE_MS=AivConfig.WORK_MIN_PAUSE_MS;
     private final Clock clock;private final BooleanSupplier cancelled;
     private final long started,maxMillis;private final int maxItems;private int items;
     public WorkBudget(Clock clock,BooleanSupplier cancelled,int maxItems,long maxMillis){this.clock=clock;this.cancelled=cancelled;this.maxItems=maxItems;this.maxMillis=maxMillis;started=clock.millis();}

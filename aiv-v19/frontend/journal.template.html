@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src 'none'; child-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; font-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"><title>Journal du cellulaire</title><style>{{AIV_STYLE_01}}</style>
+<style id="aiv-v20-design-override">{{AIV_STYLE_02}}</style>
+
+<style id="aiv-v30-full-design">{{AIV_STYLE_03}}</style>
+
+<style id="aiv-v32-android-design">{{AIV_STYLE_04}}</style>
+
+<style id="aiv-v32-2-investigation">{{AIV_STYLE_05}}</style>
+</head><body><main><style>{{AIV_STYLE_06}}</style>
+<style>{{AIV_STYLE_07}}</style>
+<div id="jc-reader" lang="fr">
+  <header class="jc-top">
+    <div class="jc-mark" aria-hidden="true">AIV</div>
+    <div><h2>Journal du cellulaire</h2><p class="jc-sub">Les échanges, leurs sources, leurs détails.</p></div>
+  </header>
+  <div class="jc-state"><span class="jc-label">Collecte du téléphone non connectée</span><span id="jc-total" class="jc-count">0 événement importé</span></div>
+  <nav class="jc-tabs" aria-label="Vues du journal">
+    <button type="button" data-jc-tab="home" aria-pressed="true" aria-controls="jc-pane-home">Accueil</button>
+    <button type="button" data-jc-tab="journal" aria-pressed="false" aria-controls="jc-pane-journal">Journal</button>
+    <button type="button" data-jc-tab="flows" aria-pressed="false" aria-controls="jc-pane-flows">Flux</button>
+    <button type="button" id="jc-analysis-tab" data-jc-tab="anomalies" aria-pressed="false" aria-controls="jc-pane-anomalies">Anomalies</button>
+    <button type="button" data-jc-tab="audit" aria-pressed="false" aria-controls="jc-pane-audit">Applications</button>
+    <button type="button" data-jc-tab="permissions" aria-pressed="false" aria-controls="jc-pane-permissions">Bixby</button>
+    <button type="button" data-jc-tab="diagnostic" aria-pressed="false" aria-controls="jc-pane-diagnostic">Diagnostic</button>
+<button type="button" id="aiv-tab" data-jc-tab="decisions" aria-pressed="false" aria-controls="jc-pane-decisions">Décisions</button><button type="button" data-jc-tab="references" aria-pressed="false" aria-controls="jc-pane-references">Référentiels</button>
+    <button type="button" data-jc-tab="sources" aria-pressed="false" aria-controls="jc-pane-sources">Sources</button>
+  </nav>
+  <nav class="jc-user-nav" aria-label="Navigation utilisateur">
+    <button type="button" data-jc-tab="home" aria-pressed="true" aria-controls="jc-pane-home">Accueil</button>
+    <button type="button" data-jc-tab="menu" aria-pressed="false" aria-controls="jc-pane-menu">Menu</button>
+  </nav>
+  <section class="jc-pane jc-home" id="jc-pane-home" aria-label="Accueil AIV">
+    <p class="jc-clean-build-tag" aria-label="Version de compilation">AIV 1.1.3 · BUILD GITHUB · FONCTIONS CONSERVÉES</p>
+    <div class="jc-view-switch" aria-label="Choisir la vue de démonstration">
+      <button type="button" id="jc-mode-user" aria-pressed="true">Utilisateur</button>
+      <button type="button" id="jc-mode-ti" aria-pressed="false">TI · démo</button>
+    </div>
+    <div class="jc-mode-banner" id="jc-mode-banner"><strong>Vue utilisateur.</strong> Les valeurs affichées proviennent des données locales disponibles sur ce téléphone.</div>
+    <div class="jc-home-hero">
+      <div class="jc-home-eyebrow" id="jc-home-eyebrow">Écarts moyens de visibilité</div>
+      <div class="jc-score-ring jc-legacy-ring" id="jc-score-ring" role="img" aria-label="Indice de cohérence en attente de données">
+        <div class="jc-score-inner"><div class="jc-score-number" id="jc-score-number">—</div><div class="jc-score-label" id="jc-score-label">moyenne par application</div></div>
+      </div>
+      <div id="jc-group-rings" class="jc-group-rings" aria-label="Scores Android, système et utilisateur"></div>
+      <h3 class="jc-home-title" id="jc-home-title">Calcul en attente de données AIV</h3>
+      <p class="jc-home-sub" id="jc-home-sub">Ce chiffre documente la cohérence des observations disponibles. Ce n’est pas un verdict de sécurité.</p>
+    </div>
+    <div class="jc-home-alert" id="jc-home-alert" aria-live="polite"><strong id="jc-home-alert-title">Aucune valeur inventée</strong><span id="jc-home-alert-text" class="jc-sub">Les données insuffisantes restent inconnues plutôt que pénalisées.</span></div>
+    <div class="jc-home-counters">
+      <div><strong id="jc-home-total">0</strong><span id="jc-home-counter-0">observées</span></div>
+      <div><strong id="jc-home-evaluated">0</strong><span id="jc-home-counter-1">évaluées</span></div>
+      <div><strong id="jc-home-unknown">0</strong><span id="jc-home-counter-u">non évaluées</span></div>
+      <div><strong id="jc-home-findings">0</strong><span id="jc-home-counter-2">anomalies</span></div>
+      <div><strong id="jc-home-app-count">0</strong><span id="jc-home-counter-3">non attribuables</span></div>
+    </div>
+    <div class="jc-row jc-between"><h3 id="jc-home-list-title">Applications à examiner</h3><button type="button" id="jc-home-refresh">Actualiser</button></div>
+    <p class="jc-refresh-status jc-sub" id="jc-refresh-status" aria-live="polite">Actualiser relance l’inventaire local. Aucun envoi n’est fait tant qu’un moteur HTTPS n’est pas relié.</p>
+    <div class="jc-endpoint-config" id="jc-endpoint-config" hidden>
+      <strong>Relier le moteur de cohérence</strong>
+      <p class="jc-sub">L’inventaire est envoyé seulement quand tu appuies sur Actualiser. L’APK ne contient aucun token GitHub ni clé d’IA.</p>
+      <label>URL HTTPS du moteur<input type="url" id="jc-coherence-endpoint" inputmode="url" autocomplete="off" placeholder="https://…/api/coherence"></label>
+      <button type="button" id="jc-coherence-link" class="jc-primary">Relier</button>
+    </div>
+    <div class="jc-group-filters"><button type="button" id="jc-group-all">Toutes les applications</button><input type="search" id="jc-home-search" placeholder="Chercher une application" aria-label="Chercher une application dans les scores"></div>
+    <div id="jc-home-app-list" class="jc-home-list"></div>
+    <button type="button" id="jc-home-more" hidden>Afficher 25 de plus</button>
+    <div class="jc-home-actions">
+      <div class="jc-user-actions jc-row"><button type="button" data-home-target="penalty">Barème AIV</button><button type="button" data-home-target="menu" class="jc-primary">Menu</button><button type="button" id="jc-home-details-ti">Voir la démo TI</button></div>
+      <div class="jc-ti-actions">
+        <button type="button" data-home-target="audit">Applications</button>
+        <button type="button" data-home-target="journal">Journal</button>
+        <button type="button" data-home-target="decisions">Décisions AIV</button>
+      </div>
+    </div>
+    <p class="jc-home-note" id="jc-home-note">Écarts moyens de visibilité : une permission déclarée ne prouve pas qu’elle a été utilisée. Les éléments inconnus restent inconnus. Ce n’est pas un verdict de sécurité.</p>
+  </section>
+
+  <section class="jc-pane" id="jc-pane-menu" aria-label="Menu des fonctions" hidden>
+    <div class="jc-menu-intro">
+      <h2>Menu</h2>
+      <p class="jc-sub">Toutes les fonctions restent disponibles. L’accueil demeure simple; les outils détaillés sont rangés ici.</p>
+    </div>
+    <div class="jc-menu-grid">
+      <button type="button" class="jc-menu-card" data-menu-target="penalty"><strong>Barème AIV</strong><span>Multiplicateurs, couleurs, règles et import/export des observations.</span></button>
+      <button type="button" class="jc-menu-card" data-menu-target="audit"><strong>Applications</strong><span>Inventaire réel, permissions déclarées, comparaison et export journal-autorisations.json.</span></button>
+      <button type="button" class="jc-menu-card" data-menu-target="journal"><strong>Journal</strong><span>Chronologie des événements et connexions observées.</span></button>
+      <button type="button" class="jc-menu-card" data-menu-target="flows"><strong>Flux</strong><span>Relier directement la sortie et le retour d’une connexion, avec UID, DNS/SNI et volumes observés.</span></button>
+      <button type="button" class="jc-menu-card" data-menu-target="anomalies"><strong>Anomalies</strong><span>Constats, traces et éléments à examiner.</span></button>
+      <button type="button" class="jc-menu-card" data-menu-target="decisions"><strong>Décisions et règles</strong><span>R1 à R6, couleurs des multiplicateurs, décisions et chaîne AIV.</span></button>
+      <button type="button" class="jc-menu-card" data-menu-target="references"><strong>Référentiel local</strong><span>Référence estimée actualisée avec l’inventaire; import et export disponibles.</span></button>
+      <button type="button" class="jc-menu-card" data-menu-target="diagnostic"><strong>Diagnostic</strong><span>Imports de diagnostic et rapprochements avec les événements.</span></button>
+      <button type="button" class="jc-menu-card" data-menu-target="permissions"><strong>Bixby</strong><span>Inventaire des permissions relevées dans les captures.</span></button>
+      <button type="button" class="jc-menu-card" data-menu-target="sources"><strong>Sources</strong><span>Couverture, collecte, Bluetooth, VPN local et licences.</span></button>
+    </div>
+  </section>
+
+  <section class="jc-pane" id="jc-pane-flows" aria-label="Flux réseau" hidden>
+    <div class="jc-row jc-between"><div><h2>Flux</h2><p class="jc-sub">Sortie et retour regroupés par l’identifiant local du VPN. Aucun marqueur n’est injecté dans Internet.</p></div><button type="button" id="jf-refresh">Actualiser</button></div>
+    <div class="jc-flow-help">Le contenu TLS n’est jamais déchiffré. DNS et SNI sont affichés seulement lorsqu’ils sont visibles. Un UID réservé ou partagé reste <strong>non attribuable</strong>.</div>
+    <div class="v33-controls"><label class="v33-grow">Application, UID, IP, domaine, ID événement ou flux<input id="jf-search" type="search" placeholder="Ex. Gmail, UID 1000, 142.250…, 889144, flow…"></label><label>Lignes<select id="jf-page-size"><option>25</option><option selected>100</option><option>250</option><option>500</option></select></label></div>
+    <p id="jf-snapshot" class="jc-sub" aria-live="polite"></p>
+    <p id="jf-status" class="jc-sub" aria-live="polite"></p>
+    <div id="jf-list" class="jc-flow-list"></div>
+    <button type="button" id="jf-more" hidden>Afficher des flux plus anciens</button>
+  </section>
+
+  <section class="jc-pane" id="jc-pane-trackers" aria-label="Traqueurs réseau observés" hidden>
+    <div class="jc-row jc-between"><div><h2>Traqueurs · trajets observés</h2><p class="jc-sub">Ici, pas besoin d’exporter de fichier. AIV regroupe directement les sorties réseau qui correspondent aux signatures Exodus, puis garde la chronologie du même flux local pour que tu puisses suivre sa trail.</p></div><button type="button" id="jt-refresh">Actualiser</button></div>
+    <div class="v33-controls"><label class="v33-grow">Rechercher une application, un traqueur ou une destination<input id="jt-search" type="search" placeholder="Ex. Google, WhatsApp, Analytics, graph.facebook.com"></label><label>Groupes<select id="jt-page-size"><option>12</option><option selected>25</option><option>30</option><option>50</option></select></label></div>
+    <div id="jt-segment-status" class="jt-segment-status"></div>
+    <p id="jt-live" class="jc-sub" aria-live="polite"></p>
+    <p id="jt-status" class="jc-sub" aria-live="polite"></p>
+    <div id="jt-detail" class="jt-detail" hidden></div>
+    <div id="jt-list" class="jt-groups"></div>
+    <div class="jc-row jc-between"><button type="button" id="jt-prev" hidden>Plus récents</button><span id="jt-page"></span><button type="button" id="jt-more" hidden>Plus anciens</button></div>
+  </section>
+
+  <section class="jc-pane" id="jc-pane-journal" aria-label="Journal des événements">
+    <div class="jc-row jc-between"><h3>Chronologie</h3><div class="jc-row"><button type="button" id="jc-import-toggle" class="jc-primary" aria-expanded="false" aria-controls="jc-import-form">Importer</button><button type="button" id="jc-export" disabled>Exporter</button></div></div>
+    <div id="jc-import-form" class="jc-form" hidden>
+      <label>Fichier d’événements<input id="jc-file" type="file" accept=".json,.jsonl,.ndjson,.csv,application/json,text/csv"></label>
+      <details><summary>Coller des événements</summary><label for="jc-paste">JSON, JSONL ou CSV</label><textarea id="jc-paste" spellcheck="false" placeholder='[{"timestamp":"2026-09-09T13:33:00Z","app":"Nom de l’app","action":"Action observée","transport":"Wi-Fi","destination":"Serveur contacté"}]'></textarea><button type="button" id="jc-paste-submit">Importer le texte</button></details>
+      <p class="jc-sub">Les nouveaux événements s’ajoutent au journal. Un fichier identique déjà importé est ignoré. Limites : 10 Mio par fichier, 50 000 événements au total.</p>
+      <details><summary>Format et conservation</summary><p>Chaque événement doit contenir une action, avec une application, un acteur ou une destination. Les heures sans fuseau restent signalées. Les lignes répétées sont conservées; une ligne invalide annule l’import entier.</p><p>Les données restent dans cette vue jusqu’à sa fermeture. Exporter permet de les conserver et de les réimporter. Aucun enregistrement sur le téléphone ne démarre ici.</p></details>
+    </div>
+    <p id="jc-message" class="jc-status" role="status" hidden></p><p id="jc-error" class="jc-error" role="alert" hidden></p>
+    <div id="jc-filter-area" hidden>
+      <div class="jc-toolbar">
+        <label class="jc-wide">Rechercher dans le journal<input id="jc-search" type="search" placeholder="Application, domaine, action ou ID d’événement…"></label>
+        <label>Lignes<select id="jc-page-size"><option>25</option><option selected>100</option><option>250</option><option>500</option></select></label>
+        <label>Application ou acteur<select id="jc-app"><option value="">Tous les acteurs</option></select></label>
+        <label>Connexion<select id="jc-transport"><option value="">Toutes les connexions</option><option>Wi-Fi</option><option>LTE / 5G</option><option>Bluetooth</option><option>Partage</option><option>USB</option><option>Ethernet</option><option>VPN</option><option>Interne</option><option>Inconnue</option></select></label>
+      </div>
+      <div class="jc-row jc-between"><span id="jc-filter-count" class="jc-sub jc-count"></span><label>Trier<select id="jc-order"><option value="new">Plus récent</option><option value="old">Plus ancien</option><option value="import">Ordre d’importation</option></select></label></div>
+    </div>
+    <div id="jc-empty" class="jc-empty"><span class="jc-empty-symbol" aria-hidden="true">0</span><h3>Prêt à recevoir ton journal</h3><p>Aucun événement du téléphone reçu. Les permissions Bixby déjà relevées sont consultables dans leur onglet.</p><button type="button" id="jc-see-bixby">Voir les permissions Bixby</button></div>
+    <div id="jc-detail" class="jc-detail" hidden></div>
+    <ol id="jc-events" class="jc-events" aria-label="Événements importés"></ol>
+    <div id="jc-pagination" class="jc-pagination" hidden><button type="button" id="jc-prev">Précédent</button><span id="jc-page" class="jc-count"></span><button type="button" id="jc-next">Suivant</button></div>
+    <div id="jc-export-panel" class="jc-form" hidden><div class="jc-row jc-between"><h3>Copie du journal</h3><button type="button" id="jc-export-close">Fermer</button></div><p class="jc-sub">Si le téléchargement est bloqué ici, sélectionne et copie ce contenu pour le conserver.</p><textarea id="jc-export-text" readonly aria-label="Journal complet à copier"></textarea><button type="button" id="jc-select-export">Sélectionner le contenu</button></div>
+  </section>
+  <section class="jc-pane" id="jc-pane-anomalies" aria-label="Anomalies et traces observables" hidden>
+    <div class="jc-row jc-between"><h3>Ce qui mérite un examen</h3><button type="button" id="jc-analysis-export">Exporter l’analyse</button></div>
+    <p class="jc-sub" style="margin-top:12px">Analyse automatique sur ce téléphone, à partir des événements conservés. Chaque signalement explique sa règle et montre ses sources.</p>
+    <p id="jc-analysis-progress" class="jc-sub" role="status" style="margin-top:12px">État de l’analyse…</p>
+    <p id="jc-analysis-coverage" class="jc-sub" style="margin-top:8px"></p>
+    <div id="jc-shizuku-cleanup" class="jc-form" style="margin-top:12px">
+      <strong>Nettoyage Shizuku L4/L5</strong>
+      <p id="jc-shizuku-status" class="jc-sub" role="status">État Shizuku…</p>
+      <div class="jc-actions">
+        <button type="button" id="jc-shizuku-run" class="jc-primary">Retirer les permissions L4/L5</button>
+        <button type="button" id="jc-shizuku-restore">Restaurer le dernier nettoyage</button>
+      </div>
+    </div>
+    <div class="jc-toolbar">
+      <label class="v33-grow">Rechercher<input id="jc-analysis-search" type="search" placeholder="Application, signal, groupe ou ID événement…"></label>
+      <label>Vue<select id="jc-analysis-kind"><option value="anomaly">Anomalies et diagnostics</option><option value="trace">Traces de l’enquête</option></select></label>
+      <label>Lignes<select id="jc-analysis-size"><option>25</option><option>100</option><option>250</option><option selected>500</option></select></label>
+      <label class="jc-check"><input id="jc-analysis-unread" type="checkbox">À lire uniquement</label>
+    </div>
+    <p id="jc-analysis-message" role="status" hidden></p>
+    <details id="jc-analysis-settings"><summary>Règles et seuils</summary><div class="jc-stack" style="padding-bottom:16px">
+      <label class="jc-check"><input id="jc-rule-failures" type="checkbox">Échecs répétés : même application et même destination</label>
+      <label>Nombre d’échecs en 5 minutes<input id="jc-rule-count" type="number" min="2" max="100" step="1" value="8"></label>
+      <label class="jc-check"><input id="jc-rule-volume" type="checkbox">Volume envoyé par application</label>
+      <label>Seuil en Mio sur 5 minutes<input id="jc-rule-mib" type="number" min="1" max="1024" step="1" value="10"></label>
+      <p class="jc-sub">Ces seuils sont des réglages de départ, pas des limites universelles de danger. Les UID inconnus ou partagés sont exclus de ces deux règles.</p>
+      <label class="jc-check"><input id="jc-rule-dns" type="checkbox">Changement des résolveurs DNS : comparaison avant/après du même réseau</label>
+      <label class="jc-check"><input id="jc-rule-collection" type="checkbox">Erreurs et intervalles signalés par le collecteur</label>
+      <label class="jc-check"><input id="jc-rule-watch" type="checkbox">Domaines que tu choisis de surveiller</label>
+      <label>Un domaine par ligne, sans https:// ni joker<textarea id="jc-rule-domains" rows="3" maxlength="13000" spellcheck="false" placeholder="exemple.org"></textarea></label>
+      <p class="jc-sub">Le nom exact et ses sous-domaines correspondent. Cette liste est vide au départ.</p>
+      <label class="jc-check"><input id="jc-rule-research" type="checkbox">Traces de l’enquête : domaines du rapport et indices de port OTLP</label>
+      <p class="jc-sub">Les nouvelles règles concernent les événements à analyser. Les anciens signalements restent consultables. Le choix « Réduire le bruit » est aussi mémorisé avec ces réglages.</p>
+      <button type="button" id="jc-analysis-save" class="jc-primary">Enregistrer les règles</button>
+    </div></details>
+    <details><summary>Ce que la recherche de l’enquête peut voir</summary>
+      <div class="jc-stack" style="padding-bottom:16px">
+        <p><strong>DNS et SNI observables :</strong> c2s.ic.gov, sc2s.sgov.gov, api.aws.ic.gov, api.aws.scloud et les noms bedrock-runtime-fips d’Amazon. La correspondance porte sur le nom complet ou un sous-domaine réel, jamais sur une simple portion de texte.</p>
+        <p><strong>Indice de port :</strong> 4317 et 4318 sont les ports par défaut d’OTLP selon OpenTelemetry. Le port seul ne confirme pas ce protocole. D’autres ports peuvent être utilisés; une connexion sur 443 ne déclenche pas cette règle.</p>
+        <p><strong>Non collecté ici :</strong> en-têtes X-OpenAI-Fedramp, claims JWT, chemins /wham/config/bundle et /api/codex/config/bundle, paramètres log_user_prompt, événements codex.user_prompt ou codex.network_proxy.policy_decision, contenu OTLP, appels de permissions Android, symboles crypto et code exécuté dans les apps.</p>
+        <p>Les noms TLS avec extension ECH/GREASE sont exclus de ces règles de domaine. Le DNS chiffré, le cache et les connexions directes par IP peuvent masquer un nom. Une IP, le port 443, le mot FIPS ou une bibliothèque partagée ne permettent pas de reconstituer cette chaîne.</p>
+        <p>Le rapport sert de piste fournie par toi. Un nom DNS ou SNI correspondant ne confirme pas la réussite de la connexion, son usage, l’export de prompts ni le routage de ton compte. example.com/otel est un exemple documentaire et n’est pas une destination recherchée.</p>
+      </div>
+    </details>
+    <p id="jc-analysis-count" class="jc-sub" style="margin:14px 0"></p>
+    <div id="jc-analysis-detail" class="jc-detail" hidden></div>
+    <p id="jc-analysis-empty" class="jc-note" hidden></p>
+    <ol id="jc-analysis-list" class="jc-events" aria-label="Signalements regroupés"></ol>
+    <div id="jc-analysis-pagination" class="jc-pagination" hidden><button type="button" id="jc-analysis-prev">Précédent</button><span id="jc-analysis-page"></span><label class="v33-jump">Aller à <input id="jc-analysis-go" type="number" min="1" step="1" inputmode="numeric"><button type="button" id="jc-analysis-jump">OK</button></label><button type="button" id="jc-analysis-next">Suivant</button></div>
+    <p class="jc-sub" style="margin-top:16px">Les répétitions sont regroupées par périodes de 5 minutes pour les seuils et de 15 minutes pour les autres règles. « Marquer vu » vaut pour ce groupe. Aucune connexion n’est bloquée.</p>
+    <button type="button" id="jc-analysis-retry" style="margin-top:12px">Reprendre l’analyse en attente</button>
+  </section>
+
+  <section class="jc-pane" id="jc-pane-audit" hidden aria-labelledby="ja-title">
+    <h3 id="ja-title">Applications · Autorisations</h3>
+    <p class="jc-sub">Le manifeste installé, la référence publiée et les observations réunis par application.</p>
+    <div class="ja-counters"><div class="ja-counter">Applications visibles<b id="ja-total">—</b></div><div class="ja-counter">Applications système<b id="ja-system">—</b></div><div class="ja-counter">Inventaire<b id="ja-scan-number">—</b></div></div>
+    <div class="jc-row"><button id="ja-scan" type="button">Actualiser l’inventaire</button><button id="ja-import" type="button">Importer le rapport</button><button id="ja-export" type="button">Exporter le dernier inventaire</button><button id="ja-export-full" type="button">Exporter tout l’historique</button></div>
+    <p id="ja-status" role="status" class="jc-sub"></p>
+    <div class="ja-legend"><span class="ja-badge ja-green">Ratio &lt; 2×</span><span class="ja-badge ja-yellow">2× à &lt; 3×</span><span class="ja-badge ja-orange">3× à &lt; 4×</span><span class="ja-badge ja-red">≥ 4×</span><span class="ja-badge ja-gray">À compléter</span></div>
+    <p class="jc-note">Couleurs = priorité de revue selon ta règle. Les valeurs non vérifiées portent la mention « provisoire ». Zéro ou valeur manquante : comparaison indisponible.</p>
+    <div class="jc-toolbar"><label>Application, paquet ou permission<input id="ja-search" type="search"></label><label>Type<select id="ja-scope"><option value="system">Applications système</option><option value="">Toutes les applications</option><option value="other">Autres applications</option></select></label></div>
+    <p id="ja-count" class="jc-sub"></p><div id="ja-list"></div>
+    <div class="jc-row"><button id="ja-prev" type="button">Précédent</button><span id="ja-page"></span><button id="ja-next" type="button">Suivant</button></div>
+    <section id="ja-detail" aria-live="polite"></section>
+  </section>
+
+  <section class="jc-pane" id="jc-pane-permissions" aria-label="Permissions de Bixby" hidden>
+    <div class="jc-row jc-between"><h3>Permissions de Bixby</h3><span class="jc-chip">Tes 10 captures</span></div>
+    <p class="jc-sub" style="margin-top:12px">Inventaire des libellés lisibles. L’état accordé ou refusé et l’utilisation effective ne sont pas établis par ces images.</p>
+    <label style="margin:16px 0">Rechercher une permission<input id="jc-permission-search" type="search" placeholder="Microphone, réseau, Samsung…"></label>
+    <p id="jc-permission-count" class="jc-sub jc-count" style="margin-bottom:10px"></p>
+    <div id="jc-permissions"></div>
+  </section>
+  <section class="jc-pane" id="jc-pane-diagnostic" aria-label="Diagnostic et fichiers" hidden>
+    <h3>Diagnostic et fichiers</h3>
+    <p class="jc-note">Le journal continue de s’enregistrer sans Internet. Pour examiner une coupure, cherche « Signal de vie », « Internet » et « Capture » aux heures concernées. Les nouveaux relevés distinguent la validation Internet d’Android, l’état du VPN et une interruption du collecteur.</p>
+    <div class="jc-form"><h3>Exports et récupération</h3>
+      <p>Un instantané complet est préparé avant la copie. Tu peux laisser la collecte active. Le format JSONL garde un événement par ligne et facilite la récupération d’un export interrompu.</p>
+      <div class="jc-row"><button type="button" id="jt-export-lines">Exporter en JSONL</button><button type="button" id="jt-recover">Récupérer un JSON / JSONL</button><button type="button" id="jt-save-recovery">Enregistrer la copie récupérée</button><button type="button" id="jt-save-last">Réenregistrer le dernier instantané</button></div>
+      <p id="jt-files-status" role="status" aria-live="polite"></p><p id="jt-recovery-status" class="jc-sub"></p>
+      <p class="jc-sub">La récupération produit une copie séparée et indique les limites. Elle ne modifie pas l’original et ne mélange pas les événements importés avec la collecte actuelle. Les instantanés privés sont temporaires; conserve l’export choisi.</p>
+    </div>
+    <div class="jc-form"><h3>Croiser avec un diagnostic Android</h3>
+      <p>Cette application n’a pas accès automatiquement au logcat des autres processus. Elle peut lire un diagnostic que tu sélectionnes sur le téléphone. Si disponible sur ton Samsung : <strong>Options de développement → Créer un rapport de bug</strong>, puis enregistrer ou partager le rapport dans tes fichiers.</p>
+      <p class="jc-sub">Formats : texte logcat avec PID, rapport bugreport*.txt ou son ZIP, et lignes JSON de preuves de socket documentées dans les sources. Un rapport créé après une panne peut déjà avoir perdu les lignes de cette période. Le rapport peut contenir des données privées; seul le fichier que tu sélectionnes est lu localement.</p>
+      <div class="jc-row"><label>Année des lignes sans année<input id="jt-year" type="number" min="1970" max="2100" step="1"></label><label>Heure du diagnostic = UTC + minutes<input id="jt-offset" type="number" min="-840" max="840" step="1"></label><label>Comparer à ± secondes<input id="jt-window" type="number" min="1" max="60" step="1"></label></div>
+      <p class="jc-sub">Exemple : UTC−4 = −240 minutes. Confirme l’heure du fichier; les horodatages epoch UTC ignorent ce décalage. L’année et le fuseau choisis s’appliquent aux nouveaux imports, pas aux diagnostics déjà indexés.</p>
+      <div class="jc-row"><button type="button" id="jt-import" class="jc-primary">Importer un diagnostic</button><button type="button" id="jt-save-settings">Appliquer la fenêtre de comparaison</button></div>
+      <p id="jt-diagnostic-status" role="status" aria-live="polite"></p><div id="jt-imports"></div>
+      <p class="jc-note">Ensuite, ouvre une connexion dans <strong>Journal</strong> et touche <strong>Croiser avec le diagnostic</strong>. Une proximité d’heure ou une mention d’IP reste une piste. Même un PID peut héberger plusieurs services. Les messages bruts du diagnostic ne sont pas conservés dans l’index.</p>
+    </div>
+  </section>
+
+  <section class="jc-pane" id="jc-pane-decisions" hidden>
+    <h2>Décisions AIV</h2>
+    <p>Règles locales et qualité des observations. DENIED exprime une décision : aucun blocage Android n’est appliqué.</p>
+    <p>La collecte fonctionne indépendamment de l’analyse AIV. Active l’analyse ici pour reprendre progressivement l’historique; tu peux la mettre en pause à tout moment.</p>
+    <div class="jc-actions"><button id="aiv-start">Activer l’analyse AIV</button><button id="aiv-stop">Arrêter AIV</button><button id="aiv-refresh">Actualiser</button><button id="aiv-verify">Vérifier la chaîne</button><button id="aiv-export">Exporter signé</button></div>
+    <p id="aiv-status" role="status"></p>
+    <label>Verdict <select id="aiv-filter"><option value="">Tous</option><option>ALLOW</option><option>WATCH</option><option>DENIED</option></select></label>
+    <div id="aiv-rows"></div><button id="aiv-next">Page suivante</button><button id="aiv-first">Première page</button>
+    <div id="aiv-detail"></div>
+    <h3>Signalements par application</h3><p>Ratio des événements WATCH ou DENIED parmi les événements évalués; inclut les observations insuffisantes, ne mesure pas une intention.</p><div id="aiv-apps"></div>
+    <details><summary>Règles locales versionnées</summary><h4>Couleurs des points AIV</h4><p>Seuils du multiplicateur, communs aux applications, aux groupes et au global. Enregistrement local sans nouvelle APK.</p><div id="aiv-score-colors"></div><h4>Règles R1 à R6 et règles personnalisées</h4><div id="aiv-rules"></div><label>Configuration JSON d’une règle<textarea id="aiv-config" rows="9" style="width:100%" spellcheck="false"></textarea></label><button id="aiv-save">Enregistrer une nouvelle version</button></details>
+  </section>
+  <section class="jc-pane" id="jc-pane-references" hidden><h2>Référentiels</h2><p>Bayton et Exodus sont intégrés localement. Les états de permissions viennent du téléphone; les descriptions et signatures viennent des catalogues datés. La visibilité réelle sur Google Play reste indéterminée sans une liste de cette version. L1 vert · L2 jaune · L3 orange · L4 rouge · L5 gris. Bleu : indéterminé.</p><button id="aiv-import">Importer un référentiel JSON</button><button id="aiv-ref-refresh">Actualiser l’inventaire et la référence</button><button id="aiv-ref-export">Exporter la référence actuelle</button><p id="aiv-local-ref-status"></p><div id="aiv-references"></div><div id="v22-reference-status"></div><h3>Correspondances Exodus dans le journal</h3><input id="v22-tracker-query" type="search" placeholder="Application, domaine ou traqueur"><button id="v22-tracker-search">Chercher</button><button id="v22-tracker-resume">Reprendre les analyses AIV</button><button id="v22-tracker-export">Exporter les correspondances</button><p id="v22-tracker-status"></p><div id="v22-tracker-results"></div><button id="v22-tracker-more">Suite</button></section>
+
+<section class="jc-pane" id="jc-pane-penalty" aria-label="Barème AIV" hidden>
+  <h2>Barème AIV</h2>
+  <p>Les points montent avec les pénalités. Le nombre central est la moyenne des écarts des applications concernées : somme H / nombre d’applications avec H > 0. Il ne contient pas le multiplicateur. Le multiplicateur du groupe vaut total pondéré / total de base. Toutes les modifications sont enregistrées sur ce téléphone.</p>
+  <div class="ja-form ja-card" id="jp-controls"></div>
+  <p class="jc-note">Les couleurs V22 suivent les niveaux de capacité L1 à L5. Les réglages numériques historiques ci-dessous restent conservés séparément et ne changent pas ces couleurs. Aucun niveau ne constitue une preuve de malveillance.</p>
+  <details class="ja-card"><summary>Réglages complets en JSON · règles et observations</summary>
+    <p>Les règles peuvent viser une permission exacte ou un préfixe, imposer un état accordé et attribuer plusieurs niveaux. Chaque règle conserve sa source et sa raison. L4 additionne les portées des capacités distinctes par défaut. L5 utilise les relations d’installation seulement pour un accès spécial actif explicitement confirmé. Le catalogue automatique est modifiable dans automatic.catalog.</p>
+    <label>Configuration complète<textarea id="jp-json" rows="22" spellcheck="false" style="width:100%;font-family:monospace"></textarea></label>
+    <button type="button" id="jp-validate">Vérifier et prévisualiser</button>
+    <button type="button" id="jp-apply-json">Appliquer le JSON</button>
+    <pre id="jp-preview" style="white-space:pre-wrap"></pre>
+  </details>
+  <div class="jc-row">
+    <button type="button" id="jp-import">Importer un barème et des observations</button>
+    <button type="button" id="jp-export">Exporter mes réglages</button>
+    <button type="button" id="jp-reset">Préparer le barème par défaut</button>
+  </div>
+  <p id="jp-status" class="jc-note" role="status"></p>
+</section>
+
+  <section class="jc-pane" id="jc-pane-sources" aria-label="Sources et couverture" hidden>
+    <h3>Ce qui alimente cette vue</h3>
+    <div class="jc-source"><strong>Captures de Bixby</strong><span class="jc-sub">Inventaire manuel des autorisations visibles · aucun événement d’utilisation déduit.</span></div>
+    <div class="jc-source"><strong>Activité du téléphone</strong><span class="jc-label">Aucune source connectée</span><span class="jc-sub">Wi-Fi, LTE/5G, Bluetooth, partage de connexion, OS et matériel : aucune collecte en direct dans cette vue.</span></div>
+    <div id="jc-import-sources"></div>
+    <div class="jc-note" style="margin-top:16px">Ce lecteur lit les fichiers que tu choisis. Il ne demande pas l’accès au microphone, à la caméra ou aux capteurs et n’envoie pas les données importées sur le réseau.</div>
+    <p class="jc-sub" style="margin-top:12px">Un import restitue les événements rapportés par sa source. Sa couverture et les périodes manquantes restent à vérifier.</p>
+  </section>
+  <footer class="jc-foot">Lecture locale des données choisies · sauvegarde par export</footer>
+</div>
+<style>{{AIV_STYLE_08}}</style><script>{{AIV_SCRIPT_01}}</script>
+<!-- V32_BUILD_TRIGGER -->
+</main></body></html>

@@ -1,0 +1,8 @@
+
+:root{color-scheme:dark;--aiv-bg:#05090d;--aiv-surface:#0c161c;--aiv-surface-2:#0f2420;--aiv-line:#1e2f33;--aiv-ink:#eaf5f2;--aiv-sub:#93a8ab;--aiv-accent:#4fe0c9;--aiv-warn:#f0b64c;--aiv-danger:#ff5470}
+html,body{background:#05090d!important;color:#eaf5f2!important}
+body{max-width:1120px;margin-inline:auto}
+button,.button,[role="button"]{border-radius:14px!important}
+#jc-reader .ja-unknown{border-color:#79b5dd;color:#b4d8ed}
+#jc-reader .ja-gray,#jc-reader [data-penalty-color="gray"]{border-color:#a6a9ad}
+#jc-reader [data-penalty-color="gray"].jc-score-ring,#jc-reader [data-penalty-color="gray"].jc-group-disc{background:#797c82}

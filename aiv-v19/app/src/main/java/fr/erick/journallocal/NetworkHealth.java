@@ -9,7 +9,7 @@ final class NetworkHealth {
     private String previous="";private long unavailableAt=-1,unavailableWall=0,previousSample=-1;private boolean intervalHasGap=false;
     NetworkHealth(Context c){manager=c.getSystemService(ConnectivityManager.class);store=EventStore.get(c);}
     JSONObject sample(){
-        long elapsed=SystemClock.elapsedRealtime(),wall=System.currentTimeMillis();if(previousSample>=0&&elapsed-previousSample>150000)intervalHasGap=true;previousSample=elapsed;
+        long elapsed=SystemClock.elapsedRealtime(),wall=System.currentTimeMillis();if(previousSample>=0&&elapsed-previousSample>AivConfig.COLLECTION_GAP_MS)intervalHasGap=true;previousSample=elapsed;
         try{
             JSONArray networks=new JSONArray();boolean validated=false,physical=false;
             for(Network network:manager.getAllNetworks()){

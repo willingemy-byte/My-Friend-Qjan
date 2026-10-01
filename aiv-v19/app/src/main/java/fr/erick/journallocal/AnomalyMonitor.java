@@ -104,11 +104,11 @@ public final class AnomalyMonitor extends SQLiteOpenHelper {
         if(saved!=null){JSONObject config=new JSONObject(saved);
             if(!"snapshots/1".equals(config.optString("engine"))){config.put("revision",config.optLong("revision")+1).put("engine","snapshots/1").put("replay_target",EventStore.get(context).latestId());if(!context.getSharedPreferences("analysis",0).edit().putString("settings",config.toString()).commit())throw new IOException("Migration des réglages non enregistrée");}
             return config;}
-        JSONObject initial=EventStore.object("failures",true,"volume",true,"dns",true,"collection",true,"watch",true,"research",true,"failure_count",8,"upload_mib",10,"domains",new JSONArray(),"revision",0,"quiet",true,"engine","snapshots/1","replay_target",EventStore.get(context).latestId());
+        JSONObject initial=EventStore.object("failures",true,"volume",true,"dns",true,"collection",true,"watch",true,"research",true,"failure_count",AivConfig.ANOMALY_FAILURE_COUNT_DEFAULT,"upload_mib",AivConfig.ANOMALY_UPLOAD_MIB_DEFAULT,"domains",new JSONArray(),"revision",0,"quiet",true,"engine","snapshots/1","replay_target",EventStore.get(context).latestId());
         if(!context.getSharedPreferences("analysis",0).edit().putString("settings",initial.toString()).commit())throw new IOException("Paramètres initiaux non enregistrés");return initial;
     }
     private AnomalyRules.Settings parseSettings(JSONObject j){
-        AnomalyRules.Settings s=new AnomalyRules.Settings();s.failures=j.optBoolean("failures",true);s.volume=j.optBoolean("volume",true);s.dns=j.optBoolean("dns",true);s.collection=j.optBoolean("collection",true);s.watch=j.optBoolean("watch",true);s.research=j.optBoolean("research",true);s.failureCount=j.optInt("failure_count",8);s.uploadMiB=j.optInt("upload_mib",10);s.domains=strings(j.optJSONArray("domains"));s.validate();return s;
+        AnomalyRules.Settings s=new AnomalyRules.Settings();s.failures=j.optBoolean("failures",true);s.volume=j.optBoolean("volume",true);s.dns=j.optBoolean("dns",true);s.collection=j.optBoolean("collection",true);s.watch=j.optBoolean("watch",true);s.research=j.optBoolean("research",true);s.failureCount=j.optInt("failure_count",AivConfig.ANOMALY_FAILURE_COUNT_DEFAULT);s.uploadMiB=j.optInt("upload_mib",AivConfig.ANOMALY_UPLOAD_MIB_DEFAULT);s.domains=strings(j.optJSONArray("domains"));s.validate();return s;
     }
     public synchronized JSONObject change(String action,String value)throws Exception{
         if(value==null||value.length()>16000)throw new IllegalArgumentException("Paramètres trop longs.");

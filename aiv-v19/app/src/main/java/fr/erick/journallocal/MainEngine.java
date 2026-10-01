@@ -34,7 +34,7 @@ public final class MainEngine {
         }
         JSONObject app=cache.apps.get(pkg);out.put("scan_id",cache.scan).put("scan_ended_ms",cache.ended).put("inventory_app",app==null?JSONObject.NULL:app);
         long age=e.getLong("timestamp_ms")-cache.ended;
-        out.put("inventory_applicable",cache.scan>0&&age>=0&&age<=86400000&&!pkg.isEmpty());
+        out.put("inventory_applicable",cache.scan>0&&age>=0&&age<=AivConfig.MAIN_INVENTORY_MAX_AGE_MS&&!pkg.isEmpty());
         JSONArray refs=cache.references.get(pkg);
         if(refs==null){refs=new JSONArray();if(!pkg.isEmpty())try(Cursor c=db.rawQuery("SELECT source,fetched_ms,payload FROM reference_apps WHERE package_name=? ORDER BY source",new String[]{pkg})){while(c.moveToNext()){JSONObject row=AivStore.row(c),ref=new JSONObject(row.getString("payload"));String original=row.getString("payload");row.put("payload_sha256",ChainStore.hex(ChainStore.digest().digest(original.getBytes(java.nio.charset.StandardCharsets.UTF_8))));row.put("payload",EventStore.object("expected_ips",row.getString("source").equals("user")&&ref.has("expected_ips")?ref.getJSONArray("expected_ips"):JSONObject.NULL).toString());refs.put(row);}}cache.references.put(pkg,refs);}
         out.put("references",refs);return out;
@@ -55,7 +55,7 @@ public final class MainEngine {
     private List<CoherenceRules.Rule> load(SQLiteDatabase db,Map<Long,JSONObject> snapshots)throws Exception{
         List<CoherenceRules.Rule> rules=new ArrayList<>();
         try(Cursor c=db.rawQuery("SELECT * FROM main_rules r WHERE version=(SELECT MAX(version) FROM main_rules WHERE name=r.name)",null)){while(c.moveToNext()){
-            JSONObject row=AivStore.row(c),condition=new JSONObject(row.getString("condition"));CoherenceRules.Rule r=new CoherenceRules.Rule();r.id=row.getLong("id");r.name=row.getString("name");r.decision=row.getString("decision");r.priority=row.getInt("priority");r.version=row.getInt("version");r.enabled=row.getInt("enabled")==1;r.threshold=condition.optLong("threshold",10485760);
+            JSONObject row=AivStore.row(c),condition=new JSONObject(row.getString("condition"));CoherenceRules.Rule r=new CoherenceRules.Rule();r.id=row.getLong("id");r.name=row.getString("name");r.decision=row.getString("decision");r.priority=row.getInt("priority");r.version=row.getInt("version");r.enabled=row.getInt("enabled")==1;r.threshold=condition.optLong("threshold",AivConfig.MAIN_THRESHOLD_BYTES_DEFAULT);
             JSONArray domains=condition.optJSONArray("domains");r.domains=new ArrayList<>();if(domains!=null)for(int i=0;i<domains.length();i++)r.domains.add(domains.getString(i));rules.add(r);snapshots.put(r.id,row);
         }}return CoherenceRules.sorted(rules);
     }
@@ -88,10 +88,10 @@ public final class MainEngine {
     }
     /** Local explicit policy editing: append a version; no executable SQL/JS condition. */
     public static void configure(Context ctx,String json)throws Exception{
-        if(json.length()>32768)throw new IllegalArgumentException("Configuration trop longue");JSONObject input=new JSONObject(json);String name=input.getString("name"),decision=input.getString("decision");
+        if(json.length()>AivConfig.MAIN_CONFIG_MAX_CHARS)throw new IllegalArgumentException("Configuration trop longue");JSONObject input=new JSONObject(json);String name=input.getString("name"),decision=input.getString("decision");
         if(!name.matches("R[1-6]")||!decision.matches("ALLOW|DENIED|WATCH"))throw new IllegalArgumentException("Règle invalide");JSONObject condition=input.getJSONObject("condition");
-        if(!name.equals(condition.getString("type"))||condition.optLong("threshold",10485760)<0)throw new IllegalArgumentException("Condition invalide");
-        for(String key:new String[]{"domains","whitelist"}){JSONArray list=condition.optJSONArray(key);if(list!=null){if(list.length()>100)throw new IllegalArgumentException("Liste trop longue");for(int i=0;i<list.length();i++)if(!list.getString(i).matches("[A-Za-z0-9.:-]{1,253}"))throw new IllegalArgumentException("Nom invalide");}}
+        if(!name.equals(condition.getString("type"))||condition.optLong("threshold",AivConfig.MAIN_THRESHOLD_BYTES_DEFAULT)<0)throw new IllegalArgumentException("Condition invalide");
+        for(String key:new String[]{"domains","whitelist"}){JSONArray list=condition.optJSONArray(key);if(list!=null){if(list.length()>AivConfig.MAIN_LIST_MAX_ITEMS)throw new IllegalArgumentException("Liste trop longue");for(int i=0;i<list.length();i++)if(!list.getString(i).matches("[A-Za-z0-9.:-]{1,253}"))throw new IllegalArgumentException("Nom invalide");}}
         SQLiteDatabase db=EventStore.get(ctx).getWritableDatabase();db.beginTransaction();try{
             long version;try(Cursor c=db.rawQuery("SELECT COALESCE(MAX(version),0)+1 FROM main_rules WHERE name=?",new String[]{name})){c.moveToFirst();version=c.getLong(0);}
             db.execSQL("INSERT INTO main_rules(name,condition,decision,priority,enabled,version,created_ms) VALUES(?,?,?,?,?,?,?)",new Object[]{name,condition.toString(),decision,input.getInt("priority"),input.getBoolean("enabled")?1:0,version,System.currentTimeMillis()});

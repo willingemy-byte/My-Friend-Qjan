@@ -1,0 +1,3 @@
+body{margin:0;padding:16px;font-family:system-ui,sans-serif;background:light-dark(#f0f4f2,#101516);color-scheme:light dark}main{max-width:800px;margin:0 auto}h2{font-size:1.35rem}h3{font-size:1.05rem}button,input,select,textarea{font-size:1rem}@media(max-width:460px){body{padding:8px}}#jc-reader .ja-unknown{border-color:#79b5dd;color:#b4d8ed}
+#jc-reader .ja-gray,#jc-reader [data-penalty-color="gray"]{border-color:#a6a9ad}
+#jc-reader [data-penalty-color="gray"].jc-score-ring,#jc-reader [data-penalty-color="gray"].jc-group-disc{background:#797c82}

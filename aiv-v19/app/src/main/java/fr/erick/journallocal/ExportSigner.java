@@ -14,7 +14,7 @@ public final class ExportSigner {
     public static File prepare(Context context)throws Exception{
         PinVault vault=null;String degraded="";
         try{vault=new PinVault();}catch(Exception e){degraded=e.getClass().getSimpleName();}
-        File dir=new File(context.getCacheDir(),"exports");if(!dir.isDirectory()&&!dir.mkdirs())throw new IOException("Cache indisponible");
+        File dir=new File(context.getCacheDir(),AivConfig.PATHS_EXPORTS_CACHE);if(!dir.isDirectory()&&!dir.mkdirs())throw new IOException("Cache indisponible");
         File part=File.createTempFile("aiv-",".part",dir),ready=new File(dir,part.getName()+".jsonl");boolean success=false;
         try{
             MessageDigest digest=ChainStore.digest();

@@ -209,7 +209,7 @@ public final class ShizukuCleanup {
     }
 
     private static int safeServerUid(){try{return Shizuku.getUid();}catch(Throwable t){return -1;}}
-    private static File snapshotFile(Context c){return new File(c.getFilesDir(),"aiv-shizuku-cleanup-last.json");}
+    private static File snapshotFile(Context c){return new File(c.getFilesDir(),AivConfig.PATHS_CLEANUP_SNAPSHOT);}
     private static void writeSnapshot(Context c,JSONObject value)throws IOException{
         File target=snapshotFile(c),tmp=new File(target.getParentFile(),target.getName()+".tmp");
         try(FileOutputStream out=new FileOutputStream(tmp)){out.write(value.toString().getBytes(StandardCharsets.UTF_8));out.getFD().sync();}

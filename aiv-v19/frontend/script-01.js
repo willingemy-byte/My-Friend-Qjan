@@ -1,0 +1,1789 @@
+
+(function () {
+  'use strict';
+  // JOURNAL_CORE_START: parsing and normalization have no DOM or network dependencies.
+  const MAX_BYTES = 10 * 1024 * 1024;
+  const MAX_EVENTS = 50000;
+  function plain(value) { return value !== null && typeof value === 'object' && !Array.isArray(value); }
+  function scalar(value) { return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' ? String(value) : ''; }
+  function first(record, keys) { for (const key of keys) { if (Object.prototype.hasOwnProperty.call(record,key)) { const value = scalar(record[key]); if (value.trim()) return value; } } return ''; }
+  function fold(value) { return String(value).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase(); }
+  function readCSV(input) {
+    const head = input.split(/\r?\n/,1)[0];
+    const separator = (head.match(/;/g)||[]).length > (head.match(/,/g)||[]).length ? ';' : ',';
+    const rows = []; let row = [], cell = '', quoted = false, afterQuote = false;
+    for (let i = 0; i < input.length; i++) {
+      const char = input[i];
+      if (quoted) { if (char === '"') { if (input[i+1] === '"') { cell += '"'; i++; } else { quoted=false; afterQuote=true; } } else { cell+=char; } continue; }
+      if (char === '"') { if (cell !== '' || afterQuote) throw new Error('Guillemets CSV mal placés.'); quoted=true; continue; }
+      if (char === separator) { row.push(cell); cell=''; afterQuote=false; continue; }
+      if (char === '\n' || char === '\r') { if (char === '\r' && input[i+1] === '\n') i++; row.push(cell); if(row.some(x=>x!=='')) rows.push(row); row=[]; cell=''; afterQuote=false; continue; }
+      if (afterQuote && char.trim()) throw new Error('Caractère inattendu après un champ CSV.');
+      if (!afterQuote) cell+=char;
+    }
+    if (quoted) throw new Error('Un champ CSV entre guillemets n’est pas fermé.');
+    row.push(cell); if(row.some(x=>x!=='')) rows.push(row);
+    if (rows.length < 2) throw new Error('Le CSV doit contenir des en-têtes et au moins un événement.');
+    const keys = rows.shift().map(x=>x.trim());
+    if(keys.some(x=>!x) || new Set(keys).size !== keys.length) throw new Error('En-têtes CSV vides ou en double.');
+    return rows.map((values,index)=>{ if(values.length !== keys.length) throw new Error('Nombre de colonnes incorrect à la ligne '+(index+2)+'.'); const record=Object.create(null); keys.forEach((key,i)=>Object.defineProperty(record,key,{value:values[i],enumerable:true})); return record; });
+  }
+  function parseJournal(text) {
+    if(new TextEncoder().encode(text).byteLength > MAX_BYTES) throw new Error('Le fichier dépasse 10 Mio. Fractionne-le avant de l’importer.');
+    const clean = text.replace(/^\uFEFF/,'').trim();
+    if(!clean) throw new Error('Le contenu est vide.');
+    let value, metadata = null;
+    if(clean.startsWith('[')) { try { value=JSON.parse(clean); } catch(e) { throw new Error('Tableau JSON invalide. Aucun événement ajouté.'); } }
+    else if(clean.startsWith('{')) {
+      try { value=JSON.parse(clean); }
+      catch(e) { const lines=clean.split(/\r?\n/).filter(x=>x.trim()); try { value=lines.map(x=>JSON.parse(x)); } catch(err) { throw new Error('JSON ou JSONL invalide. Aucun événement ajouté.'); } }
+    } else value=readCSV(clean);
+    if(plain(value)) {
+      if(Array.isArray(value.events)) { metadata=Object.fromEntries(Object.entries(value).filter(([key])=>key!=='events')); value=value.events; }
+      else if(Array.isArray(value.evenements)) { metadata=Object.fromEntries(Object.entries(value).filter(([key])=>key!=='evenements')); value=value.evenements; }
+      else if(value.permissions) throw new Error('Ce fichier contient un inventaire de permissions, pas des événements d’activité.');
+      else value=[value];
+    }
+    if(!Array.isArray(value) || !value.length) throw new Error('Aucun événement trouvé dans ce contenu.');
+    if(value.length>MAX_EVENTS) throw new Error('Le fichier dépasse 50 000 événements. Fractionne-le avant de l’importer.');
+    return { records:value, metadata };
+  }
+  function transportLabel(value) {
+    const v=fold(value).trim();
+    if(!v || ['unknown','inconnu','inconnue'].includes(v))return 'Inconnue';
+    if(/hotspot|tether|partag/.test(v))return 'Partage';
+    if(/wi[ -]?fi|wlan/.test(v))return 'Wi-Fi';
+    if(/lte|5g|4g|3g|cellul|mobile/.test(v))return 'LTE / 5G';
+    if(/bluetooth|\bble\b/.test(v))return 'Bluetooth';
+    if(/usb/.test(v))return 'USB'; if(/ethernet/.test(v))return 'Ethernet'; if(/vpn/.test(v))return 'VPN'; if(/interne|internal|local/.test(v))return 'Interne';
+    return value;
+  }
+  function normalize(record, index, sourceId) {
+    if(!plain(record)) throw new Error('Événement '+(index+1)+' : un objet est attendu.');
+    const action=first(record,['action','event','evenement','événement','type','description']);
+    const actor=first(record,['app','application','actor','acteur','package','process']);
+    const destination=first(record,['destination','target','cible','resource','ressource','domain','domaine','host','remote_ip','ip']);
+    if(!action || (!actor&&!destination)) throw new Error('Événement '+(index+1)+' : action et application/acteur ou destination requis.');
+    const timestamp=first(record,['timestamp','horodatage','time','heure','date','heure_source']);
+    let time=null;
+    const dateParts=/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.exec(timestamp);
+    if(dateParts) {
+      const [,yearText,monthText,dayText,hourText,minuteText,secondText]=dateParts;
+      const year=Number(yearText),month=Number(monthText),day=Number(dayText);
+      const days=[31,year%4===0&&(year%100!==0||year%400===0)?29:28,31,30,31,30,31,31,30,31,30,31];
+      const parsed=Date.parse(timestamp);
+      if(month>=1&&month<=12&&day>=1&&day<=days[month-1]&&Number(hourText)<24&&Number(minuteText)<60&&Number(secondText)<60&&Number.isFinite(parsed))time=parsed;
+    }
+    const transportRaw=first(record,['transport','connection','connexion','network','reseau','réseau']);
+    const item={key:sourceId+':'+index,sourceId,original:record,action,actor:actor||'Acteur inconnu',destination:destination||'Destination inconnue',timestamp,time,transport:transportLabel(transportRaw),transportRaw,result:first(record,['result','résultat','resultat','status','statut'])||'Non renseigné',direction:first(record,['direction','sens'])||'Non renseignée',protocol:first(record,['protocol','protocole'])||'Non renseigné',port:first(record,['port','remote_port'])||'Non renseigné',bytes:first(record,['bytes','octets','volume'])||'Non renseigné',declaredSource:first(record,['source','collector','collecteur'])||'Non renseignée',note:first(record,['note','notes','detail','details'])};
+    item.search=fold([item.actor,item.destination,item.action,item.transport,item.timestamp,item.note,item.result,JSON.stringify(record)].join(' '));
+    return item;
+  }
+  function selectEvents(events, query, app, transport, order) {
+    const q=fold(query.trim());
+    const list=events.filter(e=>(!q||e.search.includes(q))&&(!app||e.actor===app)&&(!transport||e.transport===transport));
+    if(order!=='import')list.sort((a,b)=>a.time===null?(b.time===null?0:1):b.time===null?-1:(order==='old'?a.time-b.time:b.time-a.time));
+    return list;
+  }
+  // JOURNAL_CORE_END
+  const root=document.getElementById('jc-reader'); if(!root)return;
+  const $=id=>root.querySelector('#'+id);
+  const state={events:[],sources:[],payloads:[],page:0,selected:null,tab:'home',busy:false};
+  let PAGE_SIZE=100;
+  const permissionGroups=[
+    ['Activité physique',[['reconnaître les activités physiques','3714.jpg']]],
+    ['Agenda',[["Lire les événements d’agenda et leurs détails",'3714.jpg'],["ajouter ou modifier des événements d’agenda et envoyer des courriels aux invités à l’insu du propriétaire",'3714.jpg']]],
+    ['Appareil photo',[['prendre des photos et filmer des vidéos','3714.jpg']]],
+    ['Appareils à proximité',[["se connecter aux appareils Bluetooth associés",'3714.jpg'],["envoyer annonces aux appareils Bluetooth à proxim.",'3712.jpg'],["découvrir des appareils Bluetooth et s’y connecter",'3712.jpg']]],
+    ['Contacts et comptes',[["modifier vos contacts",'3710.jpg'],["lire vos contacts",'3710.jpg']]],
+    ["Journaux d’appels",[["lire le journal d’appels",'3710.jpg'],["modifier le journal d’appels",'3710.jpg']]],
+    ['Localisation',[["accéder à votre position précise seulement en avant-plan",'3710.jpg'],["accéder à votre position approximative seulement en avant-plan",'3710.jpg'],["accès à la localisation en arrière-plan",'3710.jpg']]],
+    ['Messages texte',[["voir les messages texte ou multimédias",'3708.jpg'],["recevoir des messages WAP",'3708.jpg'],["recevoir des messages multimédias",'3708.jpg'],["recevoir des messages texte",'3708.jpg'],["Autorisation d’envoyer des messages texte, multimédias et RCS par l’entremise de l’API Android Messages",'3708.jpg'],["envoyer et afficher des messages texte",'3708.jpg']]],
+    ['Microphone',[["enregistrer des fichiers audio",'3708.jpg']]],
+    ['Musique et audio',[["lire des fichiers audio à partir de l’espace de stockage partagé",'3706.jpg']]],
+    ['Notifications',[["afficher les notifications",'3706.jpg']]],
+    ['Photos et vidéos',[["lire les fichiers d’images et de vidéos sélectionnés par l’utilisateur dans l’espace de stockage partagé",'3706.jpg'],["lire des fichiers d’image à partir de l’espace de stockage partagé",'3706.jpg'],["lire des fichiers vidéo à partir de l’espace de stockage partagé",'3706.jpg']]],
+    ['Téléphone',[["voir l’état et l’identité du téléphone",'3704.jpg'],["appeler directement des numéros de téléphone",'3704.jpg']]],
+    ['Capteurs corporels',[["Accéder aux données des capteurs corporels si en utilisation (fréq. card., etc.)",'3704.jpg']]],
+    ["Autres autorisations de l’appli",[
+      ['Accès au service Galaxy AI','3704.jpg'],['Writing Composer service','3704.jpg'],["recevoir des données d’Internet",'3704.jpg'],['com.samsung.android.app.parentalcare.permission.READ_CARE','3704.jpg'],['Lect. données gestion. contexte','3702.jpg'],['Service Configuration de Galaxy AI','3702.jpg'],['Service Réponse intelligente','3702.jpg'],['Vérifier les fonctions prises en charge par Samsung Visual Cloud Core','3702.jpg'],['Ouvrir Service personnalisation','3702.jpg'],['modifier la connectivité réseau','3702.jpg'],['exécuter le service en premier plan','3702.jpg'],["s’exécuter au démarrage",'3702.jpg'],['Service Changement de ton du texte','3702.jpg'],['Service Reconnaissance vocale','3700.jpg'],["agrandir ou réduire la barre d’état",'3700.jpg'],['Synthesis Service of Text-to-speech','3700.jpg'],['Preprocess Service Access Permission','3700.jpg'],['Accéder aux informations stockées dans Samsung Wallet','3700.jpg'],["bénéficier d’un accès complet au réseau",'3700.jpg'],["réorganiser les applis en cours d’exécution",'3700.jpg'],['com.samsung.android.app.parentalcare.permission.RECEIVE_BROADCAST','3700.jpg'],['Lect. données gestion. préfér.','3698.jpg'],['Vérifier les fonctions prises en charge par Samsung Core Services','3698.jpg'],['Service Résumé de texte','3698.jpg'],['Service Correction de texte','3698.jpg'],['envoyer une diffusion persistante','3698.jpg'],['Service et paramètres Reconnaissance vocale','3698.jpg'],['activer/désactiver la connexion Wi-Fi','3698.jpg'],["exécuter le service d’avant-plan avec le type « synchronisation des données »",'3698.jpg'],['afficher les connexions réseau','3698.jpg'],['Réception notif. de mise à jour','3696.jpg'],['Lire les informations du profil du compte Samsung','3696.jpg'],['Téléch appli/affic détail appli','3696.jpg'],['Vérifier les fonctions prises en charge par Samsung AI Core','3696.jpg'],['demander la suppression de paquets','3696.jpg'],['Vérification possession compte Samsung','3696.jpg'],["Service Suggestions d’assistant santé",'3696.jpg'],["exécuter le service d’avant-plan avec le type « lecture multimédia »",'3696.jpg']
+    ]]
+  ];
+  function element(tag,text,cls) { const el=document.createElement(tag); if(text!==undefined)el.textContent=text; if(cls)el.className=cls; return el; }
+  function message(text,error) { const a=$('jc-message'),b=$('jc-error'); a.hidden=true; b.hidden=true; const target=error?b:a; target.textContent=text; target.hidden=false; }
+  function setTab(tab) { state.tab=tab; for(const name of ['home','menu','journal','flows','audit','anomalies','diagnostic','permissions','sources','decisions','references','penalty'])$('jc-pane-'+name).hidden=name!==tab; root.querySelectorAll('[data-jc-tab]').forEach(btn=>btn.setAttribute('aria-pressed',String(btn.dataset.jcTab===tab))); if(tab==='permissions')renderPermissions(); if(tab==='sources')renderSources(); if(tab==='audit')renderAudit(); if(tab==='anomalies')renderAnalysis(); if(tab==='diagnostic')renderDiagnostic(true); if(tab==='decisions')renderAiv(); if(tab==='references')renderAivStatus(); if(tab==='home')renderMvpHome(); if(tab==='flows')renderFlows(false); }
+  function timeText(item) { if(item.time!==null)return new Date(item.time).toISOString().replace('T',' ').replace('.000Z',' UTC'); return item.timestamp?item.timestamp+' · heure non normalisée':'Heure non renseignée'; }
+  function fillSelect(id,values,base) { const select=$(id),selected=select.value; select.replaceChildren(new Option(base,'')); for(const value of values)select.append(new Option(value,value)); if(values.includes(selected))select.value=selected; }
+  function refreshFilters() { fillSelect('jc-app',[...new Set(state.events.map(e=>e.actor))].sort((a,b)=>a.localeCompare(b,'fr')),'Tous les acteurs'); fillSelect('jc-transport',[...new Set(state.events.map(e=>e.transport))].sort((a,b)=>a.localeCompare(b,'fr')),'Toutes les connexions'); }
+  function renderDetail() {
+    const pane=$('jc-detail'); pane.replaceChildren(); const event=state.events.find(e=>e.key===state.selected); pane.hidden=!event; if(!event)return;
+    const heading=element('div',undefined,'jc-row jc-between');heading.append(element('h3','Détail de l’événement'));
+    const close=element('button','Fermer');close.type='button';close.onclick=()=>{const key=state.selected;state.selected=null;renderDetail();const trigger=Array.from($('jc-events').querySelectorAll('button')).find(b=>b.dataset.key===key);if(trigger)trigger.focus();};heading.append(close);pane.append(heading);
+    const source=state.sources.find(s=>s.id===event.sourceId);const fields=element('dl',undefined,'jc-fields');
+    const groupLabel=typeof AuditRules!=='undefined'?({android:'Android · UID non attribuable',system:'Système · paquet identifié',user:'Utilisateur · paquet identifié'}[AuditRules.eventGroup(event)]||'Non classé'):'Non déterminé';
+    const pairs=[['Heure source',event.timestamp||'Non renseignée'],['Tri chronologique',event.time!==null?'Horodatage avec fuseau reconnu':'Heure non normalisée : ordre temporel non établi'],['Groupe de journal',groupLabel],['Application / acteur',event.actor],['Action',event.action],['Destination / ressource',event.destination],['Connexion',event.transportRaw||'Non renseignée'],['Sens',event.direction],['Protocole',event.protocol],['Port',event.port],['Volume déclaré',event.bytes],['Résultat',event.result],['Source déclarée',event.declaredSource],[nativeBridge?'Stockage local':'Fichier importé',source?source.name:'Inconnu'],['Statut de lecture',nativeBridge?(['trafic','dns'].includes(event.original.category)?'Métadonnées reçues du VPN local et enregistrées dans la base privée':'État communiqué par Android et enregistré dans la base privée'):'Événement rapporté par le fichier; non vérifié sur le téléphone']];if(event.note)pairs.push(['Détails',event.note]);
+    for(const [label,value]of pairs)fields.append(element('dt',label),element('dd',value));pane.append(fields); nativeDetailExtras(pane,event); aivEventExtras(pane,event); if(nativeBridge&&event.original.source==='ConnectivityManager.onLinkPropertiesChanged')pane.append(element('p','Paramètres réseau reçus : premier relevé ou mise à jour. Un changement de DNS est signalé dans Anomalies seulement après comparaison de deux relevés du même réseau.','jc-note'));
+    const raw=element('details');raw.append(element('summary','Données originales'),element('pre',JSON.stringify(event.original,null,2)));pane.append(raw);
+  }
+  function renderRows(rows) {
+    const list=$('jc-events');list.replaceChildren();
+    for(const event of rows) {
+      const li=element('li',undefined,'jc-event'),button=element('button');button.type='button';button.dataset.key=event.key;button.setAttribute('aria-label',event.actor+' : '+event.action+'. Voir les détails.');
+      const main=element('span',undefined,'jc-event-main');main.append(element('span',timeText(event),'jc-sub jc-count'),element('strong',event.actor+' · '+event.action),element('span',(nativeBridge?(event.original.category==='trafic'?'Destination contactée : ':event.original.category==='dns'?'Nom recherché : ':'Ressource : '):'')+event.destination,'jc-sub'));button.append(main,element('span',event.transport,'jc-chip'));
+      button.onclick=()=>{state.selected=event.key;renderDetail();$('jc-detail').scrollIntoView({block:'nearest'});};li.append(button);list.append(li);
+    }
+  }
+  function renderJournal() {
+    if(nativeBridge){renderNative();return;}
+    $('jc-total').textContent=state.events.length+' événement'+(state.events.length===1?'':'s')+' importé'+(state.events.length===1?'':'s');
+    $('jc-export').disabled=!state.events.length;
+    $('jc-filter-area').hidden=!state.events.length;
+    const filtered=selectEvents(state.events,$('jc-search').value,$('jc-app').value,$('jc-transport').value,$('jc-order').value);
+    const pages=Math.max(1,Math.ceil(filtered.length/PAGE_SIZE));state.page=Math.min(state.page,pages-1);
+    $('jc-filter-count').textContent=filtered.length+' affiché'+(filtered.length===1?'':'s')+' / '+state.events.length+' importés';
+    renderRows(filtered.slice(state.page*PAGE_SIZE,(state.page+1)*PAGE_SIZE));
+    $('jc-empty').hidden=filtered.length>0;
+    if(state.events.length) { $('jc-empty').querySelector('h3').textContent='Aucun événement pour ces filtres';$('jc-empty').querySelector('p').textContent='Les événements importés sont conservés. Modifie la recherche ou les filtres pour les retrouver.';$('jc-see-bixby').hidden=true; }
+    $('jc-pagination').hidden=filtered.length<=PAGE_SIZE;$('jc-page').textContent='Page '+(state.page+1)+' / '+pages;$('jc-prev').disabled=state.page===0;$('jc-next').disabled=state.page>=pages-1;
+    renderDetail();
+  }
+  function renderPermissions() {
+    const list=$('jc-permissions');list.replaceChildren();const query=fold($('jc-permission-search').value.trim());let count=0;
+    for(const [group,items]of permissionGroups) {const filtered=items.filter(([label])=>!query||fold(group+' '+label).includes(query));if(!filtered.length)continue;count+=filtered.length;
+      const section=element('details');section.open=Boolean(query);section.append(element('summary',group+' · '+filtered.length));const ul=element('ul',undefined,'jc-perms');
+      for(const [label,source]of filtered){const li=element('li');li.append(element('span',label),element('span','Capture '+source+' · état effectif non vérifié','jc-sub'));ul.append(li);}section.append(ul);list.append(section);
+    }
+    const total=permissionGroups.reduce((sum,[,items])=>sum+items.length,0);$('jc-permission-count').textContent=count+' / '+total+' libellés uniques relevés · aucune activité déduite';
+    if(!count)list.append(element('p','Aucun libellé correspondant.','jc-sub'));
+  }
+  function renderSources() {
+    if(nativeBridge){renderNativeSources();return;}
+    const pane=$('jc-import-sources');pane.replaceChildren();
+    for(const source of state.sources){const div=element('div',undefined,'jc-source');div.append(element('strong',source.name),element('span',source.count+' événements · importé le '+source.importedAt,'jc-sub'),element('span','Couverture déclarée par le fichier, non vérifiée.','jc-sub'));if(source.metadata){const details=element('details');details.append(element('summary','Métadonnées de la source'),element('pre',JSON.stringify(source.metadata,null,2)));div.append(details);}pane.append(div);}
+  }
+  function ingest(text,name) {
+    if(state.payloads.includes(text)){message('Ce contenu a déjà été importé. Le journal n’a pas été dupliqué.');return;}
+    const parsed=parseJournal(text);if(state.events.length+parsed.records.length>MAX_EVENTS)throw new Error('La limite de 50 000 événements serait dépassée. Le journal actuel reste intact.');
+    const sourceId='lot-'+(state.sources.length+1);const events=parsed.records.map((record,index)=>normalize(record,index,sourceId));
+    const source={id:sourceId,name,importedAt:new Date().toISOString(),count:events.length,metadata:parsed.metadata};
+    state.sources.push(source);state.payloads.push(text);state.events.push(...events);state.page=0;state.selected=null;
+    $('jc-search').value='';$('jc-app').value='';$('jc-transport').value='';refreshFilters();renderJournal();renderSources();
+    const uncertain=events.filter(e=>e.time===null).length;message(events.length+' événements ajoutés.'+(uncertain?' '+uncertain+' avec une heure non normalisée.':''));
+  }
+  root.querySelectorAll('[data-jc-tab]').forEach(btn=>btn.addEventListener('click',()=>setTab(btn.dataset.jcTab)));
+  $('jc-see-bixby').onclick=()=>setTab('permissions');
+  $('jc-import-toggle').onclick=()=>{const form=$('jc-import-form');form.hidden=!form.hidden;$('jc-import-toggle').setAttribute('aria-expanded',String(!form.hidden));};
+  $('jc-paste-submit').onclick=()=>{try{ingest($('jc-paste').value,'Texte collé '+(state.sources.length+1));}catch(e){message(e.message,true);}};
+  $('jc-file').addEventListener('change',async()=>{const file=$('jc-file').files[0];if(!file)return;if(state.busy){message('Un import est déjà en cours.',true);return;}state.busy=true;$('jc-file').disabled=true;$('jc-paste-submit').disabled=true;try{if(file.size>MAX_BYTES)throw new Error('Ce fichier dépasse 10 Mio.');const bytes=await file.arrayBuffer();const text=new TextDecoder('utf-8',{fatal:true}).decode(bytes);ingest(text,file.name);}catch(e){message(e.message||'Impossible de lire ce fichier.',true);}finally{state.busy=false;$('jc-file').disabled=false;$('jc-file').value='';$('jc-paste-submit').disabled=false;}});
+  let journalSearchTimer;for(const id of ['jc-search','jc-app','jc-transport','jc-order'])$(id).addEventListener(id==='jc-search'?'input':'change',()=>{clearTimeout(journalSearchTimer);state.page=0;state.selected=null;if(id==='jc-search')journalSearchTimer=setTimeout(renderJournal,300);else renderJournal();});
+  $('jc-permission-search').addEventListener('input',renderPermissions);
+  $('jc-prev').onclick=()=>{state.page--;renderJournal();};$('jc-next').onclick=()=>{state.page++;renderJournal();};
+  $('jc-export').onclick=()=>{if(!state.events.length)return;const journal={schema:'journal-cellulaire/1',exported_at:new Date().toISOString(),live_collection:false,sources:state.sources,events:state.events.map(e=>e.original)};const text=JSON.stringify(journal,null,2);$('jc-export-text').value=text;$('jc-export-panel').hidden=false;try{const blob=new Blob([text],{type:'application/json;charset=utf-8'});const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download='journal-cellulaire-'+new Date().toISOString().slice(0,10)+'.json';root.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),15000);message('Copie du journal préparée. Vérifie le téléchargement, ou conserve le texte ci-dessous.');}catch(e){message('Le téléchargement est indisponible ici. Tu peux copier le journal ci-dessous.');}};
+  $('jc-export-close').onclick=()=>{$('jc-export-panel').hidden=true;};$('jc-select-export').onclick=()=>{$('jc-export-text').focus();$('jc-export-text').select();};
+  const nativeBridge=window.JournalAndroid||null;
+  let nativeAnchor=0, nativeActorList="";
+  function nativeStatus(){const status=JSON.parse(nativeBridge.status());if(status.error)message(status.error,true);return status;}
+  function renderNativeSources(){
+    if(!nativeBridge)return;const status=nativeStatus(),pane=$('jc-pane-sources');pane.replaceChildren();pane.append(element('h3','Collecte sur ce téléphone'));
+    const sources=[['Connexions des applications',status.capture?status.capture_state:status.capture_starting?status.capture_state:'Capture non active. Active le VPN local depuis Paramètres → Collecte continue.'],['Écran, alimentation, batterie, USB hôte',status.running?'Service actif : notifications système accessibles.':'Service arrêté.'],['Réseau par défaut',status.network?'Changements Wi-Fi / cellulaire / VPN et configuration DNS.':'Source non active.'],['Bluetooth',status.bluetooth?'Connexions et appairages : suivi activé.':'Suivi optionnel non actif.'],['Stockage','Tous les événements reçus sont enregistrés dans la base privée du téléphone. Aucune suppression automatique.'],['Limites','VPN local : IP, port, protocole et volumes; application si Android l’identifie. Messages chiffrés non lus. Questions DNS UDP en clair et noms SNI du premier ClientHello TLS/TCP quand visibles; limites de 32 Kio, ECH et QUIC explicites. UID partagé : processus précis non identifié automatiquement. Pas d’accès aux opérations internes des apps, aux trames Bluetooth ou garanti aux appareils partagés.'],['Affichage ici / dans ChatGPT','Le lecteur local est branché à la base. Aucune transmission en direct vers la conversation.']];
+    for(const [label,value]of sources){const row=element('div',undefined,'jc-source');row.append(element('strong',label),element('span',value,'jc-sub'));pane.append(row);}
+    const bluetooth=element('button',status.bluetooth_enabled?'Désactiver le suivi Bluetooth':'Activer le suivi Bluetooth');bluetooth.id='jc-bluetooth-native';bluetooth.type='button';bluetooth.onclick=()=>{nativeBridge.command(status.bluetooth_enabled?'bluetooth-off':'bluetooth-on');setTimeout(renderNativeSources,1200);};pane.append(bluetooth);
+    const last=element('p',status.last_alive_ms?'Dernier signal de vie : '+new Date(status.last_alive_ms).toISOString():'Aucun signal de vie dans cette session.','jc-sub');last.style.marginTop='14px';pane.append(last);
+    const permissions=element('details');permissions.append(element('summary','Permissions de ce collecteur'),element('p','État du réseau; service au premier plan; affichage de sa notification; Bluetooth uniquement si tu actives ce suivi. La permission Internet relaie les connexions vers leur destination originale. La version 0.5 ajoute QUERY_ALL_PACKAGES pour voir la liste des applications et leurs permissions; les diagnostics sont choisis avec le sélecteur de fichiers Android. Le VPN local demande ton accord Android et remplace tout autre VPN actif dans ce profil. Aucun serveur VPN distant ni envoi du journal. Aucune permission microphone, caméra, contacts, SMS, localisation ou accessibilité.'));pane.append(permissions);const licenses=element('button','Sources et licences');licenses.type='button';licenses.onclick=()=>nativeBridge.command('licenses');pane.append(licenses);if(status.capture_error)pane.append(element('p',status.capture_error,'jc-error'));
+  }
+  let journalRenderGeneration=0;
+  async function renderNative(){
+    const generation=++journalRenderGeneration;
+    try{
+      const status=nativeStatus();root.querySelector('.jc-state .jc-label').textContent=status.capture?'Connexions des applications actives':status.capture_starting?status.capture_state:status.running?'États système actifs · connexions des apps non capturées':'Collecte arrêtée sur ce téléphone';
+      $('jc-start-native').disabled=status.running;$('jc-stop-native').disabled=!status.running&&!status.capture&&!status.capture_starting;
+      $('jc-capture-native').textContent=status.capture||status.capture_starting?'Arrêter les connexions apps':'Activer connexions apps';
+      $('jc-capture-note').textContent=status.capture_error||'Le VPN local observe les connexions, sans lire les messages chiffrés ni envoyer le journal. Il remplace tout autre VPN actif. Arrêt disponible dans Paramètres → Collecte continue.';
+      let result;
+      if(nativeBridge.requestJournal){
+        $('jc-filter-area').hidden=false;$('jc-segment-status').textContent='Lecture du segment en cours…';$('jc-filter-count').textContent='Lecture du journal en cours…';
+        const args=[$('jc-search').value,$('jc-transport').value,state.page*PAGE_SIZE,PAGE_SIZE,state.page?nativeAnchor:0,$('jc-app').value,$('jc-kind').value,$('jc-quiet').value==='quiet',$('jc-app-scope').value,$('jc-package').value,Number($('jc-segment').value)||0];
+        const ticket=nativeBridge.requestJournal(JSON.stringify(args));
+        const started=Date.now();
+        while(true){if(generation!==journalRenderGeneration)return;const reply=nativeBridge.journalResult(ticket);if(reply){result=JSON.parse(reply);break;}if(Date.now()-started>120000)throw Error('Lecture encore en cours. Les données sont conservées; réessaie avec un filtre.');await new Promise(resolve=>setTimeout(resolve,150));}
+        if(result.cancelled||state.tab!=='journal')return;
+      }else{
+      result=JSON.parse((nativeBridge.pageFiltered?nativeBridge.pageFiltered($('jc-search').value,$('jc-transport').value,state.page*PAGE_SIZE,PAGE_SIZE,state.page?nativeAnchor:0,$('jc-app').value,$('jc-kind').value,$('jc-quiet').value==='quiet',$('jc-app-scope').value,$('jc-package').value):nativeBridge.page($('jc-search').value,$('jc-transport').value,state.page*PAGE_SIZE,PAGE_SIZE,state.page?nativeAnchor:0,$('jc-app').value,$('jc-kind').value,$('jc-quiet').value==='quiet')));
+      }
+
+      if(result.error)throw new Error(result.error);if(!status.error)$('jc-error').hidden=true;if(state.page&&!result.events.length){state.page=0;nativeAnchor=0;renderNative();return;}
+      nativeAnchor=result.ceiling_id;
+      const actors=JSON.stringify(result.actors||[]);if(actors!==nativeActorList){nativeActorList=actors;fillSelect('jc-app',result.actors||[],'Tous les acteurs');}
+      state.sources=[{id:'phone',name:'Journal local · base privée du téléphone'}];
+      state.events=result.events.map((raw,index)=>{const event=normalize(raw,index,'phone');event.key='phone:'+raw.id;event.transport=raw.transport||'Inconnu';return event;});
+      const hasHistory=Boolean(result.latest_id||result.total||result.events.length);
+      $('jc-total').textContent=result.total+(result.total_partial?' événements indexés · historique conservé':' événements enregistrés');$('jc-export').disabled=!hasHistory;$('jc-filter-area').hidden=false;
+      const seg=result.segment;
+      $('jc-segment-status').textContent=seg?(seg.segment?'Segment '+seg.segment+' · '+seg.event_count+' / 50 000 événements · '+(seg.sealed?'archivé':'actif'):'Événements récents · indexation de l’historique en cours')+' · IDs '+seg.first_id+' → '+seg.last_id+(seg.error?' · '+seg.error:''):'';
+      $('jc-new-events').hidden=true;
+      $('jc-filter-count').textContent=result.matched+' résultats dans ce segment / '+result.total+' indexés'+(result.hidden_count?' · '+result.hidden_count+' lignes répétitives masquées':'');
+      if($('jc-app-scope').value||$('jc-package').value){$('jc-filter-count').textContent+=' · Classement selon le dernier inventaire; attribution unique seulement.';if(result.audit_index_busy||result.audit_index_checkpoint<result.latest_id)$('jc-filter-count').textContent+=' Index partiel en cours.';if(result.audit_index_error)$('jc-filter-count').textContent+=' '+result.audit_index_error;}
+      renderRows(state.events);renderDetail();
+      const empty=$('jc-empty');empty.hidden=Boolean(result.events.length);
+      if(!hasHistory){empty.querySelector('h3').textContent=status.running?'En attente des premiers événements':'Ton collecteur est prêt';empty.querySelector('p').textContent='Active les connexions apps, utilise une application Internet, puis reviens ici. Démarrer active aussi les états système; les événements reçus s’ajoutent automatiquement.';}
+      else if(!result.events.length){empty.querySelector('h3').textContent='Aucun événement pour ces filtres';empty.querySelector('p').textContent='Les événements restent enregistrés. Modifie la recherche pour les retrouver.';}
+      $('jc-see-bixby').hidden=true;
+      const pages=Math.max(1,Math.ceil(result.matched/PAGE_SIZE));$('jc-pagination').hidden=pages<=1;$('jc-page').textContent='Page '+(state.page+1)+' / '+pages;$('jc-prev').disabled=!state.page;$('jc-next').disabled=state.page>=pages-1;
+    }catch(error){message(error.message||'Lecture automatique indisponible.',true);}
+  }
+  if(nativeBridge){
+    root.querySelector('.jc-top p').textContent='Les événements reçus sur ce téléphone.';
+    $('jc-events').setAttribute('aria-label','Événements enregistrés automatiquement');
+    $('jc-import-toggle').hidden=true;$('jc-import-form').hidden=true;
+    $('jc-app').parentElement.hidden=false;$('jc-order').parentElement.hidden=true;
+    fillSelect('jc-transport',['Wi-Fi','Cellulaire','Bluetooth','USB','Ethernet','VPN','Interne','Global','Inconnu','Autre'],'Toutes les connexions');
+    const actions=$('jc-export').parentElement;
+    const start=element('button','Démarrer','jc-primary');start.id='jc-start-native';start.type='button';start.onclick=()=>{nativeBridge.command('start');setTimeout(refreshContinuous,1200);};
+    const stop=element('button','Tout arrêter');stop.id='jc-stop-native';stop.type='button';stop.onclick=()=>{nativeBridge.command('stop');setTimeout(refreshContinuous,1200);};const capture=element('button','Activer connexions apps','jc-primary');capture.id='jc-capture-native';capture.type='button';capture.onclick=()=>{const status=nativeStatus();nativeBridge.command(status.capture||status.capture_starting?'capture-off':'capture-on');setTimeout(refreshContinuous,1200);};actions.prepend(start,capture,stop);const refresh=element('button','Actualiser le journal');refresh.id='jc-refresh-journal';refresh.type='button';refresh.onclick=()=>{state.page=0;nativeAnchor=0;renderNative();};actions.append(refresh);
+    const segment=element('input');segment.id='jc-segment';segment.type='number';segment.min='0';segment.step='1';segment.value='0';
+    const segmentLabel=element('label','Segment (0 = récent; historique par numéro)');segmentLabel.append(segment);actions.after(segmentLabel);
+    const segmentStatus=element('p','','jc-sub');segmentStatus.id='jc-segment-status';segmentLabel.after(segmentStatus);
+    segment.onchange=()=>{state.page=0;nativeAnchor=0;renderNative();};
+    const fresh=element('button','Nouveaux événements disponibles · actualiser');fresh.id='jc-new-events';fresh.hidden=true;fresh.onclick=()=>{segment.value='0';refresh.click();};segmentStatus.after(fresh);
+    if(nativeBridge.journalHead)setInterval(()=>{if(state.tab==='journal'&&Number(segment.value)===0){try{fresh.hidden=Number(nativeBridge.journalHead())<=nativeAnchor;}catch(e){/* Keep the visible journal intact. */}}},3000);
+    const note=element('p',undefined,'jc-sub');note.id='jc-capture-note';$('jc-message').before(note);
+    const kind=element('select');kind.id='jc-kind';kind.append(new Option('Tout le journal',''),new Option('Connexions des applications','apps'),new Option('Système et collecteur','system'));
+    const kindLabel=element('label','Afficher');kindLabel.append(kind);$('jc-app').parentElement.before(kindLabel);
+    const appScope=element('select');appScope.id='jc-app-scope';appScope.append(new Option('Toutes les applications',''),new Option('Applications système','system'),new Option('Autres applications','other'),new Option('Attribution indéterminée','unknown'));const sl=element('label','Type d’application');sl.append(appScope);$('jc-app').parentElement.before(sl);
+    const pkg=element('input');pkg.id='jc-package';pkg.type='search';pkg.placeholder='Nom de paquet exact';const pl=element('label','Paquet attribué');pl.append(pkg);$('jc-app').parentElement.before(pl);
+    for(const c of [appScope,pkg])c.onchange=()=>{state.page=0;nativeAnchor=0;state.selected=null;renderNative();};
+    kind.onchange=()=>{state.page=0;state.selected=null;renderNative();};
+    $('jc-export').onclick=()=>nativeBridge.command('export');
+    root.querySelector('.jc-foot').textContent='Journal enregistré automatiquement · liste actualisée à la demande';
+  }
+
+  let flowBefore=0,flowSearchSeed='';
+  function flowGroupLabel(id){return ({android:'Android · non attribuable',system:'Application système',user:'Application utilisateur'}[id]||'Attribution inconnue');}
+  function flowTime(ms){return Number(ms)>0?new Date(Number(ms)).toLocaleString('fr-CA'):'Non observé';}
+  function flowBytes(n){n=Number(n)||0;if(n<1024)return n+' o';if(n<1024*1024)return (n/1024).toFixed(1)+' Kio';return (n/1024/1024).toFixed(2)+' Mio';}
+  function flowOpen(search=''){
+    flowSearchSeed=search||'';flowBefore=0;if($('jf-search'))$('jf-search').value=flowSearchSeed;setTab('flows');renderFlows(false);
+  }
+  function renderFlows(append=false){
+    if(!nativeBridge||typeof nativeBridge.flowPage!=='function'){if($('jf-status'))$('jf-status').textContent='La vue Flux nécessite le pont Android 0.6.13.';return;}
+    const list=$('jf-list');if(!append)list.replaceChildren();
+    try{
+      const q=$('jf-search').value.trim(),result=JSON.parse(nativeBridge.flowPage(q,append?flowBefore:0,25));if(result.error)throw new Error(result.error);
+      const rows=Array.isArray(result.flows)?result.flows:[];flowBefore=Number(result.next_before_id)||0;
+      $('jf-status').textContent=`${rows.length} flux affiché(s) · ${result.scanned_events||0} événements réseau examinés dans cette page bornée. ${result.notice||''}`;
+      if(!rows.length&&!append)list.append(element('p','Aucun flux ne correspond à ce filtre dans la fenêtre examinée.','jc-sub'));
+      renderEndpointSeries(rows,list);
+      for(const f of rows){
+        const card=element('details',undefined,'jc-flow-card');card.dataset.attribution=f.attribution_status||'NON_ATTRIBUABLE';
+        const title=element('summary',undefined,'jc-row jc-between');title.append(element('strong',f.actor||'Acteur non identifié'),element('span',flowGroupLabel(f.journal_group),'jc-flow-badge'));card.append(title);appIdentity(title,f);
+        const uid=Number(f.uid)>=0?'UID '+f.uid:'UID non disponible',pkgs=Array.isArray(f.packages)?f.packages:[];
+        title.append(element('p',`${uid} · ${f.protocol||'Protocole inconnu'} · ${f.destination||[f.remote_ip,f.remote_port].filter(Boolean).join(':')}`,'jc-sub'));
+        if(f.attribution_status==='NON_ATTRIBUABLE')card.append(element('p',`${f.attribution||'Auteur applicatif non démontré.'}${pkgs.length?' · '+pkgs.length+' paquet(s) candidat(s), non traités comme preuve d’auteur.':''}`,'jc-note'));
+        else if(pkgs.length===1)card.append(element('p','Package attribué : '+pkgs[0],'jc-sub'));
+        const grid=element('div',undefined,'jc-flow-grid');
+        for(const [k,v] of [['Premier sortant',flowTime(f.first_outbound_ms)],['Premier retour',flowTime(f.first_inbound_ms)],['Envoyé',`${flowBytes(f.tx_bytes)} · ${Number(f.tx_packets)||0} paquet(s)`],['Reçu',`${flowBytes(f.rx_bytes)} · ${Number(f.rx_packets)||0} paquet(s)`],['État',f.closed===true?'Fermé':f.closed===false?'Ouvert / observé':'État final non observé'],['Même flux',f.same_flow_return?'Oui · sortie et retour reliés':'Retour non observé dans les données disponibles']]){const d=element('div');d.append(element('span',k,'jc-sub'),element('strong',v));grid.append(d);}card.append(grid);
+        if(Array.isArray(f.dns)&&f.dns.length)card.append(element('p','DNS observé : '+f.dns.join(', '),'jc-flow-evidence'));
+        if(f.tls_sni)card.append(element('p','SNI TLS observé : '+f.tls_sni,'jc-flow-evidence'));
+        if(f.tracker_matches?.length)card.append(element('p','Exodus · '+f.tracker_matches.map(t=>t.name+(t.domain_boundary_match?'':' (signature partielle)')).join(', '),'jc-flow-evidence'));
+        if(f.tracker_dns_candidates?.length)card.append(element('p','DNS seulement · '+f.tracker_dns_candidates.map(t=>t.name).join(', '),'jc-sub'));
+        if(f.tracker_matches?.length||f.tracker_dns_candidates?.length)card.append(element('p',f.tracker_scope,'jc-note'));
+        if(f.tls_observation)card.append(element('p','TLS : '+f.tls_observation,'jc-sub'));
+        card.append(element('p',f.limits||'Aucun contenu chiffré n’est lu.','jc-sub'),element('code',String(f.flow_correlation_id||''),'jc-flow-id'));
+        list.append(card);
+      }
+      $('jf-more').hidden=!rows.length||!flowBefore;
+    }catch(e){$('jf-status').textContent=e.message||String(e);}
+  }
+  $('jf-refresh').onclick=()=>{flowBefore=0;renderFlows(false);};
+  $('jf-search').oninput=()=>{flowBefore=0;};$('jf-search').onchange=()=>renderFlows(false);
+  $('jf-more').onclick=()=>renderFlows(true);
+
+  function renderEndpointSeries(rows,list){
+    const groups=new Map();
+    for(const f of rows){
+      const t=Number(f.first_outbound_ms||f.first_inbound_ms);if(!t)continue;
+      const endpoints=[];
+      if(f.remote_ip)endpoints.push('IP '+f.remote_ip+':'+f.remote_port+' '+f.protocol);
+      if(f.tls_sni&&!f.ech_extension_present)endpoints.push('SNI '+f.tls_sni.toLowerCase());
+      for(const dns of f.dns||[])endpoints.push('DNS '+String(dns).toLowerCase());
+      for(const key of new Set(endpoints)){if(!groups.has(key))groups.set(key,[]);groups.get(key).push({f,t});}
+    }
+    for(const [key,items]of groups){
+      items.sort((a,b)=>a.t-b.t);let chunk=[];
+      const emit=()=>{if(chunk.length<2)return;const card=element('details',undefined,'jc-flow-card');card.append(element('summary',key+' · '+chunk.length+' flux rapprochés'));
+        card.append(element('p','Corrélation temporelle : même destination observée sur cinq minutes. Applications conservées séparément.','jc-sub'));
+        for(const {f,t}of chunk){const row=element('p',flowTime(t)+' · '+(f.actor||'Acteur inconnu'));appIdentity(row,f);row.append(element('code',f.flow_correlation_id||''));card.append(row);}list.append(card);};
+      for(const item of items){if(chunk.length&&item.t-chunk[0].t>300000){emit();chunk=[];}chunk.push(item);}emit();
+    }
+  }
+
+  let analysisRecheck=0;
+  let analysisPage=0, analysisSelected=null, analysisStatus=null, analysisConfig=null;
+  function analysisCall(method,...args){const value=JSON.parse(nativeBridge[method](...args));if(value.error)throw new Error(value.error);return value;}
+  function analysisMessage(text,error=false){const box=$('jc-analysis-message');box.textContent=text;box.className=error?'jc-error':'jc-status';box.hidden=false;}
+  function analysisTime(ms){return ms?new Date(ms).toLocaleString('fr-CA'):'Heure non renseignée';}
+  function refreshShizukuCleanup(){
+    if(!nativeBridge||!nativeBridge.shizukuCleanupState||!$('jc-shizuku-status'))return;
+    try{
+      const s=JSON.parse(nativeBridge.shizukuCleanupState());
+      const access=s.authorized?'autorisé':(s.binder?'autorisation requise':'Shizuku non démarré');
+      const count=Number(s.candidates);
+      $('jc-shizuku-status').textContent=(s.status||'État inconnu')+' · '+access+(count>=0?' · '+count+' app(s) L4/L5 admissible(s)':'');
+      $('jc-shizuku-run').disabled=Boolean(s.running);
+      $('jc-shizuku-restore').disabled=Boolean(s.running);
+    }catch(e){$('jc-shizuku-status').textContent='État Shizuku indisponible : '+e.message;}
+  }
+  function refreshAnalysisStatus(){
+    if(!nativeBridge)return;
+    try{
+      const s=JSON.parse(nativeBridge.analysisSummary());analysisStatus=s;
+      if($('jc-analysis-tab'))$('jc-analysis-tab').textContent=s.recalculating?'Anomalies · recalcul':'Anomalies'+(s.unread?' · '+s.unread:'');
+      $('jc-analysis-progress').textContent=s.error||((s.processed||0)+' événements examinés'+(s.busy||s.checkpoint<s.latest?' · analyse en cours…':' · analyse à jour')+'.');
+      if(s.recalculating)$('jc-analysis-progress').textContent=(s.error||'Recalcul en cours')+' · événements traités : '+s.processed+' · ID '+s.checkpoint+' / '+s.replay_target;
+      $('jc-analysis-progress').className=s.error?'jc-error':'jc-sub';
+      $('jc-analysis-coverage').textContent=(s.unknown_attribution||0)+' relevés sans attribution à une app unique; '+(s.uncertain_counters||0)+' relevés de volume sans intervalle exploitable. Ils restent dans le journal, sans attribution forcée.';
+      if(s.settings&&!analysisConfig)analysisConfig=s.settings;
+    }catch(e){$('jc-analysis-progress').textContent='Analyse indisponible : '+e.message;$('jc-analysis-progress').className='jc-error';}
+  }
+  function renderAnalysis(){
+    if(!nativeBridge)return;
+    refreshAnalysisStatus();
+    if(analysisStatus?.recalculating){
+      analysisSelected=null;$('jc-analysis-detail').hidden=true;$('jc-analysis-list').replaceChildren(element('div',undefined,'jc-spinner'),element('p','Recalcul en cours · les résultats précédents ne correspondent plus aux paramètres actuels.'));
+      $('jc-analysis-count').textContent='';$('jc-analysis-empty').hidden=true;$('jc-analysis-pagination').hidden=true;
+      clearTimeout(analysisRecheck);analysisRecheck=setTimeout(()=>{if(state.tab==='anomalies')renderAnalysis();},1000);return;
+    }
+    if(analysisSelected!==null||$('jc-analysis-settings').open)return;
+    try{
+      const type=$('jc-analysis-kind').value,unread=$('jc-analysis-unread').checked;
+      const result=analysisCall('analysisPage',type,unread,analysisPage*15);
+      if(result.recalculating){refreshAnalysisStatus();renderAnalysis();return;}
+      if(analysisPage&&!result.rows.length){analysisPage=0;renderAnalysis();return;}
+      const list=$('jc-analysis-list');list.replaceChildren();
+      $('jc-analysis-count').textContent=result.total+' groupe'+(result.total===1?'':'s')+(type==='trace'?' de traces':' de signalements');
+      $('jc-analysis-empty').hidden=Boolean(result.rows.length);
+      $('jc-analysis-empty').textContent=unread?'Aucun groupe à lire pour ce filtre. Tu peux afficher aussi les groupes déjà vus.':type==='trace'?'Aucune correspondance dans les questions DNS examinées. Les données chiffrées et les opérations internes restent hors de cette recherche.':'Aucune règle déclenchée dans les événements examinés. Cela ne garantit pas l’absence d’anomalies dans les données non collectées.';
+      for(const row of result.rows){
+        const li=element('li',undefined,'jc-event'),button=element('button'),main=element('span',undefined,'jc-event-main');button.type='button';
+        main.append(element('span',analysisTime(row.last_ms),'jc-sub'),element('strong',row.title),element('span',row.actor+' · '+row.occurrences+' observation(s) regroupée(s)','jc-sub'));
+        button.append(main,element('span',row.reviewed?'Vu':row.kind==='trace'?'Trace':row.severity==='attention'?'À examiner':'Information','jc-chip'));
+        const color=auditFindingColor(row);li.classList.add('ja-'+color.level);main.append(element('span',color.label,'jc-sub'));
+        appIdentity(main,row.identity||row);button.onclick=()=>showAnalysis(row);li.append(button);list.append(li);
+      }
+      const pages=Math.max(1,Math.ceil(result.total/15));$('jc-analysis-pagination').hidden=pages<=1;$('jc-analysis-page').textContent='Page '+(analysisPage+1)+' / '+pages;$('jc-analysis-prev').disabled=!analysisPage;$('jc-analysis-next').disabled=analysisPage>=pages-1;
+    }catch(e){analysisMessage(e.message,true);}
+  }
+  function showAnalysis(row){
+    analysisSelected=row.id;const pane=$('jc-analysis-detail');pane.hidden=false;pane.replaceChildren();
+    const heading=element('div',undefined,'jc-row jc-between'),close=element('button','Fermer');close.type='button';close.id='jc-analysis-close';close.onclick=()=>{analysisSelected=null;pane.hidden=true;renderAnalysis();};heading.append(element('h3',row.title),close);pane.append(heading);
+    const color=auditFindingColor(row);pane.className='ja-card ja-'+color.level;pane.append(auditBadge(color));
+    pane.append(element('p',row.explanation));
+    const dl=element('dl',undefined,'jc-fields');for(const [k,v]of Object.entries({'Application / acteur':row.actor,'Première observation':analysisTime(row.first_ms),'Dernière observation':analysisTime(row.last_ms),'Observations regroupées':row.occurrences,...row.facts}))dl.append(element('dt',k),element('dd',String(v)));pane.append(dl,element('p',row.advice,'jc-note'));
+    const seen=element('button',row.reviewed?'Déjà marqué vu':'Marquer vu');seen.type='button';seen.id='jc-analysis-reviewed';seen.disabled=row.reviewed;seen.style.marginTop='12px';seen.onclick=()=>{try{analysisCall('analysisChange','review',String(row.id));row.reviewed=true;seen.disabled=true;seen.textContent='Marqué vu';refreshAnalysisStatus();}catch(e){analysisMessage(e.message,true);}};pane.append(seen);
+    pane.append(element('p','Événements sources : échantillon de 12 références maximum. Le journal complet conserve toutes les lignes.','jc-sub'));
+    try{
+      const data=analysisCall('analysisEvidence',row.id);
+      for(const raw of data.events){const source=element('details');source.append(element('summary','#'+raw.id+' · '+(raw.app||'Acteur inconnu')+' · '+raw.action),element('p',raw.timestamp||''),element('pre',JSON.stringify(raw,null,2)));pane.append(source);}
+      if(!data.events.length)pane.append(element('p','Les événements référencés ne sont pas disponibles.'));
+    }catch(e){pane.append(element('p',e.message,'jc-error'));}
+    pane.scrollIntoView({block:'nearest'});
+  }
+  function initAnalysis(){
+    if(!nativeBridge)return;
+    const quiet=element('select');quiet.id='jc-quiet';quiet.append(new Option('Réduire le bruit','quiet'),new Option('Tout afficher','all'));quiet.value=analysisConfig&&analysisConfig.quiet===false?'all':'quiet';
+    const quietLabel=element('label','Détails répétitifs');quietLabel.append(quiet);$('jc-app').parentElement.before(quietLabel);
+    quiet.onchange=()=>{state.page=0;state.selected=null;renderNative();};
+    const noise=element('p','La vue allégée masque les signaux de vie, les compteurs globaux et les états de batterie. Une recherche consulte toutes les lignes. Aucune ligne n’est effacée.','jc-sub');noise.id='jc-noise-note';$('jc-filter-count').parentElement.after(noise);
+    $('jc-analysis-kind').onchange=()=>{analysisPage=0;analysisSelected=null;$('jc-analysis-detail').hidden=true;renderAnalysis();};
+    $('jc-analysis-unread').onchange=()=>{analysisPage=0;analysisSelected=null;$('jc-analysis-detail').hidden=true;renderAnalysis();};
+    $('jc-analysis-prev').onclick=()=>{analysisPage--;renderAnalysis();};$('jc-analysis-next').onclick=()=>{analysisPage++;renderAnalysis();};
+    $('jc-analysis-export').onclick=()=>nativeBridge.command('export-analysis');
+    $('jc-shizuku-run').onclick=()=>{try{nativeBridge.shizukuCleanupRun();refreshShizukuCleanup();setTimeout(refreshShizukuCleanup,1200);}catch(e){analysisMessage(e.message,true);}};
+    $('jc-shizuku-restore').onclick=()=>{try{const r=JSON.parse(nativeBridge.shizukuCleanupRestore());analysisMessage(r.error||('Restauration terminée : '+(r.restored||0)+' restauré(s), '+(r.failed||0)+' échec(s).'),Boolean(r.error));refreshShizukuCleanup();}catch(e){analysisMessage(e.message,true);}};
+    $('jc-analysis-retry').onclick=()=>{try{analysisCall('analysisChange','retry','');refreshAnalysisStatus();}catch(e){analysisMessage(e.message,true);}};
+    $('jc-analysis-settings').addEventListener('toggle',()=>{
+      if(!$('jc-analysis-settings').open){renderAnalysis();return;}
+      refreshAnalysisStatus();analysisConfig=analysisStatus&&analysisStatus.settings||analysisConfig||{};
+      for(const key of ['failures','volume','dns','collection','watch','research'])$('jc-rule-'+key).checked=analysisConfig[key]!==false;
+      $('jc-rule-count').value=analysisConfig.failure_count||8;$('jc-rule-mib').value=analysisConfig.upload_mib||10;$('jc-rule-domains').value=(analysisConfig.domains||[]).join('\n');
+    });
+    $('jc-analysis-save').onclick=()=>{
+      try{
+        const settings={quiet:$('jc-quiet').value==='quiet',failure_count:Number($('jc-rule-count').value),upload_mib:Number($('jc-rule-mib').value),domains:$('jc-rule-domains').value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean)};
+        if(!Number.isInteger(settings.failure_count)||!Number.isInteger(settings.upload_mib))throw new Error('Les seuils doivent être des nombres entiers.');
+        for(const key of ['failures','volume','dns','collection','watch','research'])settings[key]=$('jc-rule-'+key).checked;
+        const result=analysisCall('analysisChange','settings',JSON.stringify(settings));analysisConfig=result.settings;$('jc-analysis-settings').open=false;
+        analysisMessage('Règles enregistrées. Les calculs concernés reprennent sur l’historique; les résultats des anciennes versions restent archivés.');renderAnalysis();
+      }catch(e){analysisMessage(e.message,true);}
+    };
+  }
+  initAnalysis();
+
+  function diagnosticSettings(){const r=JSON.parse(nativeBridge.diagnosticConfigure(JSON.stringify({year:Number($('jt-year').value),utc_offset_minutes:Number($('jt-offset').value),window_seconds:Number($('jt-window').value)})));if(r.error)throw new Error(r.error);return r;}
+  function renderDiagnostic(open=false){
+    if(!nativeBridge||!nativeBridge.diagnosticSummary)return;
+    try{const d=JSON.parse(nativeBridge.diagnosticSummary());if(!d.settings)throw new Error(d.error||'Diagnostic indisponible');
+      if(open){$('jt-year').value=d.settings.year;$('jt-offset').value=d.settings.utc_offset_minutes;$('jt-window').value=d.settings.window_seconds;}
+      $('jt-files-status').textContent=d.file_status||'';$('jt-diagnostic-status').textContent=d.error||d.activity||`${d.records} lignes de diagnostic disponibles. Aucun accès logcat système en direct.`;
+      const imports=$('jt-imports');imports.replaceChildren();for(const row of d.imports||[])imports.append(element('p',`Import ${row.id} · ${row.records} lignes reconnues / ${row.lines_seen} · ${row.member} · ${row.unparsed_lines} lignes non indexées`,'jc-sub'));
+      if(d.recovery){const r=JSON.parse(d.recovery);$('jt-recovery-status').textContent=`${r.recovered_events} événements récupérés · document source ${r.document_complete?'complet':'incomplet ou invalide'} · intégrité ${r.source_integrity} · ${r.issue||'aucune erreur de syntaxe détectée'}`;}
+    }catch(e){$('jt-diagnostic-status').textContent=e.message;}
+  }
+  function nativeDetailExtras(pane,event){
+    if(!nativeBridge)return;const d=event.original.details||{};
+    if(d.uid!==undefined){const p=Array.isArray(d.packages)?d.packages:[];pane.append(element('p',(p.length>1||d.uid===1000)?`UID ${d.uid} partagé · ${p.length} paquets candidats retournés. Processus et service précis non déterminés.`:`UID observé : ${d.uid}. ${d.attribution||''}`,'jc-note'));}
+    if(d.tls_observation){pane.append(element('p',`TLS : ${d.tls_observation}${d.tls_sni?' · '+d.tls_sni:''}`));if(d.tls_sni)pane.append(element('p',d.sni_scope||'Nom annoncé par le client; contenu non identifié.','jc-sub'));}
+    if(d.flow_correlation_id){const flow=element('button','Voir le flux complet');flow.type='button';flow.onclick=()=>flowOpen(String(d.flow_correlation_id));pane.append(flow);}
+    if(d.security_context&&d.security_context.length){const c=element('details');c.append(element('summary','Contexte de sécurité documenté'));for(const e of d.security_context)c.append(element('p',`${e.package} · ${e.cve} · ${e.documented_product}`),element('p',e.applicability,'jc-note'),element('p',e.interpretation,'jc-sub'));pane.append(c);}
+    if(['trafic','dns'].includes(event.original.category)&&nativeBridge.correlate){
+      const button=element('button','Croiser avec le diagnostic');button.type='button';button.id='jt-correlate';const output=element('div');output.id='jt-correlation-result';output.setAttribute('aria-live','polite');
+      button.onclick=()=>{output.replaceChildren();try{
+        const r=JSON.parse(nativeBridge.correlate(Number(event.original.id)));if(r.error)throw new Error(r.error);output.append(element('p',r.interpretation,'jc-note'),element('p',`${r.lines_in_window} lignes dans ±${r.window_ms_each_side/1000} s · ${r.lines_examined} examinées · ${(r.candidates||[]).length} affichées. L’heure comparée est le début observé du flux.`,'jc-sub'));
+        const names={temporal:'Heure proche seulement',endpoint_and_time:'Destination mentionnée à proximité',socket_tuple_reported:'Même socket et UID rapportés'};
+        for(const row of r.candidates||[]){const item=element('div',undefined,'jc-source');item.append(element('strong',`${names[row.match]||row.match} · PID ${row.pid} · écart ${row.delta_ms} ms`),element('span',`Import ${row.import_id}, ligne ${row.source_line} · ${row.process_name||row.tag||'nom inconnu'} · ${row.time_basis}`,'jc-sub'),element('p',row.scope||'PID non vérifié sur le téléphone.','jc-sub'));output.append(item);}
+        const save=element('button','Exporter ce rapprochement');save.type='button';save.id='jt-export-correlation';save.onclick=()=>nativeBridge.command('export-correlation');output.append(save);
+      }catch(e){output.append(element('p',e.message,'jc-error'));}};pane.append(button,output);
+    }
+  }
+  if(nativeBridge){
+    $('jt-export-lines').onclick=()=>nativeBridge.command('export-lines');$('jt-recover').onclick=()=>nativeBridge.command('recover-file');$('jt-save-recovery').onclick=()=>nativeBridge.command('save-recovered');$('jt-save-last').onclick=()=>nativeBridge.command('save-last-export');
+    $('jt-import').onclick=()=>{try{diagnosticSettings();nativeBridge.command('import-diagnostic');}catch(e){$('jt-diagnostic-status').textContent=e.message;}};
+    $('jt-save-settings').onclick=()=>{try{diagnosticSettings();$('jt-diagnostic-status').textContent='Fenêtre enregistrée. Les horloges des anciens imports restent inchangées.';}catch(e){$('jt-diagnostic-status').textContent=e.message;}};
+  }
+
+// Review priority, not a security verdict. Counts with different units remain provisional.
+const AuditRules=(()=>{
+  const levels={gray:0,green:1,blue:1,yellow:2,orange:3,red:4};
+  function compare(manifest,reference={},version){
+    const count=reference.play_count;
+    if(!Number.isFinite(manifest)||manifest<0||typeof count!=='number'||!Number.isFinite(count)||count<=0)return {level:'gray',ratio:null,label:'Comparaison à compléter',provisional:true};
+    const ratio=manifest/count,level=ratio>=4?'red':ratio>=3?'orange':ratio>=2?'yellow':'green';
+    const provisional=reference.count_kind!=='permissions'||reference.same_version!==true||!reference.play_source||reference.reference_origin!=='Saisie utilisateur'||reference.installed_version_code!==version;
+    return {level,ratio,label:(provisional?'Priorité provisoire':'Priorité de revue')+' · '+ratio.toFixed(1)+'×',provisional};
+  }
+  function eventGroup(event){const d=event&&(event.details||(event.original&&event.original.details))||{};if(typeof d.journal_group==='string')return d.journal_group;const uid=Number(d.uid);if(!Number.isInteger(uid)||uid<0||uid%100000<10000)return 'android';if(!Array.isArray(d.packages)||d.packages.length!==1)return 'android';return d.system_app===true?'system':'user';}
+  function packageFor(event){const d=event.details||(event.original&&event.original.details)||{};return eventGroup(event)==='android'?null:Number.isInteger(d.uid)&&d.uid>=0&&Array.isArray(d.packages)&&d.packages.length===1&&typeof d.packages[0]==='string'?d.packages[0]:null;}
+  function max(a,b){return levels[a]>=levels[b]?a:b;}
+  return {compare,eventGroup,packageFor,max};
+})();
+if(typeof module!=='undefined')module.exports=AuditRules;
+
+  function auditAppComparison(app){
+    if(nativeBridge&&nativeBridge.penaltyData){try{const row=penaltyLoad().result.apps.find(a=>a.package_name===app.package_name);if(row?.exposure)return {level:row.color,label:row.exposure.label,penaltyText:'Capacités déclarées · visibilité '+row.exposure.visibility_status};if(row)return {level:row.color==='unknown'?'unknown':row.color==='critical'?'red':row.color,label:row.points===null?'Non évaluée':penaltyNumber(row.H)+' points de base × '+penaltyCompact(row.multiplier),penaltyText:row.H===null?row.reason:penaltyNumber(row.points)+' points pondérés · couleur selon la capacité déclarée'};}catch(e){return {level:'unknown',label:'Calcul indisponible',penaltyText:e.message};}}
+    return AuditRules.compare(app.count,app.reference,app.version_code);
+  }
+  let auditOffset=0,auditStarted=false;
+  const auditRead=value=>{const r=JSON.parse(value);if(r.error)throw new Error(r.error);return r;};
+  const auditDate=ms=>ms?new Date(ms).toISOString():'INCONNU';
+  const auditBadge=r=>element('span',r.label,'ja-badge ja-'+r.level);
+  function renderAudit(){
+    if(!nativeBridge||!nativeBridge.auditSummary){$('ja-status').textContent='Inventaire disponible dans la version Android mise à jour, sur ton téléphone.';return;}
+    try{
+      const s=JSON.parse(nativeBridge.auditSummary());$('ja-total').textContent=s.total||0;$('ja-system').textContent=s.system||0;$('ja-scan-number').textContent=s.scan_id||'À faire';
+      $('ja-status').textContent=s.error||(s.busy?'Inventaire en cours…':s.coverage||'')+(s.file_status?' · '+s.file_status:'');$('ja-scan').disabled=!!s.busy;
+      if(!s.scan_id&&!s.busy&&!s.error&&!auditStarted){auditStarted=true;nativeBridge.command('audit-scan');}
+      const result=auditRead(nativeBridge.auditPage($('ja-search').value,$('ja-scope').value,auditOffset));if(auditOffset&&!result.rows.length){auditOffset=0;renderAudit();return;}
+      $('ja-count').textContent=result.total+' applications pour ces filtres';const list=$('ja-list');list.replaceChildren();
+      for(const app of result.rows){const r=auditAppComparison(app),card=element('article',undefined,'ja-card ja-'+r.level),button=element('button',app.label);button.type='button';button.onclick=()=>renderAuditDetail(app.package_name);
+        card.append(button,element('span',app.package_name,'jc-sub'),auditBadge(r),element('span',`${app.count} droits dans le manifeste · ${r.penaltyText||((app.reference.play_count??'INCONNU')+' dans la référence Play')}`,'ja-data'),element('span',`${app.system_app?'Système':'Autre application'} · UID ${app.uid}${app.reference.watched?' · À examiner':''}`,'jc-sub'));appIdentity(card,app);list.append(card);
+      }
+      $('ja-prev').disabled=!auditOffset;$('ja-next').disabled=auditOffset+25>=result.total;$('ja-page').textContent=`Page ${Math.floor(auditOffset/25)+1} / ${Math.max(1,Math.ceil(result.total/25))}`;
+    }catch(e){$('ja-status').textContent=e.message;}
+  }
+  function auditInput(label,id,value,type='text'){
+    const field=element('input');field.id=id;field.type=type;field.value=value??'';const wrap=element('label',label);wrap.append(field);return wrap;
+  }
+  function renderAuditDetail(pkg){
+    try{
+      const data=auditRead(nativeBridge.auditDetail(pkg)),a=data.app,ref=data.reference||{},r=auditAppComparison({...a,reference:ref}),pane=$('ja-detail');pane.replaceChildren();
+      const head=element('div',undefined,'ja-card ja-'+r.level);head.append(element('h3',a.label),element('p',a.package_name,'jc-sub'),auditBadge(r),element('p',`Version ${a.version_name||'INCONNU'} (${a.version_code}) · UID ${a.uid} · profil ${a.profile_id}`,'ja-data'),element('p',`Attribution : ${a.attribution}. Application ${a.enabled?'activée':'désactivée'}.`,'jc-sub'));appIdentity(head,a);pane.append(head);
+      const pedigree=element('details',undefined,'ja-card');pedigree.append(element('summary','Pédigrée APK · signature, installation et SDK'),element('pre',JSON.stringify({version:a.version_name,version_code:a.version_code,min_sdk:a.min_sdk,target_sdk:a.target_sdk,install_source:a.install_source,certificates:a.certificates,apk:a.apk_evidence},null,2)));pane.append(pedigree);
+      const exposure=PenaltyModel.exposure(a,ref);pane.append(element('p',exposure.label,'ja-badge ja-'+exposure.color),element('p',exposure.scope,'jc-note'));
+      renderCoherenceDetail(pane,pkg);
+      const flowButton=element('button','Voir les flux réseau de cette application');flowButton.type='button';flowButton.onclick=()=>flowOpen(pkg);pane.append(flowButton);
+      if(nativeBridge.openAuditedApp){const actions=element('div',undefined,'jc-row');for(const [label,settings] of [['Ouvrir l’application',false],['Fiche Android et autorisations',true]]){const button=element('button',label);button.type='button';button.onclick=()=>nativeBridge.openAuditedApp(pkg,settings);actions.append(button);}pane.append(actions);}
+
+      if(!(nativeBridge&&nativeBridge.penaltyData)){
+      const form=element('div',undefined,'ja-form ja-card');form.append(element('h3','Référence Google Play'));
+      form.append(auditInput('Nombre visible','ja-play-count',ref.play_count,'number'));const kind=element('select');kind.id='ja-count-kind';for(const [value,label]of [['unknown','Type de comptage inconnu'],['groups','Catégories ou groupes'],['permissions','Permissions individuelles']])kind.append(new Option(label,value));kind.value=ref.count_kind||'unknown';const kl=element('label','Ce qui a été compté');kl.append(kind);form.append(kl);
+      const source=auditInput('Source : lien ou référence de capture','ja-play-source',ref.play_source);source.className='ja-wide';form.append(source);
+      for(const [id,label,checked]of [['ja-same-version','Référence correspondant à cette version installée',ref.same_version===true&&ref.installed_version_code===a.version_code],['ja-watch','Dossier à examiner',ref.watched===true]]){const l=element('label',label),input=element('input');input.type='checkbox';input.id=id;input.checked=checked;l.prepend(input);form.append(l);}
+      const note=element('textarea');note.id='ja-note';note.value=ref.note||'';note.rows=4;note.maxLength=8000;const nl=element('label','Tes observations');nl.className='ja-wide';nl.append(note);form.append(nl);
+      const save=element('button','Enregistrer le dossier'),saved=element('p',undefined,'jc-sub');save.id='ja-save';save.type='button';save.onclick=()=>{try{const count=$('ja-play-count').value.trim();if(count!==''&&(!Number.isInteger(Number(count))||Number(count)<0))throw new Error('Nombre entier positif ou zéro requis.');auditRead(nativeBridge.auditSave(pkg,JSON.stringify({play_count:count===''?null:Number(count),play_source:$('ja-play-source').value,count_kind:kind.value,same_version:$('ja-same-version').checked,note:note.value,watched:$('ja-watch').checked})));const fresh=auditRead(nativeBridge.auditContext(pkg)),updated=AuditRules.compare(fresh.count,fresh.reference,fresh.version_code);head.className='ja-card ja-'+updated.level;head.querySelector('.ja-badge').replaceWith(auditBadge(updated));saved.textContent='Dossier et référence enregistrés avec horodatage.';renderAudit();}catch(e){saved.textContent=e.message;}};form.append(save,saved);pane.append(form);
+      pane.append(element('p',`Origine : ${ref.reference_origin||'Aucune référence renseignée'} · ${auditDate(ref.recorded_ms)}.`,'jc-sub'),element('p','Les groupes affichés dans une interface et les permissions individuelles peuvent avoir des nombres différents. La couleur reste provisoire tant que le type, la version et la source ne correspondent pas.','jc-note'));
+      }
+      const events=element('button','Voir les événements attribués à ce paquet');events.id='ja-events';events.type='button';events.onclick=()=>{$('jc-package').value=pkg;$('jc-app-scope').value='';$('jc-app').value='';$('jc-search').value='';$('jc-kind').value='apps';$('jc-transport').value='';state.page=0;nativeAnchor=0;state.selected=null;setTab('journal');renderNative();};pane.append(events);
+      pane.append(element('h3',a.permissions.length+' autorisations déclarées'));
+      const permissionSearch=element('input');permissionSearch.id='ja-permission-search';permissionSearch.type='search';permissionSearch.placeholder='Chercher un droit ou sa description';permissionSearch.setAttribute('aria-label','Chercher une autorisation');const permissions=element('div');permissions.id='ja-permissions';
+      const showPermissions=()=>{permissions.replaceChildren();for(const p of a.permissions){if(!JSON.stringify(p).toLowerCase().includes(permissionSearch.value.toLowerCase()))continue;const item=element('details',undefined,'ja-description');item.append(element('summary',`${p.label||p.name} · ${p.granted===true?'accordée':p.granted===false?'non accordée':'état INCONNU'}`),element('p',p.name,'jc-sub'),element('p',p.description),element('p',`Protection : ${p.protection} (${p.protection_level}). Définie par : ${p.defined_by||'INCONNU'}.`,'jc-sub'),element('p',p.revocation,'jc-sub'));if(p.bayton)item.append(element('p','Bayton / AOSP : '+(p.bayton.description||p.bayton.label||'Description indisponible')+' · API de référence '+p.bayton.reference_api_level,'jc-sub'));const finding=exposure.findings.find(f=>f.permission===p.name);if(finding)item.append(element('p','L'+finding.level+' · '+finding.reason,'ja-badge ja-'+finding.color));else item.append(element('p','Niveau indéterminé · preuve de visibilité ou règle de capacité manquante','ja-badge ja-unknown'));permissions.append(item);}};permissionSearch.oninput=showPermissions;pane.append(permissionSearch,permissions);showPermissions();
+      pane.append(element('p','Le droit INTERNET concerne la connexion réseau. Ce journal ne permet pas de déduire quelle permission a fourni les données d’un flux. Lire ou modifier le journal d’appels, utiliser le micro et ouvrir une connexion sont des opérations distinctes.','jc-note'));
+      const history=element('details',undefined,'ja-card');history.append(element('summary','Historique du dossier — 100 dernières entrées'));for(const h of data.history)history.append(element('pre',JSON.stringify(h,null,2)));pane.append(history);
+      const imported=element('details',undefined,'ja-card');imported.append(element('summary','Constats du rapport importé — 50 derniers'),element('p',data.import_scope,'jc-sub'));for(const f of data.imported_findings){const item=element('div',undefined,'ja-card ja-'+r.level);item.append(element('strong',f.title||f.rule||'Constat'),auditBadge(r),element('pre',JSON.stringify(f,null,2)));imported.append(item);}pane.append(imported);
+      const raw=element('details',undefined,'ja-card');raw.append(element('summary','Tous les champs, permissions définies et provenance'),element('pre',JSON.stringify(a,null,2)));pane.append(raw);pane.scrollIntoView({block:'start'});
+    }catch(e){$('ja-detail').replaceChildren(element('p',e.message,'jc-error'));}
+  }
+  function auditFindingColor(row){
+    const base=row.severity==='attention'?'yellow':'blue';
+    if(!nativeBridge||!nativeBridge.auditContext||!['volume','failures','watch','research','research-port'].includes(row.rule))return {level:base,label:row.severity==='attention'?'À examiner':'Information'};
+    // These existing rules encode a unique UID:package[:destination] in subject; never join by app label.
+    const match=/^(\d+):([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+)(?::|$)/.exec(row.subject||'');
+    if(!match||Number(match[1])%100000===1000)return {level:base,label:'Attribution ou référence à compléter'};
+    try{const a=auditRead(nativeBridge.auditContext(match[2]));if(a.uid!==Number(match[1]))return {level:base,label:'Identité à vérifier'};const r=AuditRules.compare(a.count,a.reference,a.version_code);return {level:AuditRules.max(base,r.level),label:r.level==='gray'?'Référence Play à compléter':r.label+' · dossier application'};}catch{return {level:base,label:'Référence Play à compléter'};}
+  }
+  for(const id of ['ja-search','ja-scope'])$(id).addEventListener(id==='ja-search'?'input':'change',()=>{auditOffset=0;renderAudit();});
+  $('ja-prev').onclick=()=>{auditOffset=Math.max(0,auditOffset-25);renderAudit();};$('ja-next').onclick=()=>{auditOffset+=25;renderAudit();};
+  $('ja-scan').onclick=()=>{if(nativeBridge&&nativeBridge.auditSummary){nativeBridge.command('audit-scan');renderAudit();}};
+  $('ja-export-full').onclick=()=>nativeBridge.command('export-audit-full');
+  $('ja-import').onclick=()=>{if(nativeBridge&&nativeBridge.auditSummary)nativeBridge.command('import-audit');};$('ja-export').onclick=()=>{if(nativeBridge&&nativeBridge.auditSummary)nativeBridge.command('export-audit');};
+
+  let aivBefore=0,aivNext=0,aivLastPoll=0;
+  function aivRead(method,...args){if(!nativeBridge||typeof nativeBridge[method]!=='function')return null;const data=JSON.parse(nativeBridge[method](...args));if(data.error)throw new Error(data.error);return data;}
+  function aivError(e){$('aiv-status').textContent=e.message||String(e);}
+  let trackerBefore=0;
+  function renderTrackerStatus(){
+    if(!nativeBridge?.trackerStatus)return;
+    try{const s=auditRead(nativeBridge.trackerStatus()),box=$('v22-reference-status');box.replaceChildren();
+      box.append(element('p',`${s.catalog.bayton_permissions} permissions Bayton · ${s.catalog.exodus_trackers} traqueurs Exodus · catalogue du ${s.catalog.fetched_utc}.`));
+      box.append(element('p',`Android du téléphone : API ${s.catalog.device_api_level} · descriptions de référence : API ${s.catalog.bayton_api_level}. ${s.catalog.notice}`,'jc-sub'));
+      box.append(element('p',`APK : ${s.apk.cached_packages} dossiers en cache · ${s.apk.busy?'analyse de '+s.apk.current_package:'en attente du prochain passage'}. ${s.apk.error||''}`));
+      box.append(element('p',s.apk.scope,'jc-sub'));
+      $('v22-tracker-status').textContent=`${s.index.enabled?'Analyse active':'Analyse en pause'} · journal analysé jusqu’à ${s.index.checkpoint} / ${s.index.latest_event} · ${s.index.candidate_flows} flux avec correspondance ou candidat. ${s.index.error||s.index.notice}`;
+    }catch(e){$('v22-tracker-status').textContent=e.message;}
+  }
+  function renderTrackerPage(append=false){
+    if(!nativeBridge?.trackerPage)return;
+    try{const result=auditRead(nativeBridge.trackerPage($('v22-tracker-query').value,append?trackerBefore:0)),box=$('v22-tracker-results');if(!append)box.replaceChildren();
+      trackerBefore=result.next_before||0;renderTrackerStatus();
+      for(const f of result.rows){const card=element('article',undefined,'ja-card');card.append(element('h4',f.app||'Acteur inconnu'));
+        card.append(element('p',f.attribution_unique?'UID '+f.uid+' · '+(f.packages||[]).join(', '):'Auteur applicatif non attribuable; UID '+f.uid,'jc-sub'));
+        for(const t of f.tracker_matches||[])card.append(element('p',`${t.name} · ${t.host} · ${t.evidence} · ${t.domain_boundary_match?'signature réseau concordante':'signature partielle à examiner'}`));
+        if(f.current_apk_tracker_ids?.length)card.append(element('p','Aussi présent dans l’APK actuel : identifiants Exodus '+f.current_apk_tracker_ids.join(', ')+'. '+f.apk_correlation_scope,'jc-note'));
+        for(const t of f.tracker_dns_candidates||[])card.append(element('p',`${t.name} · question DNS ${t.host} · contact ultérieur non établi`,'jc-sub'));
+        card.append(element('p',`Flux : ↑ ${flowBytes(f.tx_bytes)} / ↓ ${flowBytes(f.rx_bytes)} · premier vu ${flowTime(f.first_observed_ms)} · dernier paquet ${flowTime(f.last_packet_ms)}.`));
+        card.append(element('p','Les volumes concernent le flux entier. Une correspondance ne prouve pas le contenu envoyé ni quel SDK a appelé le réseau.','jc-note'));
+        card.append(element('code',f.flow_correlation_id),penaltyButton('Voir ce flux dans le journal',()=>flowOpen(f.flow_correlation_id)));
+        if(f.attribution_unique&&f.packages?.length===1)card.append(penaltyButton('Pédigrée et SDK de l’APK',()=>{setTab('audit');renderAuditDetail(f.packages[0]);}));
+        box.append(card);
+      }
+      if(!result.rows.length&&!append)box.append(element('p','Aucune correspondance dans la partie déjà analysée pour ce filtre. Cela ne prouve pas l’absence de traqueurs.'));
+      $('v22-tracker-more').hidden=result.rows.length<25;
+    }catch(e){$('v22-tracker-status').textContent=e.message;}
+  }
+  $('v22-tracker-export').onclick=()=>nativeBridge?.command('export-trackers');
+  $('v22-tracker-search').onclick=()=>renderTrackerPage(false);
+  $('v22-tracker-more').onclick=()=>renderTrackerPage(true);
+  $('v22-tracker-resume').onclick=()=>{nativeBridge?.trackerResume?.();renderTrackerStatus();renderTrackerPage(false);};
+
+  function renderAivStatus(){try{
+    const s=aivRead('aivSummary');if(!s)return;aivLastPoll=Date.now();
+    if($('aiv-tab'))$('aiv-tab').textContent='Décisions · '+(s.stats_complete===false?'calcul partiel':s.findings);
+    const progress=Number.isFinite(s.checkpoint)?'Traité jusqu’à l’événement '+s.checkpoint+' · dernier enregistré '+s.latest_event_id:s.pending+' événements en attente';
+    $('aiv-status').textContent=(s.operation||(s.watcher_running?'AIV actif':'Analyse AIV en pause'))+' · '+progress+' · '+s.verification+(s.error?' · '+s.error:'')+(s.file_status?' · '+s.file_status:'');
+    $('aiv-status').style.color=String(s.verification).startsWith('BROKEN')?'#ff5964':'';
+    const apps=$('aiv-apps');apps.replaceChildren();if(s.stats_complete===false)apps.append(element('p','Statistiques partielles : '+s.stats_evaluated+' décisions comptabilisées. Le calcul reprend avec l’analyse AIV.'));for(const a of s.apps){apps.append(element('p',a.app+' : '+a.findings+'/'+a.evaluated+' ('+(100*a.ratio).toFixed(1)+' %)'));}
+    if(nativeBridge.auditSummary){const inventory=JSON.parse(nativeBridge.auditSummary());$('aiv-local-ref-status').textContent=(inventory.busy?'Inventaire en cours. ': '')+(inventory.scan_id?'Référence estimée basée sur le dernier inventaire terminé : '+inventory.scan_id+'.':'Appuie sur Actualiser pour créer la référence locale.')+(inventory.error?' '+inventory.error:'');}
+    renderTrackerStatus();
+    const refs=$('aiv-references');refs.replaceChildren();for(const source of s.sources){refs.append(element('p',source.source+' · '+source.apps+' apps · '+source.status+' · '+(source.last_sync_ms?new Date(source.last_sync_ms).toISOString():'jamais mis à jour')));}
+    const rules=$('aiv-rules');rules.replaceChildren();for(const r of s.rules){const b=element('button',r.name+' v'+r.version+' · '+r.decision+' · priorité '+r.priority+(r.enabled?'':' · désactivée'));b.onclick=()=>{$('aiv-config').value=JSON.stringify({name:r.name,decision:r.decision,priority:r.priority,enabled:r.enabled===1,condition:JSON.parse(r.condition)},null,2);};rules.append(b);}
+  }catch(e){aivError(e);}}
+  function aivShowDetail(eventId,target){try{const d=aivRead('aivDetail',Number(eventId));if(!d)return;target.replaceChildren();target.append(element('h3','Événement '+eventId+' · chaîne et décision'));const pre=element('pre',JSON.stringify(d,null,2));pre.style.whiteSpace='pre-wrap';pre.style.overflowWrap='anywhere';target.append(pre);}catch(e){aivError(e);}}
+  function renderAiv(){try{
+    renderAivStatus();const p=aivRead('aivPage',$('aiv-filter').value,aivBefore);if(!p)return;
+    const rows=$('aiv-rows');rows.replaceChildren(element('p','Décisions historiques : chaque décision conserve les règles utilisées au moment de son calcul.','jc-sub'));for(const d of p.rows){const box=element('article',undefined,'jc-source');const open=element('button',d.decision+' · événement '+d.event_id+' · '+d.rule_name);open.style.color=d.decision==='DENIED'?'#ff5964':d.decision==='WATCH'?'#f3c969':'#58c8ab';open.onclick=()=>aivShowDetail(d.event_id,$('aiv-detail'));appIdentity(box,d.identity||{});box.append(open,element('span',new Date(d.timestamp_ms).toISOString(),'jc-sub'));rows.append(box);}if(!p.rows.length)rows.append(element('p','Aucune décision pour ce filtre.'));aivNext=p.next;$('aiv-next').disabled=!aivNext;
+  }catch(e){aivError(e);}}
+  function pollAiv(tab){if((tab==='decisions'||tab==='references')&&Date.now()-aivLastPoll>=10000){if(tab==='decisions')renderAiv();else renderAivStatus();}}
+  function aivEventExtras(pane,event){if(!nativeBridge||!nativeBridge.aivDetail)return;const box=element('details');box.append(element('summary','Intégrité AIV : empreintes et décision'));const content=element('div');box.append(content);box.addEventListener('toggle',()=>{if(box.open)aivShowDetail(event.original.id,content);});pane.append(box);}
+  if(nativeBridge&&nativeBridge.aivSummary){
+    for(const [id,command]of [['aiv-start','aiv-start'],['aiv-stop','aiv-stop'],['aiv-verify','aiv-verify'],['aiv-export','aiv-export'],['aiv-import','aiv-reference']])$(id).onclick=()=>{nativeBridge.command(command);setTimeout(renderAivStatus,1000);};
+    $('aiv-refresh').onclick=()=>renderAiv();$('aiv-ref-refresh').onclick=()=>{nativeBridge.command('audit-scan');$('aiv-local-ref-status').textContent='Inventaire demandé. La référence utilisera automatiquement le dernier relevé terminé.';};$('aiv-ref-export').onclick=()=>nativeBridge.command('export-reference');
+    $('aiv-filter').onchange=()=>{aivBefore=0;renderAiv();};$('aiv-first').onclick=()=>{aivBefore=0;renderAiv();};$('aiv-next').onclick=()=>{aivBefore=aivNext;renderAiv();};
+    $('aiv-save').onclick=()=>{try{JSON.parse($('aiv-config').value);nativeBridge.aivConfigure($('aiv-config').value);}catch(e){aivError(e);}};
+  }
+
+  const groupNames={android:'Android',system:'Système',user:'Utilisateur',all:'Toutes les applications'};
+  const groupDescriptions={android:'UID réservé/partagé · auteur non unique',system:'Préinstallées · package unique',user:'Installées par l’utilisateur · package unique'};
+  const categoryNames={email:'Courriel',messaging:'Messagerie',video:'Vidéo',contacts:'Contacts',weather:'Météo',browser:'Navigateur',photos:'Photos',social:'Réseau social',navigation:'Navigation',utility:'Utilitaire',secure_storage:'Stockage sécurisé',system:'Composant système',unknown:'Fonction inconnue'};
+  let homeGroup='all',homeLimit=25,journalGroupTimer=0;
+  function scoreValue(value){return typeof value!=='number'||!Number.isFinite(value)?null:Math.max(0,Math.min(100,value));}
+  function appScoreColor(value){return value===null?'#6d7f89':value<50?'#ff5964':homeState(value).color;}
+  function renderGroupRings(c){
+    const holder=$('jc-group-rings');holder.replaceChildren();
+    for(const id of ['android','system','user']){
+      const g=(c.groups||[]).find(g=>g.id===id)||{},score=scoreValue(g.score),button=element('button',undefined,'jc-group-card');button.type='button';button.dataset.group=id;
+      button.setAttribute('aria-pressed',String(homeGroup===id));button.setAttribute('aria-label',`${groupNames[id]} : ${score===null?'score indisponible':score+' pour cent'}. Voir les applications.`);
+      const disc=element('span',undefined,'jc-group-disc');disc.style.setProperty('--score-color',appScoreColor(score));disc.style.setProperty('--score-angle',`${score===null?0:score*3.6}deg`);disc.append(element('span',score===null?'—':score+'%','jc-group-number'));
+      button.append(element('strong',groupNames[id]),disc,element('span',groupDescriptions[id],'jc-group-meta'),element('span',`${Number(g.evaluated_count)||0} / ${Number(g.app_count)||0} évaluées`,'jc-group-meta'),element('span',`${Number(g.below_50)||0} sous 50 %`,Number(g.below_50)>0?'jc-group-low':'jc-group-meta'));
+      button.onclick=()=>{homeGroup=id;homeLimit=25;renderUserHome();};holder.append(button);
+    }
+  }
+  function renderGroupedHome(c,status){
+    const list=$('jc-home-app-list'),pane=$('jc-pane-home'),ring=$('jc-score-ring');pane.dataset.lowScore='false';pane.style.background='';renderGroupRings(c);
+    const globalScore=scoreValue(c.score),globalState=homeState(globalScore);ring.style.setProperty('--score-color',globalState.color);ring.style.setProperty('--score-angle',`${globalScore===null?0:globalScore*3.6}deg`);ring.setAttribute('aria-label',`Indice global ${globalScore===null?'indisponible':globalScore+' pour cent'}`);$('jc-score-number').textContent=globalScore===null?'—':globalScore+'%';
+    const selected=homeGroup==='all'?c:(c.groups||[]).find(g=>g.id===homeGroup)||{};
+    const score=scoreValue(selected.score),low=Number(selected.below_50)||0,total=Number(selected.app_count)||0,evaluated=Number(selected.evaluated_count)||0,unknown=Number(selected.unknown_count)||0;
+    $('jc-home-title').textContent=low?`${low} application(s) sous 50 % · ${groupNames[homeGroup]}`:c.available?'Trois groupes, trois moyennes distinctes':'Les trois groupes attendent leur calcul';
+    $('jc-home-sub').textContent='Le cercle principal est la moyenne des applications réellement évaluées. Les non-évaluées restent visibles mais ne modifient pas le dénominateur. Les trois cercles montrent les groupes exclusifs.';
+    $('jc-home-alert').style.setProperty('--score-color',low?'#ff5964':appScoreColor(score));
+    $('jc-home-alert-title').textContent=homeGroup==='all'?'Comment lire ces scores':groupNames[homeGroup]+' · détail du calcul';
+    $('jc-home-alert-text').textContent=`${Number(selected.sum_scores)||0} points ÷ ${evaluated} évaluée(s) = ${score===null?'indisponible':score+' % (arrondi)'}. ${unknown} non évaluée(s) restent affichées mais exclues de la moyenne. Inconnu ne signifie ni sûr ni malveillant. `+(selected.minimum===null||selected.minimum===undefined?'':`Score le plus bas : ${selected.minimum} %.`);
+    const transparency=c.transparency||{};$('jc-home-total').textContent=total.toLocaleString('fr-CA');$('jc-home-evaluated').textContent=evaluated.toLocaleString('fr-CA');$('jc-home-unknown').textContent=unknown.toLocaleString('fr-CA');$('jc-home-findings').textContent=(homeGroup==='all'?Number(c.anomalies)||0:Number(selected.incoherences)||0).toLocaleString('fr-CA');$('jc-home-app-count').textContent=(Number(transparency.non_attributable)||0).toLocaleString('fr-CA');
+    $('jc-home-counter-0').textContent=homeGroup==='all'?'applications observées':'dans ce groupe';$('jc-home-counter-1').textContent='applications évaluées';$('jc-home-counter-u').textContent='non évaluées / inconnues';$('jc-home-counter-2').textContent=homeGroup==='all'?'anomalies locales':'écarts du groupe';$('jc-home-counter-3').textContent='événements réseau non attribuables';
+    $('jc-home-list-title').textContent=groupNames[homeGroup]+' · scores croissants';
+    const query=$('jc-home-search').value.trim().toLocaleLowerCase('fr');
+    const apps=(Array.isArray(c.apps)?c.apps:[]).filter(a=>(homeGroup==='all'||a.group===homeGroup)&&(!query||[a.label,a.package,categoryNames[a.category]||a.category].join(' ').toLocaleLowerCase('fr').includes(query)));
+    list.replaceChildren();if(!apps.length)list.append(element('p','Aucune application pour ce filtre.','jc-sub'));
+    for(const a of apps.slice(0,homeLimit)){
+      const value=scoreValue(a.score),row=element('button',undefined,'jc-home-app'),info=element('span');row.type='button';row.dataset.package=a.package;row.dataset.lowScore=String(value!==null&&value<50);
+      info.append(element('strong',a.label||a.package),element('span',`${groupNames[a.group]} · UID ${a.uid>=0?a.uid:'non disponible'}`,'jc-sub'),element('span',a.group_reason||groupDescriptions[a.group],'jc-sub'),element('span',`${a.category==='unknown'?'Permissions à examiner':categoryNames[a.category]||a.category} · ${Number(a.incoherences)||0} écart(s)`,'jc-sub'),element('span','Voir les permissions et le calcul →','jc-app-detail-hint'));
+      const impact=element('span',value===null?'Non évaluée':value+' %','jc-home-impact');impact.style.setProperty('--home-app-color',appScoreColor(value));row.append(info,impact);
+      row.onclick=()=>{setTab('audit');renderAuditDetail(a.package);};list.append(row);
+    }
+    $('jc-home-more').hidden=apps.length<=homeLimit;$('jc-group-all').setAttribute('aria-pressed',String(homeGroup==='all'));
+    const journal=c.journal||{},pending=journal.complete===false;
+    const t=c.transparency||{};$('jc-home-note').textContent='Android : UID réservé, partagé ou identité non unique. Système : application préinstallée avec package unique. Utilisateur : application installée par l’utilisateur avec package unique. Une liste de paquets candidats n’est jamais une preuve d’auteur. '+(t.complete===false?'La mesure de transparence réseau est encore en indexation. ':'')+(journal.error?'Classement provisoire : '+journal.error:pending?'Index du journal en cours.':'Chaque paquet de l’inventaire apparaît dans un seul groupe.');
+    if(journalGroupTimer){clearTimeout(journalGroupTimer);journalGroupTimer=0;}
+    if(pending&&!journal.error)journalGroupTimer=setTimeout(()=>{journalGroupTimer=0;if(state.tab==='home'&&mvpViewMode==='user'&&document.visibilityState!=='hidden')renderUserHome();},1000);
+    $('jc-refresh-status').textContent=status&&status.message?status.message:`Dernier calcul : ${c.generated_at_ms?new Date(c.generated_at_ms).toLocaleString('fr-CA'):'aucun'}.`;
+  }
+  function renderCoherenceDetail(pane,pkg){
+    const box=element('section',undefined,'ja-card jc-verdict-detail');box.id='jc-verdict-detail';box.append(element('h3','Calcul de cohérence'));
+    const back=element('button','Retour aux trois scores');back.type='button';back.onclick=()=>setTab('home');box.append(back);
+    try{
+      const data=coherenceRead('coherenceDetail',pkg);
+      if(!data||!data.available){box.append(element('p',data&&data.message||'Aucun calcul enregistré. Actualise depuis l’accueil.','jc-sub'));pane.append(box);return;}
+      const v=data.verdict,unknown=v.category==='unknown',score=unknown?null:scoreValue(v.score_local),issues=v.incoherences_local||[];
+      box.dataset.lowScore=String(score!==null&&score<50);box.append(element('strong',(score===null?'Non évaluée':score+' %')+' · '+(unknown?'Fonction à préciser':(categoryNames[v.category]||v.category))),element('p','Une fonction totalement inconnue reste visible mais est exclue de la moyenne. Le groupe repose sur l’identité Android : UID réservé/partagé ou package unique. Une permission déclarée ne prouve pas son utilisation.','jc-sub'));const flows=element('button','Voir ses flux réseau');flows.type='button';flows.onclick=()=>flowOpen(pkg);box.append(flows);
+      const complete=issues.every(i=>Number.isFinite(i.penalty));
+      if(complete&&score!==null){const penalties=issues.reduce((sum,i)=>sum+i.penalty,0);box.append(element('p',`100 points − ${penalties} points de pénalité = ${Math.max(0,100-penalties)} % (minimum 0).`));}
+      else if(!complete)box.append(element('p','Ancien résultat : appuie sur Actualiser pour obtenir le détail des points.','jc-sub'));
+      for(const issue of issues){const item=element('article',undefined,'jc-verdict-issue');item.append(element('strong',(issue.permission==='*'?'Cumul ou volume':issue.permission)+(Number.isFinite(issue.penalty)?' · −'+issue.penalty+' points':'')),element('p',issue.reason));box.append(item);}
+      if(!issues.length)box.append(element('p','Aucun écart relevé par les règles disponibles.'));
+      box.append(element('p',`Moteur ${data.engine} · ${data.generated_at_ms?new Date(data.generated_at_ms).toLocaleString('fr-CA'):'date inconnue'}. Permissions déclarées; leur utilisation n’est pas établie par ce calcul.`,'jc-sub'));
+    }catch(e){box.append(element('p',e.message,'jc-error'));}
+    pane.append(box);
+  }
+  $('jc-group-all').onclick=()=>{homeGroup='all';homeLimit=25;renderUserHome();};
+  $('jc-home-search').oninput=()=>{homeLimit=25;renderUserHome();};
+  $('jc-home-more').onclick=()=>{homeLimit+=25;renderUserHome();};
+
+  let mvpViewMode='user',coherencePollTimer=0;
+  const mvpFleet={
+    score:72,total:150,watch:3,critical:1,
+    devices:[
+      {name:'Téléphone — Direction 044',meta:'Android · vu il y a 2 min',score:61,state:'Action requise'},
+      {name:'Portable — Finance 018',meta:'Windows · vu il y a 4 min',score:68,state:'Action requise'},
+      {name:'Serveur — Fichiers 007',meta:'Linux · vu à l’instant',score:73,state:'À surveiller'},
+      {name:'Téléphone — Ventes 031',meta:'Android · vu il y a 1 min',score:84,state:'Surveillance'},
+      {name:'Portable — RH 012',meta:'Windows · vu il y a 3 min',score:91,state:'Cohérence élevée'}
+    ]
+  };
+  function homeState(score){
+    if(score===null)return {color:'#6d7f89',title:'Calcul en attente',sub:'Aucune couverture suffisante pour calculer un indice sans inventer de résultat.',alert:'Données insuffisantes'};
+    if(score>=85)return {color:'#47d89f',title:'Cohérence élevée dans les applications évaluées',sub:'Peu d’incohérences sont relevées par les règles disponibles.',alert:'Cohérence élevée'};
+    if(score>=70)return {color:'#e3c35b',title:'Quelques éléments méritent une vérification',sub:'Les applications au score le plus faible sont affichées en premier.',alert:'Surveillance recommandée'};
+    if(score>=50)return {color:'#ef9a4d',title:'Plusieurs observations demandent une vérification',sub:'Examine les permissions et le contexte avant de conclure.',alert:'Cohérence réduite'};
+    return {color:'#ff5964',title:'Indice sous 50 %',sub:'Le rouge indique une priorité de revue, jamais une preuve d’activité malveillante.',alert:'Priorité de revue'};
+  }
+  function coherenceRead(method,...args){
+    if(!nativeBridge||typeof nativeBridge[method]!=='function')return null;
+    const value=JSON.parse(nativeBridge[method](...args));if(value.error)throw new Error(value.error);return value;
+  }
+  function setMvpMode(mode){
+    mvpViewMode=mode==='ti'?'ti':'user';root.dataset.viewMode=mvpViewMode;
+    $('jc-mode-user').setAttribute('aria-pressed',String(mvpViewMode==='user'));
+    $('jc-mode-ti').setAttribute('aria-pressed',String(mvpViewMode==='ti'));
+    if(state.tab!=='home')setTab('home');else renderMvpHome();
+  }
+  function renderFleetDemo(){
+    const score=mvpFleet.score,st=homeState(score),ring=$('jc-score-ring'),list=$('jc-home-app-list'),pane=$('jc-pane-home');
+    pane.dataset.lowScore='false';$('jc-endpoint-config').hidden=true;$('jc-refresh-status').textContent='Mode TI de démonstration : Actualiser ne contacte aucun parc réel.';
+    $('jc-mode-banner').innerHTML='<strong>Vue TI · simulation MVP.</strong> Les données de parc ci-dessous sont fictives et servent uniquement à montrer l’interface. Les onglets techniques inspectent ce téléphone.';
+    $('jc-home-eyebrow').textContent='État global du parc · simulation';$('jc-score-label').textContent='score du parc · simulé';
+    ring.style.setProperty('--score-color',st.color);ring.style.setProperty('--score-angle',`${score*3.6}deg`);ring.setAttribute('aria-label',`Simulation TI : score du parc ${score} pour cent`);$('jc-score-number').textContent=score+'%';
+    $('jc-home-title').textContent='Attention, 3 appareils présentent des éléments à examiner.';$('jc-home-sub').textContent='Démonstration d’un parc de 150 appareils. Aucune donnée de parc réelle n’est utilisée.';
+    $('jc-home-alert').style.setProperty('--score-color',st.color);$('jc-home-alert-title').innerHTML='<span class="jc-sim-tag">Simulation</span>';$('jc-home-alert-text').textContent='Cette vue illustre seulement le futur mode technicien; elle ne déclenche aucune action sur un appareil.';
+    pane.style.background='';$('jc-home-total').textContent=mvpFleet.total.toLocaleString('fr-CA');$('jc-home-evaluated').textContent=mvpFleet.total.toLocaleString('fr-CA');$('jc-home-unknown').textContent='0';$('jc-home-findings').textContent=mvpFleet.watch.toLocaleString('fr-CA');$('jc-home-app-count').textContent='0';
+    $('jc-home-counter-0').textContent='appareils simulés';$('jc-home-counter-1').textContent='évalués · simulé';$('jc-home-counter-u').textContent='non évalués · simulé';$('jc-home-counter-2').textContent='alertes · simulé';$('jc-home-counter-3').textContent='non attribuables · simulé';$('jc-home-list-title').textContent='Appareils à examiner · simulation';
+    list.replaceChildren();for(const d of mvpFleet.devices){const row=element('div',undefined,'jc-home-app'),info=element('div');info.append(element('strong',d.name),element('p',d.meta+' · '+d.state,'jc-sub'));const impact=element('span',d.score+' %','jc-home-impact');impact.style.setProperty('--home-app-color',d.score<50?'#ff5964':d.score<70?'#ef9a4d':d.score<85?'#e3c35b':'#47d89f');row.append(info,impact);list.append(row);}
+    $('jc-home-note').textContent='Mode TI de démonstration : les appareils, scores et alertes de parc sont simulés. Les données réelles de ce téléphone ne sont jamais présentées comme des données de parc.';
+  }
+  function renderLegacyUserHome(status){
+    const ring=$('jc-score-ring'),number=$('jc-score-number'),list=$('jc-home-app-list'),pane=$('jc-pane-home');pane.dataset.lowScore='false';pane.style.background='';
+    try{
+      const s=aivRead('aivSummary');
+      if(!s){number.textContent='--%';$('jc-home-title').textContent='Moteur de cohérence non encore relié';$('jc-home-sub').textContent='Actualiser peut déjà refaire l’inventaire local; relie ensuite le moteur HTTPS pour calculer l’indice.';list.replaceChildren();return;}
+      const evaluated=Math.max(0,Number(s.stats_evaluated)||0),findings=Math.max(0,Number(s.findings)||0),apps=Array.isArray(s.apps)?s.apps:[];
+      const score=evaluated?Math.max(0,Math.min(100,Math.round(100-(findings/evaluated*100)))):null,st=homeState(score);
+      ring.style.setProperty('--score-color',st.color);ring.style.setProperty('--score-angle',`${score===null?0:score*3.6}deg`);number.textContent=score===null?'--%':score+'%';$('jc-home-title').textContent='Résultat de secours basé sur les décisions AIV locales';$('jc-home-sub').textContent='Le moteur de cohérence des permissions n’a pas encore produit de résultat. Cette valeur de secours n’est pas un verdict de sécurité.';
+      $('jc-home-alert').style.setProperty('--score-color',st.color);$('jc-home-alert-title').textContent='Moteur de cohérence en attente';$('jc-home-alert-text').textContent=status&&status.message?status.message:'Relie une URL HTTPS puis appuie sur Actualiser.';
+      $('jc-home-total').textContent=apps.length.toLocaleString('fr-CA');$('jc-home-evaluated').textContent=evaluated.toLocaleString('fr-CA');$('jc-home-unknown').textContent=Math.max(0,apps.length-evaluated).toLocaleString('fr-CA');$('jc-home-findings').textContent=findings.toLocaleString('fr-CA');$('jc-home-app-count').textContent='—';
+      $('jc-home-counter-0').textContent='applications observées';$('jc-home-counter-1').textContent='décisions AIV';$('jc-home-counter-u').textContent='non évaluées';$('jc-home-counter-2').textContent='signalements AIV';$('jc-home-counter-3').textContent='attribution réseau';$('jc-home-list-title').textContent='Données AIV locales · secours';
+      list.replaceChildren();const ranked=[...apps].filter(a=>Number(a.evaluated)>0).sort((a,b)=>(Number(b.ratio)||0)-(Number(a.ratio)||0)).slice(0,10);for(const a of ranked){const ratio=Math.max(0,Number(a.ratio)||0),pct=Math.min(100,Math.round(ratio*100)),row=element('div',undefined,'jc-home-app'),info=element('div');info.append(element('strong',a.app||'Application non identifiée'),element('p',`${Number(a.findings)||0} signalement(s) / ${Number(a.evaluated)||0} décision(s)`,'jc-sub'));const impact=element('span',pct+' % signalé','jc-home-impact');impact.style.setProperty('--home-app-color',pct>=50?'#ff5964':pct>=25?'#ef9a4d':pct>=10?'#e3c35b':'#47d89f');row.append(info,impact);list.append(row);}
+      if(!ranked.length)list.append(element('p','Aucune décision AIV évaluée pour le moment.','jc-sub'));
+    }catch(e){number.textContent='--%';$('jc-home-title').textContent='Indice temporairement indisponible';$('jc-home-sub').textContent=e.message||String(e);list.replaceChildren();}
+  }
+  function renderUserHome(){
+    $('jc-mode-banner').innerHTML='<strong>Vue utilisateur.</strong> L’inventaire provient de ce téléphone. Le calcul distant ne reçoit que le nom du paquet et les permissions demandées/déclarées.';
+    $('jc-home-eyebrow').textContent='Cohérence des permissions · trois groupes';$('jc-score-label').textContent='indice observé';
+    let status=null,coherence=null;try{status=coherenceRead('coherenceStatus');coherence=coherenceRead('coherenceSummary');}catch(e){$('jc-refresh-status').textContent=e.message||String(e);}
+    const config=$('jc-endpoint-config');config.hidden=!(nativeBridge&&nativeBridge.coherenceConfigureEndpoint&&(!status||!status.endpoint_configured));
+    if(status&&status.endpoint_configured&&$('jc-coherence-endpoint'))$('jc-coherence-endpoint').value=status.endpoint||'';
+    if(coherence&&Array.isArray(coherence.groups))renderGroupedHome(coherence,status);else renderLegacyUserHome(status);
+    if(status&&status.message)$('jc-refresh-status').textContent=status.message;
+    $('jc-home-refresh').disabled=Boolean(status&&status.running);
+    $('jc-home-refresh').textContent=status&&status.running?'Actualisation…':'Actualiser';
+  }
+  function renderMvpHome(){if(mvpViewMode==='ti'){delete $('jc-score-ring').dataset.penaltyColor;renderFleetDemo();}else renderUserHome();}
+  function stopCoherencePoll(){if(coherencePollTimer){clearInterval(coherencePollTimer);coherencePollTimer=0;}}
+  function startCoherenceRefresh(){
+    if(mvpViewMode==='ti'){renderFleetDemo();return;}
+    try{
+      const started=coherenceRead('coherenceRefresh');if(!started){$('jc-refresh-status').textContent='Cette version du lecteur ne possède pas encore le pont d’actualisation.';return;}
+      renderUserHome();stopCoherencePoll();let ticks=0;
+      coherencePollTimer=setInterval(()=>{ticks++;try{const s=coherenceRead('coherenceStatus');renderUserHome();if(!s||!s.running||ticks>=70)stopCoherencePoll();}catch(e){$('jc-refresh-status').textContent=e.message||String(e);stopCoherencePoll();}},1000);
+    }catch(e){$('jc-refresh-status').textContent=e.message||String(e);}
+  }
+  $('jc-mode-user').onclick=()=>setMvpMode('user');$('jc-mode-ti').onclick=()=>setMvpMode('ti');$('jc-home-refresh').onclick=startCoherenceRefresh;$('jc-home-details-ti').onclick=()=>setMvpMode('ti');root.querySelectorAll('[data-home-target]').forEach(btn=>btn.onclick=()=>setTab(btn.dataset.homeTarget));root.querySelectorAll('[data-menu-target]').forEach(btn=>btn.onclick=()=>setTab(btn.dataset.menuTarget));
+  $('jc-coherence-link').onclick=()=>{try{const result=coherenceRead('coherenceConfigureEndpoint',$('jc-coherence-endpoint').value);$('jc-refresh-status').textContent=result&&result.message?result.message:'Configuration enregistrée.';renderUserHome();}catch(e){$('jc-refresh-status').textContent=e.message||String(e);}};
+  root.dataset.viewMode='user';
+
+/* AIV penalty model /1. Pure, local, shared by the reader and host tests. */
+const PenaltyModel = (() => {
+  'use strict';
+  const defaults = {
+    schema: 'aiv-penalty-policy/3', name: 'Barème AIV personnel',
+    visibility: 'principal', derived_reference: true, aggregation: {denominator: 'apps_with_hidden', include_zero: false},
+    multipliers: {level2: 2, level3: 3, level4: {mode: 'installed_app_count', fixed: 1, combination:'sum'},
+      level5: {mode: 'linked_packages', fixed: 1, relations: ['initiating_package', 'installing_package', 'update_owner_package']}},
+    colors: {yellow_ratio: 2, orange_ratio: 4, red_ratio: 6, critical_ratio: 8,
+      level5_forces_critical: true, blink_critical: true,
+      global_yellow_points: 100, global_orange_points: 1000, global_red_points: 10000, global_critical_points: 100000},
+    automatic: {enabled:true,component_links:true,android_warnings:true,android_descriptions:true,catalog:[{"id": "android-call_phone", "permission": "android.permission.CALL_PHONE", "levels": [2], "source": "https://developer.android.com/reference/android/Manifest.permission#CALL_PHONE", "reason": "Appel sans passage par la confirmation du composeur.", "require_granted": true, "enabled": true}, {"id": "android-call_privileged", "permission": "android.permission.CALL_PRIVILEGED", "levels": [2], "source": "https://developer.android.com/reference/android/Manifest.permission#CALL_PRIVILEGED", "reason": "Appels privilégiés, y compris urgences; restrictions système.", "require_granted": true, "enabled": true}, {"id": "android-read_call_log", "permission": "android.permission.READ_CALL_LOG", "levels": [2], "source": "https://developer.android.com/reference/android/Manifest.permission#READ_CALL_LOG", "reason": "Lecture du journal des appels.", "require_granted": true, "enabled": true}, {"id": "android-write_call_log", "permission": "android.permission.WRITE_CALL_LOG", "levels": [2], "source": "https://developer.android.com/reference/android/Manifest.permission#WRITE_CALL_LOG", "reason": "Modification des données du journal des appels.", "require_granted": true, "enabled": true}, {"id": "android-read_contacts", "permission": "android.permission.READ_CONTACTS", "levels": [2], "source": "https://developer.android.com/reference/android/Manifest.permission#READ_CONTACTS", "reason": "Lecture des contacts.", "require_granted": true, "enabled": true}, {"id": "android-write_contacts", "permission": "android.permission.WRITE_CONTACTS", "levels": [2], "source": "https://developer.android.com/reference/android/Manifest.permission#WRITE_CONTACTS", "reason": "Modification des contacts.", "require_granted": true, "enabled": true}, {"id": "android-read_sms", "permission": "android.permission.READ_SMS", "levels": [2], "source": "https://developer.android.com/reference/android/Manifest.permission#READ_SMS", "reason": "Lecture des messages SMS.", "require_granted": true, "enabled": true}, {"id": "android-send_sms", "permission": "android.permission.SEND_SMS", "levels": [2], "source": "https://developer.android.com/reference/android/Manifest.permission#SEND_SMS", "reason": "Envoi de SMS; restrictions Android et opérateur possibles.", "require_granted": true, "enabled": true}, {"id": "android-install_packages", "permission": "android.permission.INSTALL_PACKAGES", "levels": [2], "source": "https://developer.android.com/reference/android/Manifest.permission#INSTALL_PACKAGES", "reason": "Installation privilégiée de paquets.", "require_granted": true, "enabled": true}, {"id": "android-delete_packages", "permission": "android.permission.DELETE_PACKAGES", "levels": [2], "source": "https://developer.android.com/reference/android/Manifest.permission#DELETE_PACKAGES", "reason": "Suppression privilégiée de paquets.", "require_granted": true, "enabled": true}, {"id": "android-write_secure_settings", "permission": "android.permission.WRITE_SECURE_SETTINGS", "levels": [2], "source": "https://developer.android.com/reference/android/Manifest.permission#WRITE_SECURE_SETTINGS", "reason": "Modification privilégiée des paramètres sécurisés.", "require_granted": true, "enabled": true}, {"id": "android-modify_phone_state", "permission": "android.permission.MODIFY_PHONE_STATE", "levels": [2], "source": "https://developer.android.com/reference/android/Manifest.permission#MODIFY_PHONE_STATE", "reason": "Modification privilégiée de l’état téléphonique.", "require_granted": true, "enabled": true}, {"id": "android-grant_runtime_permissions", "permission": "android.permission.GRANT_RUNTIME_PERMISSIONS", "levels": [2, 4], "source": "https://developer.android.com/reference/android/Manifest.permission#GRANT_RUNTIME_PERMISSIONS", "reason": "Gestion des permissions d’autres applications; portée potentielle.", "require_granted": true, "enabled": true}, {"id": "android-revoke_runtime_permissions", "permission": "android.permission.REVOKE_RUNTIME_PERMISSIONS", "levels": [2, 4], "source": "https://developer.android.com/reference/android/Manifest.permission#REVOKE_RUNTIME_PERMISSIONS", "reason": "Révocation des permissions d’autres applications; portée potentielle.", "require_granted": true, "enabled": true}, {"id": "android-change_component_enabled_state", "permission": "android.permission.CHANGE_COMPONENT_ENABLED_STATE", "levels": [2, 4], "source": "https://developer.android.com/reference/android/Manifest.permission#CHANGE_COMPONENT_ENABLED_STATE", "reason": "Activation ou désactivation de composants d’autres applications.", "require_granted": true, "enabled": true}]},
+    rules: []
+  };
+  const clone = x => JSON.parse(JSON.stringify(x));
+  const integer = (x, max = 1000000) => typeof x === 'number' && Number.isSafeInteger(x) && x >= 0 && x <= max;
+  const text = x => typeof x === 'string' && x.trim().length > 0;
+  function keys(o, allowed, at) {
+    if (!o || typeof o !== 'object' || Array.isArray(o)) throw Error(at + ' : objet requis');
+    for (const k of Object.keys(o)) if (!allowed.includes(k)) throw Error(at + ' : champ inconnu ' + k);
+  }
+  function validatePolicy(input) {
+    input=clone(input);
+    // Preserve the old L5 configuration for inspection, but the /2 formula has four levels.
+    if(['aiv-penalty-policy/1','aiv-penalty-policy/2'].includes(input.schema))input.schema=defaults.schema;
+    if(typeof input.multipliers?.level4==='number')input.multipliers.level4=clone(defaults.multipliers.level4);
+    keys(input, Object.keys(defaults), 'Barème');
+    const p = clone(defaults);
+    for (const k of ['schema','name','visibility','rules','derived_reference']) if (input[k] !== undefined) p[k] = clone(input[k]);
+    for (const k of ['aggregation','multipliers','colors','automatic']) if (input[k] !== undefined) {
+      keys(input[k], Object.keys(defaults[k]), k); Object.assign(p[k], input[k]);
+    }
+    if (input.multipliers && input.multipliers.level5) {
+      keys(input.multipliers.level5, Object.keys(defaults.multipliers.level5), 'L5');
+      p.multipliers.level5 = Object.assign(clone(defaults.multipliers.level5), input.multipliers.level5);
+    }
+    if(input.multipliers?.level4){keys(input.multipliers.level4,['mode','fixed','combination'],'L4');p.multipliers.level4=Object.assign(clone(defaults.multipliers.level4),input.multipliers.level4);}
+    if(!['installed_app_count','fixed','disabled'].includes(p.multipliers.level4.mode)||!integer(p.multipliers.level4.fixed))throw Error('Réglage L4 invalide');
+    if(!['sum','product'].includes(p.multipliers.level4.combination))throw Error('Combinaison L4 invalide');
+    if (typeof p.derived_reference !== 'boolean') throw Error('derived_reference : booléen requis');
+    if (p.schema !== defaults.schema || !text(p.name)) throw Error('Schéma / nom du barème invalide');
+    if (!['principal','toutes'].includes(p.visibility)) throw Error('Vue attendue : principal ou toutes');
+    if (p.aggregation.denominator !== 'apps_with_hidden' || p.aggregation.include_zero !== false)
+      throw Error('Seules les applications avec H > 0 contribuent à la synthèse');
+    for (const k of ['level2','level3']) if (!integer(p.multipliers[k])) throw Error(k + ' : entier de 0 à 1 000 000 requis');
+    const l5 = p.multipliers.level5;
+    if (!['linked_packages','fixed','disabled'].includes(l5.mode) || !integer(l5.fixed)) throw Error('Réglage L5 invalide');
+    if (!Array.isArray(l5.relations) || !l5.relations.length || l5.relations.some(x => !['initiating_package','installing_package','update_owner_package'].includes(x))) throw Error('Relations L5 invalides');
+    for (const names of [['yellow_ratio','orange_ratio','red_ratio','critical_ratio'],['global_yellow_points','global_orange_points','global_red_points','global_critical_points']]) {
+      let previous = 0;
+      for (const k of names) {if (typeof p.colors[k] !== 'number' || !Number.isFinite(p.colors[k]) || p.colors[k] <= previous || p.colors[k] > Number.MAX_SAFE_INTEGER || String(p.colors[k]).includes('e')) throw Error('Seuils strictement croissants requis : ' + k); previous = p.colors[k];}
+    }
+    for (const k of ['level5_forces_critical','blink_critical']) if (typeof p.colors[k] !== 'boolean') throw Error(k + ' : booléen requis');
+    if (!Array.isArray(p.rules) || p.rules.length > 2000) throw Error('Liste de règles invalide');
+    if(['enabled','component_links','android_warnings','android_descriptions'].some(k=>typeof p.automatic[k]!=='boolean')||!Array.isArray(p.automatic.catalog)||p.automatic.catalog.length>2000)throw Error('Détecteur automatique invalide');
+    const ids = new Set();
+    for (const r of [...p.rules,...p.automatic.catalog]) {
+      keys(r, ['id','permission','prefix','levels','source','reason','require_granted','enabled'], 'Règle');
+      if (!text(r.id) || ids.has(r.id) || !text(r.source) || !text(r.reason) || (text(r.permission) === text(r.prefix))) throw Error('Règle : id unique, permission OU préfixe, source et raison requis');
+      ids.add(r.id);
+      if (!Array.isArray(r.levels) || !r.levels.length || r.levels.some(n => ![2,3,4].includes(n))) throw Error('Règles automatiques : niveaux 2, 3, 4 uniquement');
+      if (r.require_granted !== undefined && typeof r.require_granted !== 'boolean') throw Error('require_granted invalide');
+      if (r.enabled !== undefined && typeof r.enabled !== 'boolean') throw Error('enabled invalide');
+    }
+    return p;
+  }
+  function validateEvidence(e) {
+    keys(e, ['visibility','findings','note'], 'Observations');
+    if (e.visibility !== undefined) {
+      keys(e.visibility, ['principal','toutes'], 'Visibilité');
+      for (const [name, v] of Object.entries(e.visibility)) {
+        if (v === null) continue;
+        keys(v, ['count','kind','source','same_version','version_code','permission_names','surface'], name);
+        if(v.permission_names!==undefined&&(!Array.isArray(v.permission_names)||v.permission_names.length>10000||v.permission_names.some(n=>typeof n!=='string'||!n||n.length>512)||new Set(v.permission_names).size!==v.permission_names.length||v.permission_names.length!==v.count))throw Error('Liste de permissions distinctes et nombre concordant requis');
+        if(v.surface!==undefined&&!['google_play','android_settings','unknown'].includes(v.surface))throw Error('Surface invalide');
+        if (!integer(v.count,100000) || !['permissions','groups','unknown'].includes(v.kind) || !text(v.source) || typeof v.same_version !== 'boolean' || !integer(v.version_code,Number.MAX_SAFE_INTEGER)) throw Error(name + ' : nombre, unité, source et version requis');
+      }
+    }
+    if (e.findings !== undefined) {
+      if (!Array.isArray(e.findings) || e.findings.length > 2000) throw Error('Liste de constats invalide');
+      const ids = new Set();
+      for (const f of e.findings) {
+        keys(f, ['id','permission','levels','source','reason','active','outside_permissions','version_code','observed_at','hidden','share_count'], 'Constat');
+        if (!text(f.id) || ids.has(f.id) || !text(f.source) || !text(f.reason) || !integer(f.version_code,Number.MAX_SAFE_INTEGER) || !text(f.observed_at) || !Number.isFinite(Date.parse(f.observed_at))) throw Error('Constat : id unique, source, raison, version et date requis');
+        ids.add(f.id);
+        if (!Array.isArray(f.levels) || !f.levels.length || f.levels.some(n => ![2,3,4,5].includes(n))) throw Error('Niveaux attendus : 2 à 5');
+        if(f.hidden!==undefined&&typeof f.hidden!=='boolean')throw Error('hidden : booléen requis');
+        if(f.share_count!==undefined&&!integer(f.share_count,100000))throw Error('share_count : entier de 0 à 100 000 requis');
+        if (f.active !== undefined && ![true,false,null].includes(f.active)) throw Error('État actif invalide');
+        if (f.levels.includes(5) && typeof f.outside_permissions !== 'boolean') throw Error('L5 : préciser outside_permissions');
+      }
+    }
+    if (e.note !== undefined && typeof e.note !== 'string') throw Error('Note invalide');
+    return clone(e);
+  }
+  function group(a) {
+    const uid = a.uid, candidates = a.uid_packages;
+    if (!integer(uid,Number.MAX_SAFE_INTEGER) || uid % 100000 < 10000 || !Array.isArray(candidates) || new Set(candidates).size !== 1) return 'android';
+    return a.system_app === true ? 'system' : 'user';
+  }
+  function references(a, ref, policy) {
+    const saved = ref.penalty_evidence || {}, result = clone(saved.visibility || {});
+    if (!Object.prototype.hasOwnProperty.call(result,'principal') && typeof ref.play_count === 'number') result.principal = {
+      count: ref.play_count, source: ref.play_source, kind: ref.count_kind,
+      same_version: ref.same_version, version_code: ref.installed_version_code
+    };
+    if (!Object.prototype.hasOwnProperty.call(result,'principal') && policy.derived_reference && a.local_reference) {
+      const r=a.local_reference;
+      if(r.estimated===true && r.version_code===a.version_code) result.principal={count:r.visible_permission_count,kind:'permissions',source:r.reference_note,same_version:true,version_code:r.version_code,estimated:true};
+    }
+    return result;
+  }
+  function visible(a, v, real) {
+    if (!v || !integer(v.count,100000) || !text(v.source)) return {value:null,reason:'Référence de visibilité manquante'};
+    if (v.kind !== 'permissions') return {value:null,reason:'Groupes et permissions individuelles : unités non comparables'};
+    if (v.same_version !== true || v.version_code !== a.version_code) return {value:null,reason:'Version de référence non confirmée ou périmée'};
+    if (v.count > real) return {value:null,reason:'Contradiction : davantage de permissions visibles que déclarées'};
+    return {value:v.count,hidden:real-v.count,source:v.source,estimated:v.estimated===true};
+  }
+  function graph(apps, policy) {
+    const result = new Map();
+    for (const a of apps) {
+      const s = a.install_source || {};
+      if (s.source_available !== true) continue;
+      for (const relation of policy.multipliers.level5.relations) {
+        const parent = s[relation];
+        if (!text(parent) || parent === a.package_name) continue;
+        // Android API observation only. Originating package, endpoint, family and certificate excluded.
+        if (!['PackageManager.getInstallSourceInfo','PackageManager.getInstallerPackageName'].includes(s.source)) continue;
+        const key = (a.profile_id ?? Math.floor(a.uid / 100000)) + ':' + parent;
+        if (!result.has(key)) result.set(key, new Map());
+        const children = result.get(key);
+        if (!children.has(a.package_name)) children.set(a.package_name, {package_name:a.package_name,label:a.label,relations:[]});
+        const child = children.get(a.package_name);
+        if (!child.relations.some(r => r.type === relation)) child.relations.push({type:relation,source:s.source,observed_ms:s.observed_ms ?? null,
+          scope:relation === 'installing_package' ? 'Installateur enregistré; valeur modifiable dans Android' : relation === 'initiating_package' ? 'Initiateur de la dernière installation/mise à jour exposée' : 'Responsable des mises à jour'});
+      }
+    }
+    return result;
+  }
+  function componentGraph(apps){
+    const grants=new Map(),byOwner=new Map();
+    for(const app of apps){if(app.enabled===false)continue;const profile=app.profile_id??Math.floor(app.uid/100000);
+      for(const p of app.permissions||[]){if(p.granted!==true)continue;const key=profile+':'+p.name;if(!grants.has(key))grants.set(key,[]);grants.get(key).push(app);}}
+    for(const owner of apps){const routes=new Map(),profile=owner.profile_id??Math.floor(owner.uid/100000);
+      if(owner.enabled!==false)for(const c of owner.components||[]){if(c.exported!==true||c.enabled!==true)continue;
+        const gates=c.type==='provider'?[['read',c.read_permission],['write',c.write_permission]]:[['invoke',c.permission]];
+        for(const [operation,permission]of gates){if(!text(permission))continue;
+          if(!routes.has(permission))routes.set(permission,{permission,components:[],clients:[],scope:'Correspondance statique : composant exporté et permission accordée au client. AppOps, chemins, contrôles internes et exécution non vérifiés.'});
+          const route=routes.get(permission);route.components.push({name:c.name,type:c.type,operation,path_restrictions:c.path_permissions_present===true});
+          for(const client of grants.get(profile+':'+permission)||[]){if(client.package_name===owner.package_name||client.uid===owner.uid)continue;
+            if(!route.clients.some(a=>a.package_name===client.package_name))route.clients.push({package_name:client.package_name,label:client.label,uid:client.uid});}
+        }
+      }byOwner.set(profile+':'+owner.package_name,[...routes.values()]);
+    }return byOwner;
+  }
+  // V22 capability/disclosure levels are independent of the retained legacy numeric formula.
+  function exposure(a, ref={}) {
+    const permissions=new Map((a.permissions||[]).map(p=>[typeof p==='string'?p:p.name,typeof p==='string'?{name:p}:p]));
+    const ev=ref.penalty_evidence?.visibility||{};
+    const exact=v=>v&&v.kind==='permissions'&&v.same_version===true&&v.version_code===a.version_code&&text(v.source)&&Array.isArray(v.permission_names)&&new Set(v.permission_names).size===v.count;
+    const principal=exact(ev.principal)?new Set(ev.principal.permission_names):null;
+    const all=exact(ev.toutes)?new Set(ev.toutes.permission_names):null;
+    const consistent=!(principal&&all&&[...principal].some(n=>!all.has(n)))&&!(principal&&[...principal].some(n=>!permissions.has(n)))&&!(all&&[...all].some(n=>!permissions.has(n)));
+    const full=consistent&&ev.principal?.surface==='google_play'&&principal&&principal.size===permissions.size&&[...permissions.keys()].every(n=>principal.has(n));
+    const system=new Set(['WRITE_SETTINGS','WRITE_SECURE_SETTINGS','GRANT_RUNTIME_PERMISSIONS','REVOKE_RUNTIME_PERMISSIONS','ADJUST_RUNTIME_PERMISSIONS_POLICY','MANAGE_APP_OPS_MODES','UPDATE_APP_OPS_STATS','INSTALL_PACKAGES','DELETE_PACKAGES','CLEAR_APP_USER_DATA','CHANGE_COMPONENT_ENABLED_STATE','SET_PREFERRED_APPLICATIONS','FORCE_STOP_PACKAGES','MANAGE_USERS','CREATE_USERS','INTERACT_ACROSS_USERS','INTERACT_ACROSS_USERS_FULL','MANAGE_DEVICE_ADMINS','MANAGE_PROFILE_AND_DEVICE_OWNERS','MANAGE_DEVICE_POLICY_RUNTIME_PERMISSIONS','MANAGE_DEVICE_POLICY_APPS_CONTROL','SYSTEM_ALERT_WINDOW']);
+    const autonomous=new Set(['RECEIVE_BOOT_COMPLETED','READ_LOGS','READ_PHONE_STATE','PACKAGE_USAGE_STATS']);
+    const colors={0:'unknown',1:'green',2:'yellow',3:'orange',4:'red',5:'gray'};
+    const titles={0:'Indéterminé',1:'L1 · Déclarations concordantes',2:'L2 · Toutes les autorisations',3:'L3 · Action sans intervention',4:'L4 · Avertissement de détournement',5:'L5 · Portée système ou autres applications'};
+    const findings=[];let level=full?1:0;
+    for(const p of permissions.values()){
+      const descriptions=[{text:p.description||'',source:'Description Android du téléphone'},{text:p.bayton?.description||'',source:'Bayton / AOSP · API '+(p.bayton?.reference_api_level||'?')}];
+      const short=p.name.startsWith('android.permission.')?p.name.slice(19):'';let n=0,reason='',source='';
+      if(consistent&&principal?.has(p.name)&&ev.principal?.surface==='google_play'){n=1;reason='Permission présente dans la liste Google Play fournie pour cette version.';source=ev.principal.source;}
+      if(consistent&&principal&&all&&!principal.has(p.name)&&all.has(p.name)){n=2;reason='Présente dans Toutes les autorisations, absente de la liste principale fournie pour cette version.';source=ev.toutes.source;}
+      for(const d of descriptions){if(/(à votre insu|sans votre (intervention|confirmation)|without (your|user) (knowledge|confirmation|interaction)|without asking)/i.test(d.text)&&!/(ne permet pas|does not allow)/i.test(d.text)){n=Math.max(n,3);reason=d.text;source=d.source;}}
+      if(autonomous.has(short)&&n<3){n=3;reason='Capacité de fonctionnement ou d’observation sans action immédiate dans l’application; usage non démontré.';source='Règle AIV V22 · définition Android';}
+      for(const d of descriptions){if(/(malveillant|malicious)/i.test(d.text)){n=Math.max(n,4);reason=d.text;source=d.source;}}
+      if(system.has(short)){n=5;reason='Permission permettant de modifier le système, la configuration ou le fonctionnement d’autres applications.';source='Règle AIV V22 · définition Android';}
+      if(n>0)findings.push({permission:p.name,level:n,color:colors[n],reason,source,granted:p.granted??null,effective_status:p.granted===false?'NON_ACCORDEE':p.granted===true?'ACCORD_ANDROID_APP_OPS_NON_VERIFIES':'INCONNU',operation_observed:false});
+      level=Math.max(level,n);
+    }
+    if(level===1&&!full)level=0;
+    return {schema:'aiv-exposure/22',level,color:colors[level],label:titles[level],findings,disclosure_verified:!!full,visibility_status:!consistent?'CONTRADICTOIRE':full?'LISTES_CONCORDANTES':principal?'PARTIELLE':'INCONNUE',counts:Object.fromEntries([2,3,4,5].map(n=>[n,findings.filter(f=>f.level===n).length])),scope:'Niveau de capacité déclarée et de visibilité. Une permission refusée reste indiquée comme telle. Aucune action, malveillance ou donnée transmise n’est déduite du niveau.'};
+  }
+
+  function calculate(a, ref, p, links, installedCount, routes) {
+    const permissions = new Map();
+    for (const raw of a.permissions || []) {const v = typeof raw === 'string' ? {name:raw} : raw; if (v && text(v.name)) permissions.set(v.name,v);}
+    const R = permissions.size, refs = references(a,ref,p), layers = {};
+    for (const key of ['principal','toutes']) layers[key] = visible(a,refs[key],R);
+    if (layers.principal.value !== null && layers.toutes.value !== null && layers.toutes.value < layers.principal.value) {
+      layers.principal = layers.toutes = {value:null,reason:'Contradiction : Toutes les autorisations contient moins que la vue principale'};
+    }
+    const evidence = ref.penalty_evidence || {}, matched = [], excluded = [];
+    for (const f of evidence.findings || []) {
+      if (f.version_code !== a.version_code) {excluded.push({...f,exclusion:'Constat d’une autre version'});continue;}
+      if (f.permission && !permissions.has(f.permission)) {excluded.push({...f,exclusion:'Permission absente du dernier inventaire'});continue;}
+      matched.push({...f,origin:'Observation utilisateur'});
+    }
+    for (const r of [...p.rules,...(p.automatic.enabled?p.automatic.catalog:[])]) if (r.enabled !== false) for (const permission of permissions.values()) {
+      if ((r.permission === permission.name || text(r.prefix) && permission.name.startsWith(r.prefix)) && (!r.require_granted || permission.granted === true))
+        matched.push({id:r.id+':'+permission.name,permission:permission.name,levels:r.levels,source:r.source,reason:r.reason,origin:p.automatic.catalog.includes(r)?'Détection automatique · permission accordée':'Règle du barème'});
+    }
+    if(p.automatic.enabled&&p.automatic.android_descriptions)for(const permission of permissions.values()){
+      const description=permission.autonomy_description;
+      if(permission.granted===true&&text(description)&&/^(permet|autorise|allows)\b/i.test(description.trim())&&!/(ne permet pas|ne vous permet pas|does not allow|not permitted)/i.test(description))
+        matched.push({id:'android-description:'+permission.name,permission:permission.name,levels:[2],source:'Description Android (définition fournie par android)',reason:description,origin:'Détection textuelle : autonomie mentionnée dans la description'});
+    }
+    if(p.automatic.enabled&&p.automatic.android_warnings)for(const f of [...matched]){
+      const permission=permissions.get(f.permission);if(permission?.granted===true&&text(permission.warning)&&f.levels.includes(2))
+        matched.push({...f,id:f.id+':warning',levels:[3],source:'Description de permission retournée par Android',reason:permission.warning,origin:'Avertissement Android observé'});
+    }
+    if(p.automatic.enabled&&p.automatic.component_links)for(const route of routes){
+      if(route.clients.length&&permissions.get(route.permission)?.granted===true)
+        matched.push({id:'route:'+route.permission,permission:route.permission,levels:[4],share_count:route.clients.length,source:'PackageManager : composants exportés et permissions accordées',reason:route.scope,origin:'Portée potentielle détectée',route});
+    }
+    const selected=layers[p.visibility], H=selected.value===null?null:selected.hidden;
+    const hiddenNames=new Set(selected.estimated?(a.local_reference?.hidden_candidates||[]):[]);
+    const counts={}, sets={2:new Set(),3:new Set(),4:new Set(),5:new Set()}, sharing=new Map();
+    for(const f of matched){
+      if(H===null||H===0||!(f.hidden===true||(f.permission&&hiddenNames.has(f.permission)))){
+        excluded.push({...f,exclusion:'Lien avec une permission moins visible non établi pour la vue retenue'});continue;
+      }
+      if(f.active===false){excluded.push({...f,exclusion:'Capacité signalée inactive'});continue;}
+      for(const n of new Set(f.levels)){
+        if(n===5&&!(f.active===true&&f.outside_permissions===true)){excluded.push({...f,exclusion:'L5 : accès spécial actif hors permissions non confirmé'});continue;}
+        const identity=f.permission||f.id;sets[n].add(identity);
+        if(n===4){if(!sharing.has(identity))sharing.set(identity,[]);sharing.get(identity).push(f);}
+      }
+    }
+    for(const n of [2,3,4,5])counts[n]=sets[n].size;
+    const profile=a.profile_id??Math.floor(a.uid/100000),linked=Array.from((links.get(profile+':'+a.package_name)||new Map()).values());
+    const factors=[2,3].map(n=>BigInt(Math.max(1,p.multipliers['level'+n]*counts[n]))),shareFactors=[];
+    const combine=p.multipliers.level4.combination;let F4=combine==='sum'?0n:1n;
+    for(const [identity,items] of sharing){
+      const explicit=new Set(items.filter(f=>f.share_count!==undefined).map(f=>f.share_count));
+      let count=1,scope='Désactivé dans le barème';
+      if(explicit.size>1){excluded.push({id:identity,exclusion:'Portées L4 contradictoires; facteur laissé neutre'});scope='Portée contradictoire';}
+      else if(p.multipliers.level4.mode!=='disabled'){
+        count=explicit.size?Array.from(explicit)[0]:p.multipliers.level4.mode==='fixed'?p.multipliers.level4.fixed:installedCount;
+        scope=explicit.size?'Portée renseignée dans le constat':p.multipliers.level4.mode==='fixed'?'Pondération fixe du barème':'Pondération potentielle : tous les paquets inventoriés du même profil; partage effectif non établi';
+      }
+      const factor=BigInt(Math.max(1,count));if(p.multipliers.level4.mode!=='disabled'&&explicit.size<=1){if(combine==='sum')F4+=BigInt(count);else F4*=factor;}shareFactors.push({identity,count,factor:String(factor),scope});
+    }
+    factors.push(F4<1n?1n:F4);
+    const l5=p.multipliers.level5;factors.push(BigInt(counts[5]&&l5.mode!=='disabled'?Math.max(1,l5.mode==='fixed'?l5.fixed:linked.length):1));
+    // V32.1: legacy V21 multipliers are retired. A1-A5 exposure is the active model.
+    const multiplier=1n,points=H===null?null:BigInt(H);
+    const ratio=H===null?null:selected.value===0?R>0?Infinity:1:R/selected.value;
+    const classified=new Set(matched.map(f=>f.permission));const unclassified=[...hiddenNames].filter(n=>!classified.has(n));
+    const partial=p.automatic.enabled&&H>0&&(!selected.estimated||unclassified.length>0||a.components_collected!==true);
+    const color=H===null||partial&&multiplier===1n?'unknown':H===0?'green':colorFor(multiplier,1n,p);
+    return {package_name:a.package_name,label:a.label || a.package_name,uid:a.uid,group:group(a),R,H,V:selected.value,layers,
+      routes,unclassified,coverage_partial:partial,components_collected:a.components_collected===true,estimated:selected.estimated===true,multiplier:String(multiplier),share_factors:shareFactors,installed_count:installedCount,points:points === null ? null : points.toString(),ratio:ratio === Infinity ? '∞' : ratio,color,counts,
+      factors:['1','1','1','1'],K:linked.length,linked,matched,excluded,version_code:a.version_code,
+      reason:selected.reason || '',policy_name:p.name,visibility:p.visibility,
+      l5_status:counts[5] ? (linked.length ? 'Accès actif observé et relations disponibles' : 'Accès actif observé; aucune relation disponible, facteur neutre') : 'Aucun accès L5 actif confirmé',
+      install_source:a.install_source || {source_available:false,reason:'Relevé ancien : refaire l’inventaire'}};
+  }
+  function colorFor(n,d,p){
+    let c='green';
+    // Decimal thresholds compared as rationals: no Number conversion of huge penalties.
+    for(const [key,next]of [['yellow_ratio','yellow'],['orange_ratio','orange'],['red_ratio','red'],['critical_ratio','critical']]){
+      const threshold=String(p.colors[key]);const [whole,fraction='']=threshold.split('.');
+      const scale=10n**BigInt(fraction.length);
+      if(n*scale>=BigInt(whole+fraction)*d)c=next;
+    }
+    return c;
+  }
+  function decimal(n,d){if(!d)return null;const v=(n*100n+d/2n)/d;return (v/100n)+'.'+String(v%100n).padStart(2,'0');}
+  function aggregate(rows,p){
+    const included=rows.filter(r=>r.H!==null&&r.H>0&&r.points!==null);
+    const sum=included.reduce((s,r)=>s+BigInt(r.points),0n),base=included.reduce((s,r)=>s+BigInt(r.H),0n),n=BigInt(included.length);
+    const evaluated=rows.filter(r=>r.H!==null).length;
+    const levels22=rows.filter(r=>r.exposure),peak=Math.max(0,...levels22.map(r=>r.exposure.level));
+    const semantic=levels22.length?{exposure_level:peak,exposure_levels:Object.fromEntries([2,3,4,5].map(n=>[n,levels22.filter(r=>r.exposure.findings.some(f=>f.level===n)).length])),color:peak>1?({2:'yellow',3:'orange',4:'red',5:'gray'}[peak]):levels22.length===rows.length&&levels22.every(r=>r.exposure.level===1)?'green':'unknown'}:{};
+    return {total:rows.length,concerned:included.length,unknown:rows.length-evaluated,zero:rows.filter(r=>r.H===0).length,
+      hidden:Number(base),base:evaluated?String(base):null,base_mean:n?decimal(base,n):evaluated?'0.00':null,sum:String(sum),mean:decimal(sum,n),
+      multiplier:base?decimal(sum,base):evaluated?'1.00':null,multiplier_numerator:base?String(sum):evaluated?'1':null,multiplier_denominator:base?String(base):evaluated?'1':null,
+      maximum:included.reduce((m,r)=>BigInt(r.points)>m?BigInt(r.points):m,0n).toString(),color:base?(sum===base&&included.some(r=>r.coverage_partial)?'unknown':colorFor(sum,base,p)):evaluated?'green':'unknown',
+      levels:Object.fromEntries([2,3,4,5].map(n=>[n,rows.filter(r=>r.counts[n]>0).length])),...semantic};
+  }
+  function evaluate(input,policy) {
+    const p=validatePolicy(policy || defaults), seen=new Set(), apps=[];
+    for(const a of input.apps || []) {const key=(a.profile_id??Math.floor(a.uid/100000))+':'+a.package_name;if(!seen.has(key)){seen.add(key);apps.push(a);}}
+    const totals=new Map();for(const a of apps){const profile=a.profile_id??Math.floor(a.uid/100000);totals.set(profile,(totals.get(profile)||0)+1);}
+    const links=graph(apps,p),routes=componentGraph(apps), rows=apps.map(a=>calculate(a,(input.references || {})[a.package_name] || {},p,links,totals.get(a.profile_id??Math.floor(a.uid/100000)),routes.get((a.profile_id??Math.floor(a.uid/100000))+':'+a.package_name)||[]));
+    for(const row of rows){const raw=apps.find(a=>a.package_name===row.package_name&&a.uid===row.uid);if(raw?.audit_schema==='aiv-audit/22'){row.exposure=exposure(raw,(input.references||{})[row.package_name]||{});row.numeric_color=row.color;row.color=row.exposure.color;}}
+    rows.sort((a,b)=>a.points===null?(b.points===null?a.package_name.localeCompare(b.package_name):1):b.points===null?-1:BigInt(a.points)===BigInt(b.points)?a.package_name.localeCompare(b.package_name):BigInt(a.points)>BigInt(b.points)?-1:1);
+    return {schema:'aiv-penalty-result/2',policy:p,scan_id:input.scan_id,apps:rows,summary:aggregate(rows,p),groups:['android','system','user'].map(id=>({id,...aggregate(rows.filter(r=>r.group===id),p)}))};
+  }
+  return {defaults:()=>clone(defaults),validatePolicy,validateEvidence,evaluate,group,exposure};
+})();
+if(typeof module!=='undefined')module.exports=PenaltyModel;
+
+  const penaltyColors={gray:'#a6a9ad',unknown:'#79b5dd',green:'#47d89f',yellow:'#e3c35b',orange:'#ef9a4d',red:'#ff5964',critical:'#ff3344'};
+  let penaltyCache=null,penaltyImportTimer=0;
+  function penaltyRead(method,...args){const raw=nativeBridge&&nativeBridge[method]&&nativeBridge[method](...args);if(!raw)throw Error('Ce calcul nécessite AIV 0.6.14.');const r=JSON.parse(raw);if(r.error)throw Error(r.error);return r;}
+  function penaltySettings(){const c=penaltyRead('penaltyConfig');c.policy=PenaltyModel.validatePolicy(c.policy||{});c.references=c.references||{};return c;}
+  function penaltyValidateSettings(c){
+    if(c.schema!=='aiv-penalty-settings/1'||!c.references||typeof c.references!=='object'||Array.isArray(c.references))throw Error('Format attendu : aiv-penalty-settings/1');
+    if(Object.keys(c).some(k=>!['schema','policy','references'].includes(k)))throw Error('Champ de configuration inconnu');
+    c.policy=PenaltyModel.validatePolicy(c.policy);
+    for(const [pkg,e] of Object.entries(c.references)){if(!/^[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)*$/.test(pkg))throw Error('Paquet invalide');c.references[pkg]=PenaltyModel.validateEvidence(e);}
+    return c;
+  }
+  function penaltySave(c){penaltyRead('penaltySave',JSON.stringify(penaltyValidateSettings(c)));penaltyCache=null;}
+  function penaltySnapshot(input,settings){
+    const stable=x=>Array.isArray(x)?x.map(stable):x&&typeof x==='object'?Object.fromEntries(Object.keys(x).sort().map(k=>[k,stable(x[k])])):x;
+    // Scan identifiers/times are not evidence changes. Every app field and reference is.
+    const identity=JSON.stringify(stable({engine:'aiv-penalty/0.6.22-exposure-1',apps:input.apps,references:input.references,policy:settings.policy}));
+    if(nativeBridge.calculationLoad){const saved=penaltyRead('calculationLoad',identity);if(saved.cached&&saved.result?.schema==='aiv-penalty-result/2')return {...saved.result,scan_id:input.scan_id};}
+    const result=PenaltyModel.evaluate(input,settings.policy);
+    if(nativeBridge.calculationSave){try{penaltyRead('calculationSave',identity,JSON.stringify(result));}catch(e){penaltyStatus('Calcul terminé; instantané non enregistré : '+e.message);}}
+    return result;
+  }
+  function penaltyLoad(force=false){
+    if(!penaltyCache||force){const input=penaltyRead('penaltyData'),settings=penaltySettings();penaltyCache={input,settings,result:penaltySnapshot(input,settings)};}
+    return penaltyCache;
+  }
+  function penaltyNumber(value){if(value===null||value===undefined)return '—';const [whole,fraction]=String(value).split('.');return whole.replace(/\B(?=(\d{3})+(?!\d))/g,' ')+(fraction&&fraction!=='00'?','+fraction:'');}
+  function penaltyCompact(value){
+    if(value===null||value===undefined)return '—';
+    const [whole]=String(value).split('.');
+    if(whole.length<=6)return penaltyNumber(value);
+    return whole[0]+','+whole.slice(1,3)+'e'+(whole.length-1);
+  }
+  function penaltyDisc(disc,row,policy){
+    disc.dataset.penaltyColor=row.color;
+    let badge=disc.querySelector('.jp-multiplier');if(!badge){badge=element('span',undefined,'jp-multiplier');disc.append(badge);}
+    badge.textContent=row.exposure?('L'+row.exposure.level):row.exposure_level!==undefined?(row.exposure_level?'L'+row.exposure_level:'?'):row.multiplier===null?'× —':'×'+penaltyCompact(row.multiplier);if(row.exposure?.level===0)badge.textContent='?';
+    badge.title=(row.exposure?.label||'Capacité déclarée; score numérique historique')+' · Multiplicateur : '+penaltyNumber(row.multiplier)+(row.multiplier_denominator?' ; rapport exact '+row.multiplier_numerator+'/'+row.multiplier_denominator:'');
+    badge.classList.toggle('jp-critical-symbol',row.color==='critical'&&policy.colors.blink_critical);
+  }
+  function penaltyButton(label,action){const b=element('button',label);b.type='button';b.onclick=action;return b;}
+  function penaltyStatus(text){$('jp-status').textContent=text;}
+  function renderPenaltyColors(){
+    const box=$('aiv-score-colors');if(box)box.replaceChildren(element('p','V22 : L1 vert · L2 jaune · L3 orange · L4 rouge · L5 gris. Bleu : indéterminé. Les couleurs représentent les capacités déclarées; les nombres conservent le calcul V21.'));
+  }
+  function renderPenaltySettings(){
+    try{
+      const c=penaltySettings(),p=c.policy,box=$('jp-controls');box.replaceChildren();
+      const make=(label,value,type='number')=>{const l=element('label',label),i=element('input');i.type=type;if(type==='checkbox')i.checked=value;else i.value=value;i.min='0';l.append(i);box.append(l);return i;};
+      const select=(label,choices,value)=>{const l=element('label',label),i=element('select');for(const [v,t]of choices)i.append(new Option(t,v));i.value=value;l.append(i);box.append(l);return i;};
+      const auto=make('Détecter automatiquement les capacités documentées',p.automatic.enabled,'checkbox');
+      const routes=make('Détecter les accès potentiels entre applications',p.automatic.component_links,'checkbox');
+      const descriptions=make('Détecter les mentions explicites d’autonomie dans les descriptions Android',p.automatic.android_descriptions,'checkbox');
+      const warnings=make('Compter les avertissements Android observés en L3',p.automatic.android_warnings,'checkbox');
+      const derived=make('Référence locale estimée quand aucune observation n’est renseignée',p.derived_reference,'checkbox');
+      const view=select('Vue de référence',[['principal','Vue principale'],['toutes','Toutes les autorisations']],p.visibility);
+      const weights=[2,3].map(n=>make('Multiplicateur de niveau '+n,p.multipliers['level'+n]));
+      const mode=select('L4 · portée par capacité de partage',[['installed_app_count','Tous les paquets du profil (potentiel)'],['fixed','Valeur fixe'],['disabled','Désactivé']],p.multipliers.level4.mode);
+      const fixed=make('Portée fixe L4 (si choisie)',p.multipliers.level4.fixed);
+      const combination=select('Combiner les capacités L4',[['sum','Additionner les portées'],['product','Multiplier les portées (ancien calcul)']],p.multipliers.level4.combination);
+      const l5mode=select('L5 confirmé : portée installation',[['linked_packages','Paquets reliés par une source Android'],['fixed','Valeur fixe'],['disabled','Désactivé']],p.multipliers.level5.mode);
+      const l5fixed=make('Portée fixe L5',p.multipliers.level5.fixed);
+      const ratioKeys=['yellow_ratio','orange_ratio','red_ratio','critical_ratio'];
+      const ratio=ratioKeys.map((k,i)=>make(['Multiplicateur jaune','Multiplicateur orange','Multiplicateur rouge','Multiplicateur critique'][i],p.colors[k]));
+      const blink=make('Animer le symbole critique',p.colors.blink_critical,'checkbox');
+      box.append(penaltyButton('Enregistrer et recalculer',()=>{try{
+        const fresh=penaltySettings();fresh.policy.visibility=view.value;fresh.policy.derived_reference=derived.checked;
+        fresh.policy.automatic.android_descriptions=descriptions.checked;fresh.policy.automatic.enabled=auto.checked;fresh.policy.automatic.component_links=routes.checked;fresh.policy.automatic.android_warnings=warnings.checked;fresh.policy.multipliers.level4.combination=combination.value;fresh.policy.multipliers.level5.mode=l5mode.value;fresh.policy.multipliers.level5.fixed=Number(l5fixed.value);
+        weights.forEach((w,i)=>{fresh.policy.multipliers['level'+(i+2)]=Number(w.value);});
+        fresh.policy.multipliers.level4.mode=mode.value;fresh.policy.multipliers.level4.fixed=Number(fixed.value);
+        ratio.forEach((w,i)=>{fresh.policy.colors[ratioKeys[i]]=Number(w.value);});
+        fresh.policy.colors.blink_critical=blink.checked;
+        penaltySave(fresh);renderPenaltySettings();penaltyStatus('Réglages enregistrés. Les résultats ont été recalculés.');
+      }catch(e){penaltyStatus(e.message);}}));
+      $('jp-json').value=JSON.stringify(c,null,2);$('jp-preview').textContent='';
+    }catch(e){penaltyStatus(e.message);}
+  }
+  function penaltyPreview(){const c=penaltyValidateSettings(JSON.parse($('jp-json').value)),current=penaltyLoad(),input=JSON.parse(JSON.stringify(current.input));
+    for(const [pkg,e]of Object.entries(c.references)){input.references[pkg]={...(input.references[pkg]||{}),penalty_evidence:e};}
+    const r=PenaltyModel.evaluate(input,c.policy);$('jp-preview').textContent=`Prévisualisation : ${penaltyNumber(r.summary.base)} points de base × ${penaltyNumber(r.summary.multiplier)} · ${r.summary.concerned} applications avec caché · ${r.summary.unknown} non évaluées.\nPénalité cumulée : ${penaltyNumber(r.summary.sum)}. Aucun réglage appliqué.`;return c;}
+  $('jp-validate').onclick=()=>{try{penaltyPreview();penaltyStatus('Configuration valide.');}catch(e){penaltyStatus(e.message);}};
+  $('jp-apply-json').onclick=()=>{try{penaltySave(penaltyPreview());renderPenaltySettings();penaltyStatus('Configuration appliquée.');}catch(e){penaltyStatus(e.message);}};
+  $('jp-reset').onclick=()=>{try{const c=penaltySettings();c.policy=PenaltyModel.defaults();$('jp-json').value=JSON.stringify(c,null,2);$('jp-json').closest('details').open=true;penaltyPreview();penaltyStatus('Barème par défaut préparé; tes observations restent présentes. Appuie sur Appliquer le JSON pour le choisir.');}catch(e){penaltyStatus(e.message);}};
+  $('jp-export').onclick=()=>{try{const c=penaltySettings();penaltySave(c);nativeBridge.command('export-penalty');penaltyStatus('Choisis où enregistrer le fichier de réglages.');}catch(e){penaltyStatus(e.message);}};
+  function penaltyCheckImport(){try{if(!nativeBridge||!nativeBridge.penaltyImported)return;const value=nativeBridge.penaltyImported();if(!value)return;
+    const incoming=JSON.parse(value);const c=['aiv-penalty-policy/1','aiv-penalty-policy/2','aiv-penalty-policy/3'].includes(incoming.schema)?{...penaltySettings(),policy:incoming}:incoming;
+    penaltyValidateSettings(c);const fresh=penaltySettings();c.references={...fresh.references,...c.references};
+    $('jp-json').value=JSON.stringify(c,null,2);$('jp-json').closest('details').open=true;penaltyPreview();penaltyStatus('Fichier lu. Vérifie la prévisualisation puis applique le JSON.');
+    clearInterval(penaltyImportTimer);penaltyImportTimer=0;
+  }catch(e){penaltyStatus('Import refusé : '+e.message);clearInterval(penaltyImportTimer);penaltyImportTimer=0;}}
+  $('jp-import').onclick=()=>{nativeBridge.command('import-penalty');clearInterval(penaltyImportTimer);let ticks=0;penaltyImportTimer=setInterval(()=>{penaltyCheckImport();if(++ticks>300){clearInterval(penaltyImportTimer);penaltyImportTimer=0;}},1000);};
+  function renderPenaltyHome(){
+    try{
+      const scan=penaltyRead('auditSummary');if(penaltyCache&&penaltyCache.input.scan_id!==scan.scan_id)penaltyCache=null;
+      const {result:r,input}=penaltyLoad(),g=r.summary,p=r.policy,ring=$('jc-score-ring'),list=$('jc-home-app-list');
+      $('jc-endpoint-config').hidden=true;$('jc-pane-home').dataset.lowScore=String(g.color==='critical');$('jc-pane-home').style.background='';
+      $('jc-mode-banner').textContent='L1 vert · L2 jaune · L3 orange · L4 rouge · L5 rose WATCHER. Bleu : indéterminé. Les couleurs indiquent la capacité déclarée; le calcul numérique V21 reste disponible.';
+      $('jc-home-eyebrow').textContent='Indice de pénalité AIV';$('jc-score-label').textContent='moyenne par application avec écart';
+      $('jc-score-number').textContent=penaltyCompact(g.base_mean);$('jc-score-number').title=penaltyNumber(g.base_mean);$('jc-score-number').style.fontSize='';penaltyDisc(ring,g,p);
+      ring.style.setProperty('--score-color',penaltyColors[g.color]);ring.style.setProperty('--score-angle',g.base===null?'0deg':'360deg');ring.setAttribute('aria-label',penaltyNumber(g.base_mean)+' points moyens de base, multiplicateur '+penaltyNumber(g.multiplier));
+      $('jc-home-title').textContent=g.concerned?`${g.concerned} applications avec du caché sur ${g.total}`:'Aucune application avec caché évalué pour le moment';
+      $('jc-home-sub').textContent=`${penaltyNumber(g.base)} écarts ÷ ${g.concerned} applications concernées = ${penaltyNumber(g.base_mean)} de moyenne. Cumul pondéré : ${penaltyNumber(g.base)} × ${penaltyNumber(g.multiplier)}${g.base&&g.multiplier_numerator && BigInt(g.multiplier_numerator)%BigInt(g.multiplier_denominator)!==0?' (arrondi)':''} = ${penaltyNumber(g.sum)} points pondérés. ${g.zero} sans écart et ${g.unknown} non évaluées restent hors du calcul du multiplicateur.`;
+      $('jc-home-alert').style.setProperty('--score-color',penaltyColors[g.color]);$('jc-home-alert-title').textContent='Composition et portée du résultat';
+      $('jc-home-alert-text').textContent=`L2 : ${(g.exposure_levels||g.levels)[2]} apps · L3 : ${(g.exposure_levels||g.levels)[3]} · L4 : ${(g.exposure_levels||g.levels)[4]} · L5 : ${(g.exposure_levels||g.levels)[5]}. Maximum individuel : ${penaltyNumber(g.maximum)} points. ${p.name}. Les points sont une pondération AIV, pas un pourcentage de danger.`;
+      const ids=['jc-home-total','jc-home-evaluated','jc-home-unknown','jc-home-findings','jc-home-app-count'];
+      [g.total,g.concerned,g.unknown,g.hidden,g.zero].forEach((v,i)=>{$(ids[i]).textContent=penaltyNumber(v);});
+      ['paquets inventoriés','avec écart · incluses','non évalués','éléments moins visibles','sans écart · exclus'].forEach((v,i)=>{$(['jc-home-counter-0','jc-home-counter-1','jc-home-counter-u','jc-home-counter-2','jc-home-counter-3'][i]).textContent=v;});
+      const holder=$('jc-group-rings');holder.replaceChildren();
+      for(const group of r.groups){const b=penaltyButton('',()=>{homeGroup=group.id;homeLimit=25;renderPenaltyHome();});b.className='jc-group-card';b.dataset.group=group.id;b.setAttribute('aria-pressed',String(homeGroup===group.id));
+        const disc=element('span',undefined,'jc-group-disc');disc.style.setProperty('--score-color',penaltyColors[group.color]);disc.style.setProperty('--score-angle',group.base===null?'0deg':'360deg');const number=element('strong',penaltyCompact(group.base_mean),'jp-group-number');number.title=penaltyNumber(group.base_mean);disc.append(number);penaltyDisc(disc,group,p);
+        b.append(element('strong',groupNames[group.id]),disc,element('span',`Moyenne sans multiplicateur · ${group.concerned} / ${group.total} avec écart · ${group.unknown} inconnues`,'jc-group-meta'));holder.append(b);}
+      $('jc-home-list-title').textContent=groupNames[homeGroup]+' · pénalités décroissantes';
+      const q=$('jc-home-search').value.trim().toLocaleLowerCase('fr');const rows=r.apps.filter(a=>(homeGroup==='all'||a.group===homeGroup)&&(!q||[a.label,a.package_name].join(' ').toLocaleLowerCase('fr').includes(q)));
+      list.replaceChildren();for(const a of rows.slice(0,homeLimit)){const b=penaltyButton('',()=>{setTab('audit');renderAuditDetail(a.package_name);});b.className='jc-home-app';b.dataset.package=a.package_name;
+        const info=element('span');info.append(element('strong',a.label),element('span',groupNames[a.group]+' · '+a.package_name+' · UID '+(a.uid??'inconnu'),'jc-sub'),element('span',a.H===null?a.reason:`${a.H} moins visibles${a.estimated ? " (estimation)" : ""}${a.coverage_partial?' · analyse partielle':''}`,'jc-sub'));
+        const impact=element('span',a.exposure?a.exposure.label:a.points===null?'Non évaluée':penaltyNumber(a.H)+' pts de base','jc-home-impact');if(a.H!==null){const multiplier=element('strong','×'+penaltyCompact(a.multiplier),'jp-app-multiplier');multiplier.title='Multiplicateur exact : ×'+penaltyNumber(a.multiplier);if(a.color==='critical'&&p.colors.blink_critical)multiplier.classList.add('jp-critical-symbol');impact.append(multiplier,element('small',penaltyCompact(a.points)+' points pondérés'));}b.dataset.penaltyColor=a.color;impact.style.setProperty('--home-app-color',penaltyColors[a.color]);
+        if(a.color==='critical'){const symbol=element('span',' ⊘');symbol.className=p.colors.blink_critical?'jp-critical-symbol':'';symbol.setAttribute('aria-label','Critique');impact.append(symbol);}b.append(info,impact);list.append(b);}
+      if(!rows.length)list.append(element('p','Aucune application pour ce filtre.','jc-sub'));
+      $('jc-group-all').setAttribute('aria-pressed',String(homeGroup==='all'));$('jc-home-more').hidden=rows.length<=homeLimit;
+      $('jc-home-note').textContent=r.apps.filter(a=>a.estimated).length+' applications utilisent une référence estimée, actualisée avec l’inventaire. Les observations saisies restent prioritaires. R correspond aux permissions déclarées dans le manifeste. H mesure leur écart avec une référence de visibilité comparable. Une possibilité déclarée ne démontre pas son utilisation. Les sources absentes restent inconnues.';
+      $('jc-refresh-status').textContent=input.scan_id?`Inventaire ${input.scan_id} · calcul local · Paramètres → Barème AIV pour ajuster les règles.`:'Appuie sur Actualiser pour relever les applications, la référence locale sera calculée automatiquement.';
+      $('jc-home-refresh').disabled=Boolean(input.busy);$('jc-home-refresh').textContent=input.busy?'Inventaire…':'Actualiser';
+    }catch(e){$('jc-score-number').textContent='—';$('jc-home-title').textContent='Calcul indisponible';$('jc-home-sub').textContent=e.message;}
+  }
+  function renderPenaltyDetail(pane,pkg){
+    const box=element('section',undefined,'ja-card');box.id='jp-app-detail';
+    try{
+      const current=penaltyLoad(),row=current.result.apps.find(a=>a.package_name===pkg);if(!row)throw Error('Paquet absent du dernier inventaire');
+      const raw=current.input.apps.find(a=>a.package_name===pkg),reference=current.input.references[pkg]||{},saved=reference.penalty_evidence||{};
+      if(row.estimated)box.append(element('p','Référence estimée automatiquement — calibration V6 et dernier inventaire. Ce nombre ne mesure pas directement les écrans de permissions Android.'));
+      box.append(element('h3','Calcul numérique conservé de V21 · '+(row.points===null?'non évaluée':penaltyNumber(row.H)+' points de base × '+penaltyNumber(row.multiplier))));
+      box.append(element('p',row.H===null?row.reason:`${row.H} moins visibles × ${row.factors[0]} L2 × ${row.factors[1]} L3 × ${row.factors[2]} L4 × ${row.factors[3]} L5 = ${penaltyNumber(row.points)} points`));
+      box.append(element('p',`R : ${row.R} permissions déclarées · vue principale : ${row.layers.principal.value??'inconnue'} · toutes : ${row.layers.toutes.value??'inconnue'}.`));
+      box.append(element('p',`Écart principal : ${row.layers.principal.hidden??'inconnu'} · écart toutes : ${row.layers.toutes.hidden??'inconnu'}. Ratio descriptif réel/visible : ${row.ratio??'inconnu'} (ne détermine pas la couleur).`,'jc-sub'));
+      for(const factor of row.share_factors)box.append(element('p',`L4 · ${factor.identity} : ×${penaltyNumber(factor.factor)} — ${factor.scope}`));
+      box.append(element('p','Composants : '+(row.components_collected?'inventoriés':'ancien relevé, actualiser')+'. '+(row.coverage_partial?'Analyse partielle : des capacités restent non classifiées. ×1 ne constitue pas une validation.':'Les règles disponibles ont été examinées.'),'jc-note'));
+      const routeDetails=element('details');routeDetails.append(element('summary','Accès interapplications potentiels · '+row.routes.length+' permissions de passage'));
+      for(const route of row.routes){routeDetails.append(element('h4',route.permission+' · '+route.clients.length+' paquets distincts'),element('p',route.scope));
+        for(const c of route.components)routeDetails.append(element('p',c.type+' · '+c.name+' · '+c.operation+(c.path_restrictions?' · restrictions par chemin':'')));
+        for(const client of route.clients)routeDetails.append(element('p',(client.label||client.package_name)+' · '+client.package_name+' · UID '+client.uid));}
+      routeDetails.append(element('p','Un client qui détient la permission ne reçoit pas toutes les capacités du fournisseur. Ces liens ne prouvent pas un appel exécuté ni une délégation de permissions. Les clients d’un même UID ou d’un autre profil sont exclus.'));
+      box.append(routeDetails);
+      const unc=element('details');unc.append(element('summary','Permissions moins visibles non classifiées · '+row.unclassified.length),element('pre',row.unclassified.join('\n')||'Aucun nom disponible; une référence numérique ne désigne pas les permissions individuelles.'));box.append(unc);
+      const relations=element('details');relations.append(element('summary',`Sources d’installation · ${row.K} paquets distincts (comptage direct)`));
+      for(const child of row.linked){relations.append(element('strong',child.label||child.package_name),element('p',child.package_name),element('pre',JSON.stringify(child.relations,null,2)));}
+      relations.append(element('p','Les sources Android décrivent une installation ou une mise à jour exposée. Elles ne prouvent pas une installation clandestine. Famille, certificat, domaines communs et origine déclarative ne sont pas ajoutés à K.','jc-sub'));
+      box.append(relations);
+      const own=element('details');own.append(element('summary','Source d’installation de cette application'),element('pre',JSON.stringify(row.install_source,null,2)));box.append(own);
+      for(const f of row.matched){box.append(element('p',`${f.permission||f.id} · niveaux ${f.levels.join(', ')} · ${f.origin} · ${f.source} — ${f.reason}${f.levels.includes(5)?' · actif : '+String(f.active):''}`,'jc-sub'));}
+      for(const f of row.excluded)box.append(element('p','Constat non utilisé : '+f.id+' — '+f.exclusion,'jc-sub'));
+      const form=element('div',undefined,'ja-form'),inputs={};box.append(element('h4','Références de visibilité pour cette version'));
+      for(const [key,label]of [['principal','Vue principale'],['toutes','Toutes les autorisations']]){
+        const old=saved.visibility&&Object.prototype.hasOwnProperty.call(saved.visibility,key)?saved.visibility[key]:key==='principal'&&reference.play_count!==undefined?{count:reference.play_count,source:reference.play_source,kind:reference.count_kind,same_version:reference.same_version,version_code:reference.installed_version_code}:{};
+        const v=old||{},group=element('fieldset');group.append(element('legend',label));
+        const count=element('input');count.type='number';count.min='0';count.value=v.count??'';count.setAttribute('aria-label',label+' : nombre');group.append(count);
+        const kind=element('select');for(const [value,title]of [['unknown','Unité à préciser'],['permissions','Permissions individuelles'],['groups','Groupes / catégories']])kind.append(new Option(title,value));kind.value=v.kind||'unknown';kind.setAttribute('aria-label',label+' : unité');group.append(kind);
+        const source=element('input');source.value=v.source||'';source.placeholder='Lien ou nom de capture avec date';source.setAttribute('aria-label',label+' : source');group.append(source);
+        const checked=element('input');checked.type='checkbox';checked.checked=v.same_version===true&&v.version_code===raw.version_code;const l=element('label','J’ai vérifié la même version installée');l.prepend(checked);group.append(l);
+        const names=element('textarea');names.rows=3;names.placeholder='Noms exacts des permissions, un par ligne (facultatif)';names.value=(v.permission_names||[]).join('\n');group.append(names);const surface=element('select');for(const [id,title]of [['unknown','Source à préciser'],['google_play','Google Play'],['android_settings','Paramètres Android']])surface.append(new Option(title,id));surface.value=v.surface||'unknown';group.append(surface);inputs[key]={count,kind,source,checked,names,surface};form.append(group);
+      }
+      box.append(form,element('p','Un champ vide reste inconnu. Un zéro explicitement renseigné signifie aucune permission visible dans cette vue. Les groupes ne sont pas comparés à des permissions individuelles.','jc-sub'));
+      const observations=element('details');observations.append(element('summary','Constats du calcul V21 · JSON modifiable'));
+      const editor=element('textarea');editor.rows=12;editor.style.width='100%';editor.spellcheck=false;editor.value=JSON.stringify(saved.findings||[],null,2);observations.append(editor);
+      observations.append(penaltyButton('Ajouter un constat à compléter',()=>{try{const list=JSON.parse(editor.value);list.push({id:'observation-'+Date.now(),levels:[4],source:'',reason:'',hidden:true,active:null,version_code:raw.version_code,observed_at:new Date().toISOString()});editor.value=JSON.stringify(list,null,2);}catch(e){message.textContent=e.message;}}));
+      observations.append(element('p','Anciennes catégories du calcul V21, conservées pour tes réglages. Les couleurs V22 sont calculées séparément : L2 visibilité, L3 autonomie, L4 avertissement documenté, L5 portée système. Lier le constat à une permission moins visible (nom ou hidden=true justifié). share_count permet de renseigner une portée propre au constat; sinon le barème utilise le nombre de paquets inventoriés. Chaque capacité L4 distincte multiplie le résultat. Les anciens L5 restent conservés, sans facteur automatique.','jc-sub'));
+      box.append(observations);const message=element('p',undefined,'jc-note');message.setAttribute('role','status');
+      box.append(penaltyButton('Enregistrer les observations et recalculer',()=>{try{
+        const evidence={visibility:{},findings:JSON.parse(editor.value),note:saved.note||''};
+        for(const [key,v]of Object.entries(inputs)){const value=v.count.value.trim();evidence.visibility[key]=value===''?null:{count:Number(value),kind:v.kind.value,source:v.source.value,same_version:v.checked.checked,version_code:raw.version_code,surface:v.surface.value,...(v.names.value.trim()?{permission_names:v.names.value.trim().split(/\n/).map(s=>s.trim()).filter(Boolean)}:{})};}
+        PenaltyModel.validateEvidence(evidence);const c=penaltySettings();c.references[pkg]=evidence;penaltySave(c);renderAuditDetail(pkg);
+      }catch(e){message.textContent=e.message;}}),message,penaltyButton('Modifier le barème global',()=>setTab('penalty')));
+    }catch(e){box.append(element('p',e.message,'jc-error'));}
+    pane.append(box);
+  }
+  // Replace the phone score path only; the TI panel remains explicitly simulated.
+  const legacyRenderUserHome=renderUserHome;
+  renderUserHome=function(){if(nativeBridge&&nativeBridge.penaltyData)renderPenaltyHome();else legacyRenderUserHome();};
+  const legacyRenderCoherenceDetail=renderCoherenceDetail;
+  renderCoherenceDetail=function(pane,pkg){if(nativeBridge&&nativeBridge.penaltyData)renderPenaltyDetail(pane,pkg);else legacyRenderCoherenceDetail(pane,pkg);};
+  const legacyStartCoherenceRefresh=startCoherenceRefresh;
+  startCoherenceRefresh=function(){
+    if(mvpViewMode==='ti'||!nativeBridge||!nativeBridge.penaltyData)return legacyStartCoherenceRefresh();
+    try{nativeBridge.command('audit-scan');stopCoherencePoll();let ticks=0;
+      $('jc-home-refresh').disabled=true;$('jc-refresh-status').textContent='Inventaire local en cours…';
+      coherencePollTimer=setInterval(()=>{try{const s=penaltyRead('auditSummary');if(!s.busy||++ticks>180){stopCoherencePoll();penaltyCache=null;renderUserHome();if(s.error)$('jc-refresh-status').textContent=s.error;} }catch(e){stopCoherencePoll();$('jc-refresh-status').textContent=e.message;}},1000);
+    }catch(e){$('jc-refresh-status').textContent=e.message;}
+  };
+  $('jc-home-refresh').onclick=startCoherenceRefresh;
+  const oldSetTab=setTab;
+  setTab=function(tab){oldSetTab(tab);if(tab==='decisions')renderPenaltyColors();if(tab==='penalty'){renderPenaltySettings();penaltyCheckImport();}};
+
+  // V17: stable navigation and one prepared startup snapshot.
+  function appIdentity(node,raw={}){
+    const d=raw.details||raw.facts||raw,pkgs=d.packages||[],pkg=raw.package_name||d.package_name||(pkgs.length===1?pkgs[0]:null);
+    const uid=d.uid??raw.uid;
+    const apps=penaltyCache?penaltyCache.result.apps:[];
+    const matches=pkg?apps.filter(a=>a.package_name===pkg&&(uid==null||a.uid===Number(uid))):uid!=null?apps.filter(a=>a.uid===Number(uid)):[];
+    const a=matches.length===1?matches[0]:null;
+    node.append(element('span',(a?a.label+' · ':raw.app?raw.app+' · ':'')+'UID '+(uid==null||Number(uid)<0?'non attribué':uid),'jc-identity'));
+    if(a){node.dataset.penaltyColor=a.color;node.style.setProperty('--identity-color',penaltyColors[a.color]);}
+  }
+  const stableRows=renderRows;
+  renderRows=function(rows){stableRows(rows);[...$('jc-events').children].forEach((node,i)=>{if(rows[i])appIdentity(node,rows[i].original);});};
+  const nav=root.querySelector('.jc-user-nav');nav.replaceChildren();
+  for(const [tab,label] of [['home','Accueil'],['journal','Journal'],['anomalies','Anomalies'],['decisions','Décisions'],['audit','Applications'],['menu','Paramètres']]){
+    const b=penaltyButton(label,()=>setTab(tab));b.dataset.jcTab=tab;b.setAttribute('aria-pressed',String(tab==='home'));nav.append(b);
+  }
+  const menu=$('jc-pane-menu');menu.replaceChildren(element('h2','Paramètres'));
+  for(const [tab,label] of [['penalty','Barème et formules'],['references','Référentiels']]){
+    const detail=element('details'),pane=$('jc-pane-'+tab);detail.append(element('summary',label),pane);menu.append(detail);
+    detail.addEventListener('toggle',()=>{if(detail.open){pane.hidden=false;if(tab==='penalty')renderPenaltySettings();else renderAivStatus();}});
+  }
+  if(nativeBridge){
+    const collection=element('section');collection.id='jc-continuous';collection.append(element('h3','Collecte continue'));
+    const status=element('p','','jc-sub');status.id='jc-continuous-status';collection.append(status);
+    for(const id of ['jc-start-native','jc-capture-native','jc-stop-native','jc-capture-note'])collection.append($(id));
+    collection.querySelector('#jc-start-native').textContent='Reprendre la collecte';
+    collection.append(element('p','La collecte autorisée et l’analyse progressive fonctionnent en arrière-plan. Une pause volontaire est conservée. Android peut interrompre les services; les données déjà enregistrées restent conservées.','jc-sub'));
+    menu.prepend(collection);
+  }
+  function refreshContinuous(){if(!nativeBridge)return;try{const s=JSON.parse(nativeBridge.continuousStatus?nativeBridge.continuousStatus():nativeBridge.status());$('jc-start-native').disabled=Boolean(s.collector||s.running);$('jc-stop-native').disabled=s.enabled===false&&!s.collector&&!s.running&&!s.vpn&&!s.capture;$('jc-capture-native').textContent=s.vpn||s.capture?'Arrêter les connexions apps':'Activer connexions apps';$('jc-continuous-status').textContent=(s.enabled===false?'Pause demandée':'Collecte continue demandée')+' · collecteur '+(s.collector||s.running?'actif':'arrêté')+' · VPN '+(s.vpn||s.capture?'actif':'arrêté')+' · analyse '+(s.analysis?'active':'arrêtée')+(s.vpn_error?' · '+s.vpn_error:'');}catch(e){}}
+  const rules=$('aiv-config').closest('details');menu.append(rules);
+  rules.addEventListener('toggle',()=>{if(rules.open){renderAivStatus();renderPenaltyColors();}});
+  menu.append($('jc-analysis-settings'));
+  for(const [tab,label]of [['diagnostic','Diagnostics importés'],['sources','Collecte et sources']])menu.append(penaltyButton(label,()=>setTab(tab)));
+  const oldUsabilityTab=setTab;
+  setTab=function(tab){
+    if(tab==='penalty'||tab==='references'){
+      oldUsabilityTab('menu');for(const name of ['penalty','references'])$('jc-pane-'+name).hidden=false;
+      const detail=$('jc-pane-'+tab).parentElement;detail.open=true;if(tab==='penalty')renderPenaltySettings();else renderAivStatus();return;
+    }
+    oldUsabilityTab(tab);
+    if(tab==='menu')refreshContinuous();
+    if(tab==='menu')for(const name of ['penalty','references'])$('jc-pane-'+name).hidden=false;
+    if(tab==='journal')renderJournal();
+    nav.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.jcTab===tab||(tab==='flows'&&b.dataset.jcTab==='anomalies'))));
+  };
+  // Both modes describe this phone; no simulated percentages mixed into real data.
+  $('jc-mode-ti').textContent='TI · téléphone';$('jc-home-details-ti').textContent='Vue TI';
+  renderMvpHome=function(){renderUserHome();if(mvpViewMode==='ti')$('jc-mode-banner').textContent='Vue TI · données de ce téléphone. Même moyenne et même multiplicateur; détails techniques dans les fiches.';};
+  renderUserHome=function(){if(nativeBridge&&nativeBridge.penaltyData)renderPenaltyHome();else{
+    $('jc-score-number').textContent='—';$('jc-home-title').textContent='Ouvrir AIV depuis son icône Android';$('jc-home-sub').textContent='Ce lecteur n’a pas accès au journal du téléphone. Aucune donnée locale n’est remplacée.';$('jc-total').textContent='Journal local non accessible dans ce lecteur';
+  }};
+  // V32.1: Flux and Anomalies are independent pages. Legacy linked-series router removed.
+  function finishStartup(input){
+    if(input){
+      const raw=penaltyRead('penaltyConfig');
+      const settings=penaltyValidateSettings(JSON.parse(JSON.stringify(raw)));
+      // Install/migrate the bundled rules automatically, preserving all personal settings.
+      if(JSON.stringify(raw)!==JSON.stringify(settings))penaltyRead('penaltySave',JSON.stringify(settings));
+      penaltyCache={input,settings,result:penaltySnapshot(input,settings)};
+    }
+    if(state.tab==='home')renderMvpHome();if(state.tab!=='journal')$('jc-total').textContent='Historique conservé · ouvrir Journal pour le consulter';if(nativeBridge){refreshAnalysisStatus();if(analysisConfig)$('jc-quiet').value=analysisConfig.quiet===false?'all':'quiet';}
+    const overlay=document.getElementById('jc-startup');if(overlay)overlay.remove();root.inert=false;
+    if(nativeBridge&&nativeBridge.defenseStatus){renderDefense(true);if(nativeBridge.defenseOpenRequested&&nativeBridge.defenseOpenRequested())openDefense();}
+  }
+  function beginStartup(){
+    if(!nativeBridge||!nativeBridge.startupStatus){finishStartup();return;}
+    root.inert=true;const overlay=element('div');overlay.id='jc-startup';overlay.setAttribute('role','status');
+    overlay.append(element('div',undefined,'jc-spinner'),element('h2','Initialisation'),element('p','Calcul en cours'));document.body.append(overlay);overlay.append(penaltyButton('Consulter le journal pendant le calcul',()=>{overlay.remove();root.inert=false;setTab('journal');}));
+    const poll=()=>{try{const status=JSON.parse(nativeBridge.startupStatus());overlay.querySelector('p').textContent=status.state;
+      if(status.ready){finishStartup(JSON.parse(nativeBridge.startupData()));return;}
+      if(status.error)throw Error(status.error);setTimeout(poll,250);
+    }catch(e){overlay.querySelector('p').textContent='Initialisation incomplète : '+e.message;overlay.append(penaltyButton('Réessayer',()=>{if(nativeBridge.startupRetry)nativeBridge.startupRetry();overlay.remove();beginStartup();}),penaltyButton('Consulter le dernier relevé',()=>finishStartup()));}};
+    setTimeout(poll,50);
+  }
+  // Paint the pending state before configuration writes and synchronous recalculation.
+  const recomputeLabels=new Set(['Enregistrer et recalculer','Enregistrer les couleurs','Appliquer le JSON','Enregistrer les observations et recalculer']);
+  let replayingSave=false;
+  root.addEventListener('click',event=>{
+    const button=event.target.closest('button');if(replayingSave||!button||!recomputeLabels.has(button.textContent))return;
+    event.preventDefault();event.stopImmediatePropagation();root.inert=true;
+    const overlay=element('div');overlay.id='jc-recalculation';overlay.setAttribute('role','status');overlay.append(element('div',undefined,'jc-spinner'),element('h2','Recalcul en cours'),element('p','Application des paramètres et préparation des résultats'));document.body.append(overlay);
+    setTimeout(()=>{try{replayingSave=true;button.click();penaltyLoad(true);renderMvpHome();overlay.remove();root.inert=false;}
+      catch(e){penaltyCache=null;overlay.querySelector('p').textContent='Résultats indisponibles : '+e.message;overlay.append(penaltyButton('Revenir aux paramètres',()=>{overlay.remove();root.inert=false;setTab('menu');}));}
+      finally{replayingSave=false;}},60);
+  },true);
+  // V23: automatic inventory/review, explicit Android actions, durable before/after dossiers.
+  let defenseOffset=0,defenseRevision='',defensePending='',defenseScope='TO_REVIEW',defensePanel=null;
+  const defenseStates={TO_REVIEW:'À examiner',KEPT:'Conservée pour cet état',DISABLED:'Désactivée selon Android',REMOVED:'Retrait confirmé dans ce profil',ARCHIVED:'Archivée par Android',NOT_RETURNED:'Absente du relevé · retrait non confirmé',BELOW_THRESHOLD:'En dessous de L4'};
+  const defenseKinds={INITIAL_REVIEW:'Dossier initial',NEW_APP:'Nouvelle application observée',APP_CHANGED:'Version ou permissions modifiées',PACKAGE_EVENT:'Événement Android',REMOVAL_OBSERVED:'Retrait observé par Android',ARCHIVAL_OBSERVED:'Archivage observé par Android',NOT_RETURNED:'Absence dans un relevé',KEEP_CHOSEN:'Application conservée',REVIEW_REQUESTED:'Réexamen demandé',ACTION_REQUESTED:'Action demandée · dossier avant action',ACTION_FAILED:'Action non exécutée',SETTINGS_FALLBACK:'Fiche Android ouverte en remplacement',SETTINGS_RETURNED:'Retour des réglages · vérification',UNINSTALL_CONFIRMED:'Désinstallation confirmée',UNINSTALL_CANCELLED:'Demande de désinstallation annulée',UNINSTALL_UNCONFIRMED:'Désinstallation non confirmée',RESULT_UNKNOWN:'Résultat inconnu · reprise demandée'};
+  function defenseRead(method,...args){const value=JSON.parse(nativeBridge[method](...args));if(value.error)throw Error(value.error);return value;}
+  function openDefense(){setTab('audit');if(defensePanel){defensePanel.open=true;renderDefense(true);defensePanel.scrollIntoView({block:'start'});}}
+  function renderDefenseDetail(pkg,before=0,append=false){
+    try{
+      const data=defenseRead('defenseDetail',pkg,before),pane=$('v23-defense-detail');if(!append)pane.replaceChildren();
+      if(!append){
+        const app=data.app,s=app.snapshot||{},a=app.assessment||{};
+        pane.append(element('h3','Dossier de ménage · '+app.label),element('p',pkg,'jc-sub'),element('p',defenseStates[app.state]||app.state),element('p',data.scope,'jc-sub'));
+        const source=s.install_source||{};
+        pane.append(element('p',`Version ${s.version_name||'?'} (${s.version_code||'?'}) · ${s.count??'?'} permissions recensées`),element('p','Installateur enregistré : '+(source.installing_package||'INCONNU')+' · initiateur : '+(source.initiating_package||'INCONNU'),'jc-sub'));
+        pane.append(element('p','Les modifications ci-dessous sont constatées entre relevés. Leur auteur et leur heure exacte ne sont pas établis.','jc-note'));
+        const raw=element('details',undefined,'ja-card');raw.append(element('summary','Dernier dossier conservé : permissions, provenance et motifs'),element('pre',JSON.stringify({application:s,evaluation:a},null,2)));pane.append(raw);
+      }
+      for(const entry of data.history||[]){
+        const item=element('details',undefined,'ja-card');item.append(element('summary',auditDate(entry.at_ms)+' · '+(defenseKinds[entry.kind]||entry.kind)));
+        const changes=entry.data?.permission_changes;
+        if(changes)for(const [key,label] of Object.entries({added:'Permissions ajoutées',removed:'Permissions retirées du relevé',granted:'Permissions devenues accordées',revoked:'Permissions devenues refusées',state_unknown:'État devenu inconnu'})){if(changes[key]?.length)item.append(element('p',label+' : '+changes[key].join(', ')));}
+        item.append(element('pre',JSON.stringify(entry.data,null,2)));pane.append(item);
+      }
+      pane.querySelector('[data-defense-more]')?.remove();
+      if((data.history||[]).length===50){const more=penaltyButton('Historique plus ancien',()=>renderDefenseDetail(pkg,data.next_before,true));more.dataset.defenseMore='true';pane.append(more);}
+      if(!append)pane.scrollIntoView({block:'start'});
+    }catch(e){$('v23-defense-detail').replaceChildren(element('p',e.message,'jc-error'));}
+  }
+  function renderDefense(force=false){
+    if(!defensePanel)return;
+    try{
+      const s=defenseRead('defenseStatus'),revision=s.revision+':'+s.pending_action+':'+s.inventory_busy+':'+s.file_status;
+      $('v23-defense-home').textContent='Ménage · '+(s.counts?.TO_REVIEW||0)+' application(s) à examiner';
+      let cleanup='';
+      try{if(nativeBridge.shizukuCleanupState){const z=JSON.parse(nativeBridge.shizukuCleanupState());cleanup=' · '+(z.status||'Shizuku')+(z.auto_pending?' · lancement auto dans moins d’une minute':'');}}catch(_){}
+      $('v23-defense-status').textContent=(s.inventory_busy?'Inventaire en cours… ':s.scan_id?'Inventaire prêt. ':'Premier inventaire en préparation. ')+(s.watching?'Surveillance des installations active. ':'Surveillance des installations inactive. ')+(s.file_status||'')+cleanup;
+      $('v23-defense-coverage').textContent=s.coverage;$('v23-defense-refresh').disabled=!!s.inventory_busy;
+      $('v23-defense-pending').hidden=!s.pending_action;
+      $('v23-defense-pending-text').textContent=s.pending_action?'Action Android en attente pour '+s.pending_action+'. Après le retour, AIV vérifie le résultat.':'';
+      if(!force&&revision===defenseRevision)return;defenseRevision=revision;defensePending=s.pending_action||'';
+      const data=defenseRead('defensePage',defenseScope,defenseOffset),list=$('v23-defense-list');
+      if(defenseOffset&&!data.rows.length){defenseOffset=0;renderDefense(true);return;}list.replaceChildren();
+      for(const app of data.rows){
+        const a=app.assessment||{},card=element('article',undefined,'ja-card ja-'+(app.level===5?'gray':'red'));
+        card.append(element('h3',app.label),element('p',app.package_name,'jc-sub'),element('p',`L${app.level} · ${defenseStates[app.state]||app.state}`),element('p',`Version ${app.version_name||'?'} (${app.version_code}) · ${a.granted_high||0} droits L4/L5 accordés, ${a.denied_high||0} refusés, ${a.unknown_high||0} inconnus.`,'jc-sub'));
+        for(const reason of a.protected_reasons||[])card.append(element('p',reason,'jc-sub'));
+        const reasons=element('details');reasons.append(element('summary','Pourquoi cette application est dans le ménage ?'));
+        for(const f of a.findings||[])reasons.append(element('p',`L${f.level} · ${f.permission} · ${f.granted===true?'accordée':f.granted===false?'refusée':'état inconnu'}`),element('p',f.reason,'jc-sub'));card.append(reasons);
+        const actions=element('div',undefined,'jc-actions');
+        const launch=(label,action)=>{const b=penaltyButton(label,()=>{nativeBridge.defenseAction(app.package_name,action,app.stamp);b.disabled=true;setTimeout(()=>renderDefense(true),250);});b.disabled=!!defensePending;actions.append(b);};
+        if(app.state==='TO_REVIEW'&&a.can_request_uninstall){card.append(element('p','La désinstallation retire l’application et peut effacer ses données locales. Le dossier AIV reste conservé.','jc-sub'));launch('Désinstaller…','uninstall');}
+        if(!['REMOVED','NOT_RETURNED','ARCHIVED'].includes(app.state)){
+          launch('Autorisations et désactivation','settings');
+          for(const action of a.special_actions||[])launch(({unknown_sources:'Installation de sources inconnues',overlay:'Superposition sur les autres apps',write_settings:'Modification des paramètres système',usage:'Accès aux données d’utilisation'})[action]||action,action);
+        }
+        if(['TO_REVIEW','KEPT'].includes(app.state))actions.append(penaltyButton(app.state==='KEPT'?'Remettre à examiner':'Conserver cette application',()=>{try{defenseRead('defenseDecide',app.package_name,app.stamp,app.state!=='KEPT');renderDefense(true);}catch(e){$('v23-defense-status').textContent=e.message;}}));
+        actions.append(penaltyButton('Dossier et enquête locale',()=>renderDefenseDetail(app.package_name)));card.append(actions);list.append(card);
+      }
+      if(!data.rows.length)list.append(element('p','Aucun dossier pour ce filtre.'));
+      $('v23-defense-page').textContent=`${data.total} dossier(s) · page ${Math.floor(defenseOffset/25)+1}`;$('v23-defense-prev').disabled=defenseOffset===0;$('v23-defense-next').disabled=defenseOffset+25>=data.total;
+    }catch(e){$('v23-defense-status').textContent=e.message;}
+  }
+  if(nativeBridge&&nativeBridge.defenseStatus){
+    defensePanel=element('details',undefined,'ja-card');defensePanel.id='v23-defense';defensePanel.append(element('summary','Défense et ménage · L4 / L5'));
+    defensePanel.append(element('p','AIV examine automatiquement les applications installées et leurs changements. Choisis celles à conserver; les autres disposent des actions permises par Android.','jc-note'),element('p','Le niveau décrit une capacité. La nécessité d’une application dépend de ton usage. Les retraits demandent la confirmation Android; certains accès spéciaux doivent être retirés dans ses réglages.','jc-sub'));
+    const status=element('p');status.id='v23-defense-status';status.setAttribute('aria-live','polite');defensePanel.append(status);
+    const controls=element('div',undefined,'jc-actions'),refresh=penaltyButton('Réexaminer les applications',()=>{nativeBridge.command('audit-scan');renderDefense(true);});refresh.id='v23-defense-refresh';
+    const shizukuLaunch=penaltyButton('Lancer Shizuku',()=>{try{const s=JSON.parse(nativeBridge.shizukuCleanupRun());$('v23-defense-status').textContent=s.status||'Shizuku lancé';setTimeout(()=>renderDefense(true),1200);}catch(e){$('v23-defense-status').textContent=e.message;}});
+    shizukuLaunch.id='v23-shizuku-launch';
+    controls.append(shizukuLaunch,refresh,penaltyButton('Exporter le journal de ménage',()=>nativeBridge.command('export-defense')));
+    const filter=element('select');filter.id='v23-defense-filter';filter.setAttribute('aria-label','Filtrer les dossiers de ménage');for(const [value,label]of Object.entries({TO_REVIEW:'À examiner',KEPT:'Conservées',HISTORY:'Retirées, archivées ou désactivées',ALL:'Tous les dossiers L4 / L5'})){const o=element('option',label);o.value=value;filter.append(o);}filter.onchange=()=>{defenseScope=filter.value;defenseOffset=0;renderDefense(true);};controls.append(filter);defensePanel.append(controls);
+    const pending=element('div',undefined,'jc-note');pending.id='v23-defense-pending';pending.hidden=true;const pendingText=element('p');pendingText.id='v23-defense-pending-text';pending.append(pendingText,penaltyButton('Vérifier après mon retour d’Android',()=>{try{defenseRead('defenseRecover');renderDefense(true);}catch(e){status.textContent=e.message;}}));defensePanel.append(pending);
+    const list=element('div');list.id='v23-defense-list';defensePanel.append(list);
+    const pagination=element('div',undefined,'jc-actions'),prev=penaltyButton('Précédents',()=>{defenseOffset=Math.max(0,defenseOffset-25);renderDefense(true);}),next=penaltyButton('Suivants',()=>{defenseOffset+=25;renderDefense(true);}),page=element('span');prev.id='v23-defense-prev';next.id='v23-defense-next';page.id='v23-defense-page';pagination.append(prev,page,next);defensePanel.append(pagination);
+    const coverage=element('p',undefined,'jc-sub');coverage.id='v23-defense-coverage';defensePanel.append(coverage);
+    const detail=element('div');detail.id='v23-defense-detail';defensePanel.append(detail);$('jc-pane-audit').prepend(defensePanel);
+    const home=penaltyButton('Ménage · inventaire en préparation',openDefense);home.id='v23-defense-home';$('jc-home-refresh').parentElement.before(home);
+    defensePanel.addEventListener('toggle',()=>{if(defensePanel.open)renderDefense(true);});
+    window.AivDefenseRefresh=()=>renderDefense(true);
+    setInterval(()=>{if(!document.hidden)renderDefense();},3000);
+  }
+
+  // V32 Android UI overlay. Keeps the existing stores, bridges and calculations.
+  root.classList.add('v32-ui');
+  const v32Colors={1:'#65df70',2:'#f3d65a',3:'#f7a34f',4:'#ff636e',5:'#d065ff'};
+  let v32HomeGroup='all';
+  function v32Badge(level){
+    const n=Number(level)||0,b=element('span',n?'A'+n:'?','v32-a-badge');
+    b.style.setProperty('--tone',v32Colors[n]||'#7e91a5');b.style.color=v32Colors[n]||'#7e91a5';return b;
+  }
+  function v32Group(app){
+    if(app.group)return app.group;
+    const uid=Number(app.uid),pkgs=Array.isArray(app.uid_packages)?app.uid_packages:[];
+    if(!Number.isInteger(uid)||uid<0||uid%100000<10000||pkgs.length!==1)return 'android';
+    return app.system_app?'system':'user';
+  }
+  function v32Exposure(app){return Number(app?.exposure?.level)||Number(app?.exposure_level)||0;}
+  function v32PenaltyApps(){try{return penaltyLoad().result.apps||[];}catch(e){return [];}}
+  function v32AppForRaw(raw){
+    const d=raw?.details||raw||{},pkg=raw?.package_name||d.package_name||(Array.isArray(d.packages)&&d.packages.length===1?d.packages[0]:''),uid=Number(d.uid);
+    const apps=v32PenaltyApps();
+    if(pkg){const m=apps.filter(a=>a.package_name===pkg);if(m.length===1)return m[0];}
+    if(Number.isInteger(uid)){const m=apps.filter(a=>Number(a.uid)===uid);if(m.length===1)return m[0];}
+    return null;
+  }
+  function v32InstallHeader(){
+    const top=root.querySelector('.jc-top');if(!top)return;
+    top.replaceChildren();
+    top.append(element('div','AIV','v32-logo'),element('div','ALL IN VISIBLE','v32-brand'));
+    const engine=element('div',undefined,'v32-engine');
+    const calc=element('button');calc.type='button';calc.append(element('i',undefined,'v32-dot'),document.createTextNode('Collecte'));
+    const corr=element('button');corr.type='button';corr.append(element('i',undefined,'v32-dot'),document.createTextNode('Corrélation'));
+    calc.id='v32-calc';corr.id='v32-corr';
+    calc.onclick=()=>{try{const st=JSON.parse(nativeBridge.continuousStatus());nativeBridge.command(st.collector?'stop':'start');setTimeout(v32Status,900);}catch(e){}};
+    corr.onclick=()=>{try{const st=JSON.parse(nativeBridge.continuousStatus());nativeBridge.command(st.analysis?'aiv-stop':'aiv-start');setTimeout(v32Status,900);}catch(e){}};
+    engine.append(calc,corr);top.append(engine);
+    const resize=()=>document.documentElement.style.setProperty('--v32-top-h',top.getBoundingClientRect().height+'px');
+    resize();if(window.ResizeObserver)new ResizeObserver(resize).observe(top);else addEventListener('resize',resize);
+  }
+  function v32Status(){
+    if(!nativeBridge)return;
+    try{
+      const s=JSON.parse(nativeBridge.continuousStatus?nativeBridge.continuousStatus():nativeBridge.status());
+      const c=$('v32-calc')?.querySelector('.v32-dot'),r=$('v32-corr')?.querySelector('.v32-dot');
+      if(c)c.className='v32-dot '+(s.collector?'on':'');
+      if(r)r.className='v32-dot '+(s.analysis?'on':'');
+    }catch(e){}
+  }
+  function v32InstallNav(){
+    const n=root.querySelector('.jc-user-nav');if(!n)return;n.replaceChildren();
+    for(const [tab,label] of [['home','Présentation'],['journal','Journal'],['flows','Flux'],['trackers','Traqueurs'],['anomalies','Anomalies'],['audit','Applications'],['menu','Paramètres']]){
+      const b=penaltyButton(label,()=>setTab(tab));b.dataset.jcTab=tab;b.setAttribute('aria-pressed',String(tab==='home'));n.append(b);
+    }
+  }
+  function v32SetNav(tab){root.querySelectorAll('.jc-user-nav button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.jcTab===tab)));}
+  // The old UI nested Flux inside Anomalies; V32 restores it as its own page.
+  try{const p=$('jc-pane-flows');if(p&&p.parentElement!==root)$('jc-pane-anomalies').before(p);}catch(e){}
+  const v32OldSetTab=setTab;
+  setTab=function(tab){
+    if(['home','journal','flows','trackers','anomalies','audit','menu'].includes(tab)){
+      state.tab=tab;
+      for(const name of ['home','menu','journal','flows','trackers','audit','anomalies','diagnostic','permissions','sources','decisions','references','penalty']){const p=$('jc-pane-'+name);if(p)p.hidden=name!==tab;}
+      if(tab==='home')v32RenderHome();
+      if(tab==='journal')renderJournal();
+      if(tab==='flows')renderFlows(false);
+      if(tab==='trackers')v332RenderTrackers(false);
+      if(tab==='anomalies')renderAnalysis();
+      if(tab==='audit')renderAudit();
+      if(tab==='menu')v32RenderSettings();
+      v32SetNav(tab);return;
+    }
+    v32OldSetTab(tab);
+  };
+
+  function v32HomeNode(){
+    let box=$('v32-home');if(box)return box;
+    box=element('div',undefined);box.id='v32-home';$('jc-pane-home').prepend(box);$('jc-pane-home').classList.add('v32-home-on');return box;
+  }
+  function v32RenderHome(){
+    const box=v32HomeNode();box.replaceChildren();
+    let apps=[];try{apps=v32PenaltyApps();}catch(e){}
+    const counts={1:0,2:0,3:0,4:0,5:0};
+    for(const a of apps){
+      const fs=a.exposure?.findings||[];if(fs.length)for(const f of fs){const n=Number(f.level);if(n>=1&&n<=5)counts[n]++;}
+      else{const n=v32Exposure(a);if(n>=1&&n<=5)counts[n]++;}
+    }
+    const f1=element('section',undefined,'v32-frame'),h1=element('div',undefined,'v32-frame-title'),hl=element('div');hl.append(element('span','Présentation','v32-tag'),element('h2','Niveaux d’autorisation'));h1.append(hl,element('span','A1 → A5\nlecture compacte'));f1.append(h1);
+    const levels=element('div',undefined,'v32-levels');
+    const defs=[
+      [1,'Visible','Visible directement dans les autorisations de l’application.'],
+      [2,'Visible dans « Toutes les autorisations »','Présente dans la vue détaillée, mais pas forcément mise de l’avant.'],
+      [3,'Action sans intervention immédiate','Visible dans la vue détaillée et peut agir à votre insu selon sa portée.'],
+      [4,'Vigilance Android / AOSP','A3 + avertissement explicite indiquant une capacité potentiellement dangereuse.'],
+      [5,'Portée système ou inter-applications','Capacité étendue. Révocabilité suivie séparément : révoquée, maintenue, non testée ou échec.']
+    ];
+    for(const [n,title,desc] of defs){const c=element('article',undefined,'v32-level a'+n),badge=element('div','A'+n,'v32-level-badge'),copy=element('div',undefined,'v32-level-copy');copy.append(element('strong',title),element('span',desc));c.append(badge,copy,element('div',String(counts[n]||0),'v32-level-count'));levels.append(c);}f1.append(levels);box.append(f1);
+
+    const f2=element('section',undefined,'v32-frame'),h2=element('div',undefined,'v32-frame-title'),hh=element('div');hh.append(element('span','Inventaire','v32-tag'),element('h2','Applications par catégorie'));h2.append(hh,element('span','Touche un bloc\npour filtrer'));f2.append(h2);
+    const groups=element('div',undefined,'v32-groups');
+    const meta={android:['A','Android','UID/composants Android non attribuables proprement.'],system:['S','Système','Applications préinstallées identifiées.'],user:['U','Utilisateur','Applications installées par l’utilisateur.']};
+    for(const id of ['android','system','user']){
+      const rows=apps.filter(a=>v32Group(a)===id),b=element('button',undefined,'v32-group');b.type='button';b.dataset.group=id;b.setAttribute('aria-pressed',String(v32HomeGroup===id));
+      const m=meta[id];b.append(element('span',m[0],'v32-group-icon'),element('strong',m[1]),element('span',m[2]),element('em',rows.length+' app(s) · voir la liste'));
+      b.onclick=()=>{v32HomeGroup=id;v32RenderHome();setTimeout(()=>document.getElementById('v32-app-list')?.scrollIntoView({block:'nearest'}),0);};groups.append(b);
+    }
+    f2.append(groups);
+    if(v32HomeGroup!=='all'){
+      const list=element('div',undefined,'v32-apps');list.id='v32-app-list';
+      const rows=apps.filter(a=>v32Group(a)===v32HomeGroup).sort((a,b)=>v32Exposure(b)-v32Exposure(a)||String(a.label).localeCompare(String(b.label),'fr')).slice(0,100);
+      for(const a of rows){const row=element('div',undefined,'v32-app'),info=element('div');info.append(element('strong',a.label||a.package_name),element('small',a.package_name));const action=penaltyButton('Réglages',()=>{setTab('audit');renderAuditDetail(a.package_name);});action.className='quick';row.append(v32Badge(v32Exposure(a)),info,action);list.append(row);}
+      if(!rows.length)list.append(element('p','Aucune application dans cette catégorie pour le dernier inventaire.','jc-sub'));f2.append(list);
+    }
+    box.append(f2);
+  }
+
+  function v32TrackerFor(event){
+    if(!nativeBridge?.trackerMatch)return [];
+    const raw=event.original||{},d=raw.details||{};let host='',kind='JOURNAL';
+    if(raw.category==='dns'){host=d.question||event.destination||'';kind='DNS_QUERY_ONLY';}
+    else{host=d.tls_sni||'';kind=d.ech_extension_present?'TLS_OUTER_NAME':'TLS_SNI';}
+    if(!host)return [];
+    try{const a=JSON.parse(nativeBridge.trackerMatch(String(host),kind));return Array.isArray(a)?a:[];}catch(e){return [];}
+  }
+  function v32FilterJournal(value){
+    if(!value)return;$('jc-search').value=value;state.page=0;state.selected=null;nativeAnchor=0;renderJournal();
+  }
+  function v32EnsureCollectionControls(){
+    const actions=$('jc-export')?.parentElement;if(!actions||$('v32-collect-toggle'))return;
+    const collect=penaltyButton('Collecte',()=>{try{const st=JSON.parse(nativeBridge.continuousStatus());nativeBridge.command(st.collector?'stop':'start');setTimeout(()=>{v32Status();renderNative();},900);}catch(e){}});
+    collect.id='v32-collect-toggle';
+    const vpn=penaltyButton('Connexions apps',()=>{try{const st=JSON.parse(nativeBridge.continuousStatus());nativeBridge.command(st.vpn?'capture-off':'capture-on');setTimeout(()=>{v32Status();renderNative();},900);}catch(e){}});
+    vpn.id='v32-vpn-toggle';
+    actions.prepend(collect,vpn);
+  }
+  function v32EnsureJournalTable(){
+    const list=$('jc-events');if(list.closest('.v32-table-wrap'))return;
+    const wrap=element('div',undefined,'v32-table-wrap'),table=element('div',undefined,'v32-table'),head=element('div',undefined,'v32-table-head');
+    for(const x of ['Heure','Application','UID','Événement','Destination / permission','Tracker / SDK','État'])head.append(element('span',x));
+    list.parentElement.insertBefore(wrap,list);wrap.append(table);table.append(head,list);
+  }
+  renderRows=function(rows){
+    v32EnsureCollectionControls();
+    v32EnsureJournalTable();const list=$('jc-events');list.replaceChildren();
+    for(const event of rows){
+      const raw=event.original||{},d=raw.details||{},app=v32AppForRaw(raw),level=v32Exposure(app),trackers=v32TrackerFor(event),uid=d.uid??raw.uid;
+      const li=element('li',undefined,'v32-table-row');
+      const mk=(text,click,cls='')=>{const c=element('span',undefined,'v32-cell '+cls);if(click){const b=element('button',text);b.type='button';b.onclick=click;c.append(b);}else c.textContent=text;return c;};
+      li.append(mk(timeText(event)),(()=>{const c=element('span',undefined,'v32-cell v32-appcell');c.append(v32Badge(level));const b=element('button',event.actor||'Acteur inconnu');b.onclick=()=>v32FilterJournal(event.actor);c.append(b);return c;})(),mk(uid==null||Number(uid)<0?'—':String(uid),()=>v32FilterJournal(String(uid))),mk(event.action||'—'),mk(event.destination||'—',()=>v32FilterJournal(event.destination)),mk(trackers.length?trackers.map(t=>t.name).slice(0,2).join(' · '):'—',trackers.length?()=>v32FilterJournal(trackers[0].host):null,'v32-tracker'),mk(raw.result||event.result||'—'));
+      list.append(li);
+    }
+  };
+
+  renderFlows=function(append=false){
+    if(!nativeBridge?.flowPage){$('jf-status').textContent='Flux indisponibles dans cette version.';return;}
+    const list=$('jf-list');if(!append)list.replaceChildren();
+    try{
+      const result=JSON.parse(nativeBridge.flowPage($('jf-search').value.trim(),append?flowBefore:0,25));if(result.error)throw new Error(result.error);
+      const rows=Array.isArray(result.flows)?result.flows:[];flowBefore=Number(result.next_before_id)||0;
+      let wrap=list.querySelector('.v32-table-wrap'),table;
+      if(!wrap){wrap=element('div',undefined,'v32-table-wrap');table=element('div',undefined,'v32-table');const head=element('div',undefined,'v32-table-head v32-flow-head');for(const x of ['Heure','Application','UID','Transport','IP / port','DNS / SNI','Tracker','Volume'])head.append(element('span',x));table.append(head);wrap.append(table);list.append(wrap);}else table=wrap.firstElementChild;
+      for(const f of rows){
+        const app=(f.packages?.length===1)?v32PenaltyApps().find(a=>a.package_name===f.packages[0]):null,level=v32Exposure(app),row=element('div',undefined,'v32-table-row v32-flow-row');
+        const c=t=>element('span',t??'—','v32-cell'),tracker=(f.tracker_matches||[]).map(t=>t.name).concat((f.tracker_dns_candidates||[]).map(t=>t.name)).slice(0,2).join(' · ')||'—';
+        const name=element('span',undefined,'v32-cell v32-appcell');name.append(v32Badge(level),document.createTextNode(f.actor||'Acteur inconnu'));
+        row.append(c(flowTime(f.first_outbound_ms||f.first_inbound_ms)),name,c(Number(f.uid)>=0?String(f.uid):'—'),c(f.protocol||'—'),c(f.destination||[f.remote_ip,f.remote_port].filter(Boolean).join(':')||'—'),c(f.tls_sni||(f.dns||[]).join(', ')||'—'),c(tracker),c('↑ '+flowBytes(f.tx_bytes)+' · ↓ '+flowBytes(f.rx_bytes)));table.append(row);
+      }
+      $('jf-status').textContent=rows.length+' flux affiché(s) · '+(result.notice||'');$('jf-more').hidden=!rows.length||!flowBefore;$('jf-more').textContent='Plus ancien →';
+    }catch(e){$('jf-status').textContent=e.message||String(e);}
+  };
+
+  renderAnalysis=function(){
+    if(!nativeBridge?.analysisPage)return;
+    refreshAnalysisStatus();if(analysisStatus?.recalculating){$('jc-analysis-progress').textContent='Recalcul en cours…';return;}
+    if(analysisSelected!==null||$('jc-analysis-settings').open)return;
+    try{
+      const type=$('jc-analysis-kind').value,unread=$('jc-analysis-unread').checked,result=analysisCall('analysisPage',type,unread,analysisPage*15),list=$('jc-analysis-list');list.replaceChildren();
+      const wrap=element('div',undefined,'v32-table-wrap'),table=element('div',undefined,'v32-table'),head=element('div',undefined,'v32-table-head v32-anom-head');for(const x of ['Heure','Application','Type','Signal','État','Niveau'])head.append(element('span',x));table.append(head);wrap.append(table);list.append(wrap);
+      for(const a of result.rows||[]){
+        const app=v32AppForRaw(a.identity||a),level=v32Exposure(app),row=element('button',undefined,'v32-table-row v32-anom-row');row.type='button';row.style.width='100%';row.style.padding='0';row.style.border='0';row.style.textAlign='left';row.onclick=()=>showAnalysis(a);
+        const vals=[analysisTime(a.last_ms),a.actor||'—',a.kind||type,a.title||'—',a.reviewed?'Vu':a.severity==='attention'?'À examiner':'Nouveau'];for(let i=0;i<vals.length;i++)row.append(element('span',vals[i],'v32-cell'));const l=element('span',undefined,'v32-cell');l.append(v32Badge(level));row.append(l);table.append(row);
+      }
+      $('jc-analysis-count').textContent=result.total+' groupe(s)';const pages=Math.max(1,Math.ceil(result.total/15));$('jc-analysis-pagination').hidden=pages<=1;$('jc-analysis-page').textContent='Page '+(analysisPage+1)+' / '+pages;$('jc-analysis-prev').disabled=!analysisPage;$('jc-analysis-next').disabled=analysisPage>=pages-1;$('jc-analysis-empty').hidden=Boolean((result.rows||[]).length);
+    }catch(e){analysisMessage(e.message,true);}
+  };
+
+  renderAudit=function(){
+    if(!nativeBridge?.auditPage){$('ja-status').textContent='Inventaire Android indisponible.';return;}
+    try{
+      const summary=JSON.parse(nativeBridge.auditSummary());$('ja-total').textContent=summary.total||0;$('ja-system').textContent=summary.system||0;$('ja-scan-number').textContent=summary.scan_id||'À faire';$('ja-status').textContent=summary.error||(summary.busy?'Inventaire en cours…':summary.coverage||'');$('ja-scan').disabled=!!summary.busy;
+      if(!summary.scan_id&&!summary.busy&&!summary.error&&!auditStarted){auditStarted=true;nativeBridge.command('audit-scan');}
+      const result=auditRead(nativeBridge.auditPage($('ja-search').value,$('ja-scope').value,auditOffset));if(auditOffset&&!result.rows.length){auditOffset=0;renderAudit();return;}
+      const list=$('ja-list');list.replaceChildren();const wrap=element('div',undefined,'v32-table-wrap'),table=element('div',undefined,'v32-table'),head=element('div',undefined,'v32-table-head v32-app-head');for(const x of ['Application','Catégorie','UID','Niveau','Permissions','Tracker','Action'])head.append(element('span',x));table.append(head);wrap.append(table);list.append(wrap);
+      const apps=v32PenaltyApps();
+      for(const a of result.rows){
+        const pa=apps.find(x=>x.package_name===a.package_name),level=v32Exposure(pa),group=v32Group(pa||a),row=element('div',undefined,'v32-table-row v32-app-row'),appc=element('span',undefined,'v32-cell v32-appcell');appc.append(v32Badge(level),document.createTextNode(a.label||a.package_name));row.append(appc,element('span',({android:'Android',system:'Système',user:'Utilisateur'}[group]||'—'),'v32-cell'),element('span',String(a.uid??'—'),'v32-cell'),(()=>{const c=element('span',undefined,'v32-cell');c.append(v32Badge(level));return c;})(),element('span',String(a.count??'—'),'v32-cell'),element('span','—','v32-cell'));
+        const action=element('span',undefined,'v32-cell'),b=element('button','Réglages');b.onclick=()=>renderAuditDetail(a.package_name);action.append(b);row.append(action);table.append(row);
+      }
+      $('ja-count').textContent=result.total+' applications';$('ja-prev').disabled=!auditOffset;$('ja-next').disabled=auditOffset+25>=result.total;$('ja-page').textContent='Page '+(Math.floor(auditOffset/25)+1)+' / '+Math.max(1,Math.ceil(result.total/25));
+      let act=$('v32-app-actions');if(!act){act=element('div',undefined,'v32-actions');act.id='v32-app-actions';$('ja-status').after(act);act.append(penaltyButton('↻ Actualiser l’inventaire',()=>{nativeBridge.command('audit-scan');setTimeout(renderAudit,1200);}),penaltyButton('▶ Lancer Shizuku A4/A5',()=>{nativeBridge.shizukuCleanupRun?.();setTimeout(renderAudit,1200);}),penaltyButton('↶ Restaurer',()=>{nativeBridge.shizukuCleanupRestore?.();setTimeout(renderAudit,1200);}));}
+    }catch(e){$('ja-status').textContent=e.message;}
+  };
+
+  function v32RenderSettings(){
+    const pane=$('jc-pane-menu');pane.classList.add('v32-settings-on');let box=$('v32-settings');if(!box){box=element('div',undefined);box.id='v32-settings';pane.prepend(box);}
+    box.replaceChildren();const frame=element('section',undefined,'v32-frame'),title=element('div',undefined,'v32-frame-title'),left=element('div');left.append(element('span','Paramètres','v32-tag'),element('h2','Configuration guidée'));title.append(left,element('span','Formulaire → JSON'));frame.append(title);
+    const nav=element('div',undefined,'v32-settings-nav'),content=element('div');frame.append(nav,content);box.append(frame);
+    const tabs={};
+    const addTab=(id,label)=>{const b=penaltyButton(label,()=>show(id));nav.append(b);const p=element('div',undefined,'v32-settings-pane');p.id='v32-set-'+id;content.append(p);tabs[id]={b,p};};
+    addTab('a','A · Autorisations');addTab('r','R · Règles');addTab('json','JSON');
+    const A=[['A1','Visible dans les autorisations'],['A2','Visible dans Toutes les autorisations'],['A3','Action possible sans intervention immédiate'],['A4','Avertissement de vigilance Android / AOSP'],['A5','Portée système ou inter-applications']];
+    const al=element('div',undefined,'v32-rule-list');tabs.a.p.append(element('p','Libellés de lecture A1–A5. Le classement reste calculé à partir des références Android/AOSP et de l’inventaire local.','jc-sub'),al);for(const [id,label] of A){const r=element('label',undefined,'v32-rule'),c=document.createElement('input');c.type='checkbox';c.checked=true;c.dataset.kind='a';c.dataset.id=id;const inp=document.createElement('input');inp.type='text';inp.value=label;inp.dataset.label=id;r.append(c,element('strong',id),inp);al.append(r);}
+    const descriptions={R1:'Nouvelle destination pour une app avec Internet',R2:'Synchronisation contacts attendue mais non observée',R3:'UID 1000 caméra/micro non visible',R4:'Application réseau absente de l’inventaire',R5:'Volume sortant au-dessus du seuil',R6:'Domaine surveillé observé'};
+    const rl=element('div',undefined,'v32-rule-list');tabs.r.p.append(element('p','R1 à R6 sont les règles réelles du moteur AIV. Décoche une règle pour la désactiver dans le JSON.','jc-sub'),rl);
+    for(let n=1;n<=6;n++){const id='R'+n,r=element('div',undefined,'v32-rule'),c=document.createElement('input');c.type='checkbox';c.checked=true;c.dataset.r=id;const desc=element('span',descriptions[id],'jc-sub'),decision=document.createElement('select');for(const v of ['WATCH','ALLOW','DENIED'])decision.append(new Option(v,v));decision.value='WATCH';decision.dataset.decision=id;r.append(c,element('strong',id),desc,decision);rl.append(r);if(id==='R5'){const extra=element('div',undefined,'v32-rule');extra.style.gridTemplateColumns='36px 1fr';extra.append(element('strong','Seuil'),(()=>{const i=document.createElement('input');i.id='v32-r5-threshold';i.type='number';i.min='0';i.value='10485760';return i;})());rl.append(extra);}if(id==='R6'){const extra=element('div',undefined,'v32-rule');extra.style.gridTemplateColumns='36px 1fr';extra.append(element('strong','Domaines'),(()=>{const i=document.createElement('input');i.id='v32-r6-domains';i.type='text';i.placeholder='exemple.org, api.exemple.org';return i;})());rl.append(extra);}}
+    const actions=element('div',undefined,'v32-actions'),gen=penaltyButton('Créer / actualiser le JSON',()=>{v32GenerateJson();show('json');});actions.append(gen);tabs.r.p.append(actions);
+    const textarea=document.createElement('textarea');textarea.id='v32-json';textarea.readOnly=true;tabs.json.p.append(element('p','Aperçu local des règles cochées.','jc-sub'),textarea);const ja=element('div',undefined,'v32-actions');ja.append(penaltyButton('Créer / actualiser',v32GenerateJson),penaltyButton('Appliquer les règles R',v32ApplyRules));tabs.json.p.append(ja);
+    function show(id){for(const [k,v] of Object.entries(tabs)){v.b.classList.toggle('active',k===id);v.p.classList.toggle('active',k===id);}if(id==='json')v32GenerateJson();}
+    show('a');
+  }
+  function v32RuleObject(id){
+    const n=Number(id.slice(1)),enabled=$('v32-settings')?.querySelector('[data-r="'+id+'"]')?.checked??true,decision=$('v32-settings')?.querySelector('[data-decision="'+id+'"]')?.value||'WATCH',condition={type:id};
+    if(id==='R5')condition.threshold=Number(document.getElementById('v32-r5-threshold')?.value)||10485760;
+    if(id==='R6'){const raw=document.getElementById('v32-r6-domains')?.value||'';condition.domains=raw.split(',').map(x=>x.trim()).filter(Boolean);}
+    return {name:id,decision,priority:70-n,enabled,condition};
+  }
+  function v32GenerateJson(){
+    const ta=document.getElementById('v32-json');if(!ta)return;const a=[...document.querySelectorAll('#v32-set-a .v32-rule')].map((r,i)=>({id:'A'+(i+1),enabled:r.querySelector('input[type="checkbox"]')?.checked!==false,label:r.querySelector('input[type="text"]')?.value||''})).filter(x=>x.enabled),rules=[1,2,3,4,5,6].map(n=>v32RuleObject('R'+n));ta.value=JSON.stringify({schema:'aiv-ui-rules/1',authorizations:a,rules},null,2);
+  }
+  function v32ApplyRules(){
+    if(!nativeBridge?.aivConfigure){return;}const rules=[1,2,3,4,5,6].map(n=>v32RuleObject('R'+n));
+    if(nativeBridge.aivConfigureBatch)nativeBridge.aivConfigureBatch(JSON.stringify(rules));else for(const r of rules)nativeBridge.aivConfigure(JSON.stringify(r));
+  }
+
+  v32InstallHeader();v32InstallNav();v32Status();setInterval(v32Status,2500);
+  const v32Top=penaltyButton('↑',()=>window.scrollTo({top:0,behavior:'smooth'}));v32Top.className='v32-float-top';v32Top.setAttribute('aria-label','Remonter en haut');document.body.append(v32Top);addEventListener('scroll',()=>v32Top.classList.toggle('show',scrollY>180),{passive:true});
+  // V32.2: do not throw the investigator back to the newest rows.
+  let v32Head=0;setInterval(()=>{if(document.hidden||!nativeBridge?.journalHead)return;try{const h=Number(nativeBridge.journalHead());if(!v32Head){v32Head=h;return;}if(h<=v32Head)return;const added=h-v32Head;v32Head=h;
+    if(state.tab==='journal'){const fresh=$('jc-new-events');if(fresh){fresh.hidden=false;fresh.textContent=added+' nouveaux événements · actualiser';}}
+    if(state.tab==='flows'&&window.AivFlowFresh)window.AivFlowFresh(h);
+    if(window.AivTrackerFresh)window.AivTrackerFresh();
+  }catch(e){}},2500);
+  const v32OldMvp=renderMvpHome;renderMvpHome=function(){try{v32RenderHome();}catch(e){v32OldMvp();}};
+
+  // V32.2 investigation controls: frozen views, persistent position and tracker egress timeline.
+  let v332FlowSnapshot=0,v332FlowCursor=0,v332FlowReady=false,v332AnalysisPageSize=500,v332AnalysisPages=1;
+  let v332TrackerOffset=0,v332TrackerReady=false,v332TrackerNetworkBaseline=0,v332TrackerLatestBaseline=0,v332TrackerSelected=null;
+  const v332Scroll={journal:0,flows:0,trackers:0,anomalies:0};let v332SaveTimer=0,v332Restored=false;
+  function v332CaptureX(tab=state.tab){const w=$('jc-pane-'+tab)?.querySelector('.v32-table-wrap');if(w)v332Scroll[tab]=w.scrollLeft||0;}
+  function v332RestoreX(tab=state.tab){requestAnimationFrame(()=>{const w=$('jc-pane-'+tab)?.querySelector('.v32-table-wrap');if(w)w.scrollLeft=Number(v332Scroll[tab]||0);});}
+  function v332Persist(){
+    try{v332CaptureX();const payload={tab:state.tab,journalPage:state.page,journalPageSize:PAGE_SIZE,journalSearch:$('jc-search')?.value||'',journalSegment:Number($('jc-segment')?.value||0),
+      flowSearch:$('jf-search')?.value||'',flowPageSize:Number($('jf-page-size')?.value||100),flowSnapshot:v332FlowSnapshot,flowCursor:v332FlowCursor,flowReady:v332FlowReady,
+      trackerSearch:$('jt-search')?.value||'',trackerPageSize:Number($('jt-page-size')?.value||25),trackerOffset:v332TrackerOffset,trackerReady:v332TrackerReady,trackerNetworkBaseline:v332TrackerNetworkBaseline,trackerLatestBaseline:v332TrackerLatestBaseline,
+      analysisPage,analysisPageSize:v332AnalysisPageSize,analysisSearch:$('jc-analysis-search')?.value||'',analysisKind:$('jc-analysis-kind')?.value||'anomaly',analysisUnread:!!$('jc-analysis-unread')?.checked,
+      scrollX:v332Scroll,scrollY:scrollY||0};nativeBridge?.saveUiState?.(JSON.stringify(payload));return true;}catch(e){return false;}
+  }
+  window.AivPersistUi=v332Persist;
+  function v332SaveSoon(){clearTimeout(v332SaveTimer);v332SaveTimer=setTimeout(v332Persist,180);}
+  addEventListener('scroll',v332SaveSoon,{passive:true});root.addEventListener('scroll',v332SaveSoon,{passive:true,capture:true});
+
+  const v332RenderNativeBase=renderNative;
+  renderNative=async function(){v332CaptureX('journal');const r=await v332RenderNativeBase();v332RestoreX('journal');v332SaveSoon();return r;};
+
+  function v332FlowPageSize(){return Math.max(1,Math.min(500,Number($('jf-page-size')?.value||100)));}
+  renderFlows=function(append=false,force=false){
+    if(!nativeBridge?.flowPage){$('jf-status').textContent='Flux indisponibles dans cette version.';return;}
+    if(!append&&!force&&v332FlowReady&&$('jf-list')?.children.length){v332RestoreX('flows');return;}
+    v332CaptureX('flows');const list=$('jf-list');if(!append)list.replaceChildren();
+    try{
+      if(!v332FlowSnapshot)v332FlowSnapshot=Number(nativeBridge.journalHead?.()||0);if(!append)v332FlowCursor=v332FlowSnapshot;
+      const result=JSON.parse(nativeBridge.flowPage($('jf-search').value.trim(),append?v332FlowCursor:v332FlowSnapshot,v332FlowPageSize()));if(result.error)throw new Error(result.error);
+      const rows=Array.isArray(result.flows)?result.flows:[];v332FlowCursor=Number(result.next_before_id)||0;flowBefore=v332FlowCursor;
+      let wrap=list.querySelector('.v32-table-wrap'),table;if(!wrap){wrap=element('div',undefined,'v32-table-wrap');table=element('div',undefined,'v32-table');const head=element('div',undefined,'v32-table-head v32-flow-head');for(const x of ['Heure','Application','UID','Transport','IP / port','DNS / SNI','Tracker','Volume'])head.append(element('span',x));table.append(head);wrap.append(table);list.append(wrap);}else table=wrap.firstElementChild;
+      for(const f of rows){const app=(f.packages?.length===1)?v32PenaltyApps().find(a=>a.package_name===f.packages[0]):null,level=v32Exposure(app),row=element('div',undefined,'v32-table-row v32-flow-row');const c=t=>{const x=element('span',t??'—','v32-cell');x.title=t??'—';return x;},trackerName=(f.tracker_matches||[]).map(t=>t.name).concat((f.tracker_dns_candidates||[]).map(t=>t.name)).slice(0,2).join(' · ')||'—';const name=element('span',undefined,'v32-cell v32-appcell');name.title=f.actor||'Acteur inconnu';name.append(v32Badge(level),document.createTextNode(f.actor||'Acteur inconnu'));row.append(c(flowTime(f.first_outbound_ms||f.first_inbound_ms)),name,c(Number(f.uid)>=0?String(f.uid):'—'),c(f.protocol||'—'),c(f.destination||[f.remote_ip,f.remote_port].filter(Boolean).join(':')||'—'),c(f.tls_sni||(f.dns||[]).join(', ')||'—'),c(trackerName),c('↑ '+flowBytes(f.tx_bytes)+' · ↓ '+flowBytes(f.rx_bytes)));table.append(row);}
+      $('jf-status').textContent=rows.length+' flux affiché(s) · '+(result.scanned_events||0)+' événements examinés · '+(result.notice||'');$('jf-snapshot').textContent='Vue figée au journal ID '+v332FlowSnapshot+' · la collecte continue en arrière-plan.';$('jf-more').hidden=!rows.length||!v332FlowCursor;$('jf-more').textContent='Afficher '+v332FlowPageSize()+' flux plus anciens';v332FlowReady=true;v332RestoreX('flows');v332SaveSoon();
+    }catch(e){$('jf-status').textContent=e.message||String(e);}
+  };
+  window.AivFlowFresh=function(head){if(v332FlowSnapshot&&head>v332FlowSnapshot)$('jf-snapshot').textContent='Vue figée au journal ID '+v332FlowSnapshot+' · nouvelles données disponibles ('+(head-v332FlowSnapshot)+' événements). Appuie sur Actualiser.';};
+  $('jf-refresh').onclick=()=>{v332FlowSnapshot=Number(nativeBridge.journalHead?.()||0);v332FlowCursor=v332FlowSnapshot;v332FlowReady=false;renderFlows(false,true);};$('jf-search').oninput=()=>{};$('jf-search').onchange=()=>{v332FlowCursor=v332FlowSnapshot;v332FlowReady=false;renderFlows(false,true);};$('jf-page-size').onchange=()=>{v332FlowCursor=v332FlowSnapshot;v332FlowReady=false;renderFlows(false,true);};$('jf-more').onclick=()=>renderFlows(true,true);
+
+  function v332TrackerSize(){return Math.max(1,Math.min(50,Number($('jt-page-size')?.value||25)));}
+  function v332FmtTime(ms){if(!ms)return '—';try{return new Date(ms).toLocaleString('fr-CA',{month:'short',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'});}catch(e){return flowTime(ms);}}
+  function v332ProofLabel(g){if(g?.apk?.present===true)return ['APK + réseau','both'];if(Number(g?.proof)>=2)return ['Réseau','net'];return ['DNS candidat','dns'];}
+  function v332SegmentCards(st){
+    const box=$('jt-segment-status');box.replaceChildren();const seg=st?.segments||{};
+    const items=[['Lots 50 000 terminés',seg.completed??0],['Lot en cours',seg.current||'—'],['Événements moulinés',st?.checkpoint??0],['Groupes traqueurs',st?.tracker_groups??0]];
+    for(const [label,value] of items){const d=element('div',undefined,'jt-stat');d.append(element('span',label),element('strong',String(value)));box.append(d);}
+  }
+  function v332Destinations(g){
+    const box=element('div',undefined,'jt-dests');
+    for(const d of (g.destinations||[]).slice(0,8)){const name=d.name||'Destination inconnue',x=element('span',name+(d.journeys>1?' · '+d.journeys+'×':''),'jt-dest');x.title=name;box.append(x);}
+    if(!(g.destinations||[]).length)box.append(element('span','Destination non résolue','jt-dest'));
+    return box;
+  }
+  function v332GroupCard(g){
+    const card=element('button',undefined,'jt-group');card.type='button';
+    const top=element('div',undefined,'jt-group-top'),title=element('div'),proof=v332ProofLabel(g),p=element('span',proof[0],'v33-proof '+proof[1]);
+    title.append(element('div',(g.app||'Application inconnue')+' → '+(g.tracker_name||('Tracker '+g.tracker_id)),'jt-group-title'));
+    if(g.package_name)title.append(element('div',g.package_name,'jc-sub'));
+    top.append(title,p);
+    const metrics=element('div',undefined,'jt-metrics');
+    for(const t of [(g.journeys||0)+' trajet(s)',(g.destinations_count||0)+' destination(s)','↑ '+flowBytes(g.tx_bytes||0),'↓ '+flowBytes(g.rx_bytes||0),'dernier '+v332FmtTime(g.last_ms)])metrics.append(element('span',t,'jt-chip'));
+    card.append(top,metrics,v332Destinations(g));
+    card.onclick=()=>v332OpenGroup(g);return card;
+  }
+  function v332RenderTrackers(force=false){
+    if(!nativeBridge?.trackerGroups){$('jt-status').textContent='La vue regroupée des traqueurs n’est pas disponible dans cette version.';return;}
+    if(!force&&v332TrackerReady&&$('jt-list')?.children.length&&!v332TrackerSelected)return;
+    try{
+      nativeBridge.trackerResume?.();
+      const q=$('jt-search').value.trim(),size=v332TrackerSize(),result=JSON.parse(nativeBridge.trackerGroups(q,v332TrackerOffset,size));if(result.error)throw new Error(result.error);
+      const st=result.status||JSON.parse(nativeBridge.trackerStatus()).index||{};v332SegmentCards(st);
+      const list=$('jt-list');list.replaceChildren();for(const g of result.rows||[])list.append(v332GroupCard(g));
+      const pages=Math.max(1,Math.ceil((result.total||0)/size)),page=Math.floor(v332TrackerOffset/size)+1;
+      $('jt-page').textContent='Page '+page+' / '+pages;$('jt-prev').hidden=v332TrackerOffset<=0;$('jt-more').hidden=v332TrackerOffset+size>=(result.total||0);
+      $('jt-status').textContent=(result.total||0)+' groupe(s) application + traqueur · '+(st.tracker_flow_hits||0)+' trajets correspondants · '+(st.trail_steps||0)+' étapes de trail indexées.';
+      $('jt-live').textContent=st.busy?'La moulinette travaille dans le journal en arrière-plan. La liste reste stable pendant que tu regardes.':'Index à jour au journal ID '+(st.checkpoint||0)+'.';
+      v332TrackerNetworkBaseline=Number(st.tracker_flow_hits)||0;v332TrackerLatestBaseline=Number(st.latest_network_match_event)||0;v332TrackerReady=true;v332SaveSoon();
+    }catch(e){$('jt-status').textContent=e.message||String(e);}
+  }
+  function v332OpenGroup(g){
+    v332TrackerSelected={group:g,before:0};const detail=$('jt-detail');detail.hidden=false;detail.replaceChildren();
+    const back=element('button','← Retour aux groupes','jt-back');back.type='button';back.onclick=()=>{v332TrackerSelected=null;detail.hidden=true;detail.replaceChildren();};
+    const h=element('h3',(g.app||'Application inconnue')+' → '+(g.tracker_name||'Traqueur'));
+    const meta=element('p',(g.journeys||0)+' trajet(s) · '+(g.destinations_count||0)+' destination(s) · du '+v332FmtTime(g.first_ms)+' au '+v332FmtTime(g.last_ms),'jc-sub');
+    const journeys=element('div');detail.append(back,h,meta,v332Destinations(g),journeys);
+    v332LoadJourneys(g,journeys,0);
+    detail.scrollIntoView({behavior:'smooth',block:'start'});
+  }
+  function v332LoadJourneys(g,box,before){
+    try{
+      const result=JSON.parse(nativeBridge.trackerJourneys(g.app_key,Number(g.tracker_id),before,30));if(result.error)throw new Error(result.error);
+      if(!before)box.replaceChildren();
+      for(const j of result.rows||[]){
+        const b=element('button',undefined,'jt-journey');b.type='button';
+        const dest=j.host||j.remote_ip||'Destination non résolue';
+        b.append(element('strong',v332FmtTime(j.first_ms)+' → '+dest),element('span','UID '+(j.uid>=0?j.uid:'?')+' · ↑ '+flowBytes(j.tx_bytes||0)+' · ↓ '+flowBytes(j.rx_bytes||0)+' · '+(j.steps||0)+' étape(s)','jc-sub'));
+        b.onclick=()=>v332OpenTrail(g,j);box.append(b);
+      }
+      if(result.next_before&&(result.rows||[]).length===30){const more=element('button','30 trajets plus anciens');more.type='button';more.onclick=()=>{more.remove();v332LoadJourneys(g,box,result.next_before);};box.append(more);}
+    }catch(e){box.append(element('p',e.message||String(e),'jc-error'));}
+  }
+  function v332OpenTrail(g,j){
+    const detail=$('jt-detail');detail.hidden=false;detail.replaceChildren();
+    const back=element('button','← Retour aux trajets','jt-back');back.type='button';back.onclick=()=>v332OpenGroup(g);
+    detail.append(back,element('h3',(g.app||'Application')+' · '+(g.tracker_name||'Traqueur')),element('p','Trajet '+String(j.correlation||'').slice(0,12)+'… · '+(j.host||j.remote_ip||'destination non résolue'),'jc-sub'));
+    try{
+      const r=JSON.parse(nativeBridge.trackerTrail(j.correlation));if(r.error)throw new Error(r.error);
+      const trail=element('div',undefined,'jt-trail');
+      let prevTx=0,prevRx=0;
+      for(const s of r.steps||[]){
+        const tx=Math.max(0,Number(s.tx_bytes||0)-prevTx),rx=Math.max(0,Number(s.rx_bytes||0)-prevRx);prevTx=Math.max(prevTx,Number(s.tx_bytes||0));prevRx=Math.max(prevRx,Number(s.rx_bytes||0));
+        const step=element('div',undefined,'jt-step'),time=element('div',v332FmtTime(s.observed_ms),'jt-step-time'),main=element('div',undefined,'jt-step-main');
+        main.append(element('strong',s.action||s.category||'Événement'));
+        const where=s.tls_sni||s.destination||s.remote_ip||'';if(where)main.append(document.createTextNode(' · '+where));
+        if(tx||rx)main.append(element('div','Δ ↑ '+flowBytes(tx)+' · Δ ↓ '+flowBytes(rx),'jc-sub'));
+        const open=element('button','Événement '+s.event_id);open.type='button';open.onclick=()=>{$('jc-search').value=String(s.event_id);state.page=0;nativeAnchor=0;setTab('journal');renderNative();};main.append(open);step.append(time,main);trail.append(step);
+      }
+      detail.append(element('p',(r.total||0)+' événement(s) relié(s) au même flow_correlation_id local.'+(r.truncated?' Affichage limité aux 250 premiers.':''),'jc-sub'),trail);
+    }catch(e){detail.append(element('p',e.message||String(e),'jc-error'));}
+    detail.scrollIntoView({behavior:'smooth',block:'start'});
+  }
+  window.AivTrackerFresh=function(){try{const s=JSON.parse(nativeBridge.trackerStatus()).index||{},n=Number(s.tracker_flow_hits)||0,last=Number(s.latest_network_match_event)||0;if(!v332TrackerNetworkBaseline){v332TrackerNetworkBaseline=n;v332TrackerLatestBaseline=last;return;}if(n>v332TrackerNetworkBaseline||last>v332TrackerLatestBaseline)$('jt-live').textContent='Nouveaux trajets de traqueurs disponibles. Ta vue reste en place; appuie sur Actualiser quand tu veux les intégrer.';}catch(e){}};
+  $('jt-refresh').onclick=()=>{v332TrackerReady=false;v332TrackerSelected=null;$('jt-detail').hidden=true;v332RenderTrackers(true);};
+  $('jt-search').onchange=()=>{v332TrackerOffset=0;v332TrackerReady=false;v332TrackerSelected=null;$('jt-detail').hidden=true;v332RenderTrackers(true);};
+  $('jt-page-size').onchange=()=>{v332TrackerOffset=0;v332TrackerReady=false;v332RenderTrackers(true);};
+  $('jt-prev').onclick=()=>{v332TrackerOffset=Math.max(0,v332TrackerOffset-v332TrackerSize());v332TrackerReady=false;v332RenderTrackers(true);};
+  $('jt-more').onclick=()=>{v332TrackerOffset+=v332TrackerSize();v332TrackerReady=false;v332RenderTrackers(true);};
+
+  renderAnalysis=function(){
+    if(!nativeBridge?.analysisPage)return;refreshAnalysisStatus();if(analysisStatus?.recalculating){$('jc-analysis-progress').textContent='Recalcul en cours…';return;}if(analysisSelected!==null||$('jc-analysis-settings').open)return;
+    try{const type=$('jc-analysis-kind').value,unread=$('jc-analysis-unread').checked,q=$('jc-analysis-search')?.value.trim()||'',size=Math.max(1,Math.min(500,Number($('jc-analysis-size')?.value||v332AnalysisPageSize)));v332AnalysisPageSize=size;const result=nativeBridge.analysisPageSized?JSON.parse(nativeBridge.analysisPageSized(type,unread,analysisPage*size,size,q)):analysisCall('analysisPage',type,unread,analysisPage*15),list=$('jc-analysis-list');if(result.error)throw new Error(result.error);list.replaceChildren();if(analysisPage&&!result.rows.length){analysisPage=0;renderAnalysis();return;}const wrap=element('div',undefined,'v32-table-wrap'),table=element('div',undefined,'v32-table'),head=element('div',undefined,'v32-table-head v32-anom-head');for(const x of ['Heure','Application','Type','Signal','État','Niveau'])head.append(element('span',x));table.append(head);wrap.append(table);list.append(wrap);for(const a of result.rows||[]){const app=v32AppForRaw(a.identity||a),level=v32Exposure(app),row=element('button',undefined,'v32-table-row v32-anom-row');row.type='button';row.style.width='100%';row.style.padding='0';row.style.border='0';row.style.textAlign='left';row.onclick=()=>showAnalysis(a);const vals=[analysisTime(a.last_ms),a.actor||'—',a.kind||type,a.title||'—',a.reviewed?'Vu':a.severity==='attention'?'À examiner':'Nouveau'];for(const v of vals){const s=element('span',v,'v32-cell');s.title=v;row.append(s);}const l=element('span',undefined,'v32-cell');l.append(v32Badge(level));row.append(l);table.append(row);} $('jc-analysis-count').textContent=result.total+' groupe(s)'+(q?' · filtre « '+q+' »':'');v332AnalysisPages=Math.max(1,Math.ceil(result.total/size));$('jc-analysis-pagination').hidden=v332AnalysisPages<=1;$('jc-analysis-page').textContent='Page '+(analysisPage+1)+' / '+v332AnalysisPages;$('jc-analysis-prev').disabled=!analysisPage;$('jc-analysis-next').disabled=analysisPage>=v332AnalysisPages-1;$('jc-analysis-empty').hidden=Boolean((result.rows||[]).length);$('jc-analysis-go').max=String(v332AnalysisPages);$('jc-analysis-go').value=String(analysisPage+1);v332RestoreX('anomalies');v332SaveSoon();}catch(e){analysisMessage(e.message,true);}
+  };
+  $('jc-analysis-search').onchange=()=>{analysisPage=0;analysisSelected=null;$('jc-analysis-detail').hidden=true;renderAnalysis();};$('jc-analysis-size').onchange=()=>{analysisPage=0;analysisSelected=null;$('jc-analysis-detail').hidden=true;renderAnalysis();};$('jc-analysis-kind').onchange=()=>{analysisPage=0;analysisSelected=null;$('jc-analysis-detail').hidden=true;renderAnalysis();};$('jc-analysis-unread').onchange=()=>{analysisPage=0;analysisSelected=null;$('jc-analysis-detail').hidden=true;renderAnalysis();};$('jc-analysis-prev').onclick=()=>{analysisPage=Math.max(0,analysisPage-1);renderAnalysis();};$('jc-analysis-next').onclick=()=>{analysisPage=Math.min(v332AnalysisPages-1,analysisPage+1);renderAnalysis();};$('jc-analysis-jump').onclick=()=>{const n=Math.max(1,Math.min(v332AnalysisPages,Number($('jc-analysis-go').value)||1));analysisPage=n-1;renderAnalysis();};$('jc-analysis-go').onkeydown=e=>{if(e.key==='Enter')$('jc-analysis-jump').click();};
+
+  $('jc-page-size').onchange=()=>{PAGE_SIZE=Math.max(1,Math.min(500,Number($('jc-page-size').value)||100));state.page=0;nativeAnchor=0;renderNative();v332SaveSoon();};
+
+  const v332SetTabBase=setTab;
+  setTab=function(tab){v332CaptureX();v332SetTabBase(tab);if(tab==='flows'&&v332FlowReady)$('jf-snapshot').textContent='Vue figée au journal ID '+v332FlowSnapshot+' · la collecte continue en arrière-plan.';if(tab==='trackers')v332RenderTrackers(false);v332RestoreX(tab);v332SaveSoon();};
+
+  function v332RestoreState(){if(v332Restored)return;v332Restored=true;let s={};try{const raw=nativeBridge?.uiState?.();if(raw)s=JSON.parse(raw);}catch(e){}try{PAGE_SIZE=Math.max(1,Math.min(500,Number(s.journalPageSize)||100));$('jc-page-size').value=String(PAGE_SIZE);state.page=Math.max(0,Number(s.journalPage)||0);$('jc-search').value=s.journalSearch||'';if($('jc-segment'))$('jc-segment').value=String(Math.max(0,Number(s.journalSegment)||0));$('jf-search').value=s.flowSearch||'';$('jf-page-size').value=String([25,100,250,500].includes(Number(s.flowPageSize))?Number(s.flowPageSize):100);v332FlowSnapshot=Math.max(0,Number(s.flowSnapshot)||0);v332FlowCursor=Math.max(0,Number(s.flowCursor)||v332FlowSnapshot);v332FlowReady=!!s.flowReady;$('jt-search').value=s.trackerSearch||'';$('jt-page-size').value=String([12,25,30,50].includes(Number(s.trackerPageSize))?Number(s.trackerPageSize):25);v332TrackerOffset=Math.max(0,Number(s.trackerOffset)||0);v332TrackerReady=!!s.trackerReady;v332TrackerNetworkBaseline=Math.max(0,Number(s.trackerNetworkBaseline)||0);v332TrackerLatestBaseline=Math.max(0,Number(s.trackerLatestBaseline)||0);v332AnalysisPageSize=[25,100,250,500].includes(Number(s.analysisPageSize))?Number(s.analysisPageSize):500;$('jc-analysis-size').value=String(v332AnalysisPageSize);analysisPage=Math.max(0,Number(s.analysisPage)||0);$('jc-analysis-search').value=s.analysisSearch||'';$('jc-analysis-kind').value=s.analysisKind==='trace'?'trace':'anomaly';$('jc-analysis-unread').checked=!!s.analysisUnread;Object.assign(v332Scroll,s.scrollX||{});const tab=['home','journal','flows','trackers','anomalies','audit','menu'].includes(s.tab)?s.tab:'home';if(tab==='flows')v332FlowReady=false;if(tab==='trackers')v332TrackerReady=false;setTab(tab);requestAnimationFrame(()=>{scrollTo(0,Math.max(0,Number(s.scrollY)||0));v332RestoreX(tab);});}catch(e){setTab('home');}}
+  const v332FinishStartupBase=finishStartup;finishStartup=function(input){v332FinishStartupBase(input);v332RestoreState();};
+
+
+
+  beginStartup();
+
+})();

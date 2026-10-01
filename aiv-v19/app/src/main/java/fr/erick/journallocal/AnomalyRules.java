@@ -7,11 +7,11 @@ import java.util.*;
 /** Deterministic metadata rules. No network, Android, or content decryption dependency. */
 public final class AnomalyRules implements Serializable {
     private static final long serialVersionUID = 3L;
-    public static final long WINDOW = 300000L, GROUP = 900000L;
+    public static final long WINDOW = AivConfig.ANOMALY_WINDOW_MS, GROUP = AivConfig.ANOMALY_GROUP_MS;
     public static final class Settings implements Serializable {
         private static final long serialVersionUID = 1L;
         public boolean failures=true, volume=true, dns=true, collection=true, watch=true, research=true;
-        public int failureCount=8, uploadMiB=10;
+        public int failureCount=AivConfig.ANOMALY_FAILURE_COUNT_DEFAULT, uploadMiB=AivConfig.ANOMALY_UPLOAD_MIB_DEFAULT;
         public String[] domains=new String[0];
         public void validate() {
             if(failureCount<2||failureCount>100||uploadMiB<1||uploadMiB>1024||domains.length>50)
