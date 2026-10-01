@@ -77,7 +77,7 @@ jobs:
           grep -q 'android:versionName="1.1.2"' aiv-v19/app/src/main/AndroidManifest.xml
           grep -q 'rikka.shizuku.ShizukuProvider' aiv-v19/app/src/main/AndroidManifest.xml
           grep -q 'class ShizukuCleanup' aiv-v19/app/src/main/java/fr/erick/journallocal/ShizukuCleanup.java
-          sha256sum -c aiv-v19/build/AIV-0.6.37-unsigned.apk.sha256
+          sha256sum -c aiv-v19/build/AIV-1.1.2-unsigned.apk.sha256
 
       - name: Upload AIV V37 unsigned APK
         uses: actions/upload-artifact@v4
