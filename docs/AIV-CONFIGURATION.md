@@ -147,7 +147,7 @@ Les noms ci-dessous sont ceux de `AivConfig.java`, générés depuis `config/def
 
 ## Design et contrôle — 1er octobre 2026
 
-Le logo fourni AIV est utilisé sans modification comme icône Android (`res/drawable/aiv_logo.png`), logo de l'en-tête et image d'initialisation. Le compilateur embarque les images dans la page locale sous forme data URI pour conserver la CSP et l'absence de chargement externe. Le thème natif et la WebView utilisent le fond `#04102f`. Les commandes d'observation gardent le bleu ; les actions de contrôle, l'onglet Shizuku et l'onglet Traqueurs utilisent l'orange. L'anneau d'initialisation tourne autour du logo avec respect de la préférence de mouvement réduit.
+Le logo fourni AIV est utilisé sans modification comme icône Android (`res/drawable/aiv_logo.jpg`), logo de l'en-tête et image d'initialisation. Le compilateur embarque les images dans la page locale sous forme data URI pour conserver la CSP et l'absence de chargement externe. Le thème natif et la WebView utilisent le fond `#04102f`. Les commandes d'observation gardent le bleu ; les actions de contrôle, l'onglet Shizuku et l'onglet Traqueurs utilisent l'orange. L'anneau d'initialisation tourne autour du logo avec respect de la préférence de mouvement réduit.
 
 « Ouvrir le journal maintenant » ferme immédiatement l'écran d'initialisation, laisse le calcul en cours et conserve la navigation actuelle lorsque le résultat arrive. Il ne désactive ni le journal ni l'analyse. Les scores restent dépendants de leur état de calcul.
 

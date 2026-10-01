@@ -16,7 +16,7 @@ const assert=require('node:assert/strict'),path=require('node:path'),{chromium}=
   });
   await page.goto('file://'+path.resolve(__dirname,'../app/src/main/assets/journal.html'));
   await page.locator('#jc-startup .aiv-startup-logo').waitFor();
-  assert.match(await page.locator('.v32-logo').getAttribute('src'),/^data:image\/png;base64,/);
+  assert.match(await page.locator('.v32-logo').getAttribute('src'),/^data:image\/jpeg;base64,/);
   const c=await page.locator('#jc-startup').evaluate(el=>getComputedStyle(el).backgroundColor);
   assert.equal(c,'rgb(4, 16, 47)');
   await page.screenshot({path:'/tmp/aiv-startup.png'});

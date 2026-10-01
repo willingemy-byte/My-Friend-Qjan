@@ -20,8 +20,8 @@ def assemble():
         html=html.replace(token,(frontend/filename).read_text())
     if re.search(r'\{\{AIV_(STYLE|SCRIPT)_',html):
         raise ValueError('Missing frontend part')
-    logo=(ROOT/'app/src/main/res/drawable/aiv_logo.png').read_bytes()
-    html=html.replace('{{AIV_LOGO}}','data:image/png;base64,'+base64.b64encode(logo).decode())
+    logo=(ROOT/'app/src/main/res/drawable/aiv_logo.jpg').read_bytes()
+    html=html.replace('{{AIV_LOGO}}','data:image/jpeg;base64,'+base64.b64encode(logo).decode())
     return html
 
 if __name__=='__main__':
