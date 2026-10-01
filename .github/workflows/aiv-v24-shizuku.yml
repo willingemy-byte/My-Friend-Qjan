@@ -3,7 +3,7 @@ name: AIV V37 recovery GitHub build
 on:
   workflow_dispatch:
   push:
-    branches: [aiv-v37-recovery]
+    branches: [aiv-v37-v1.1.2]
     paths:
       - "aiv-v19/**"
       - ".github/workflows/aiv-v24-shizuku.yml"
@@ -31,7 +31,7 @@ jobs:
           path: aiv-v19/.toolchain
           key: aiv-v32-android35-ndk27d-shizuku-13.1.5
 
-      - name: Build AIV 0.6.37 unsigned
+      - name: Build AIV 1.1.2 unsigned
         working-directory: aiv-v19
         env:
           AIV_BUILD_MODE: unsigned
@@ -72,9 +72,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -s aiv-v19/build/AIV-0.6.37-unsigned.apk
-          test -s aiv-v19/build/AIV-0.6.37-unsigned.apk.sha256
-          grep -q 'android:versionName="0.6.37"' aiv-v19/app/src/main/AndroidManifest.xml
+          test -s aiv-v19/build/AIV-1.1.2-unsigned.apk
+          test -s aiv-v19/build/AIV-1.1.2-unsigned.apk.sha256
+          grep -q 'android:versionName="1.1.2"' aiv-v19/app/src/main/AndroidManifest.xml
           grep -q 'rikka.shizuku.ShizukuProvider' aiv-v19/app/src/main/AndroidManifest.xml
           grep -q 'class ShizukuCleanup' aiv-v19/app/src/main/java/fr/erick/journallocal/ShizukuCleanup.java
           sha256sum -c aiv-v19/build/AIV-0.6.37-unsigned.apk.sha256
@@ -82,7 +82,7 @@ jobs:
       - name: Upload AIV V37 unsigned APK
         uses: actions/upload-artifact@v4
         with:
-          name: AIV-0.6.37-unsigned
+          name: AIV-1.1.2-unsigned
           path: |
             aiv-v19/build/AIV-0.6.37-unsigned.apk
             aiv-v19/build/AIV-0.6.37-unsigned.apk.sha256
