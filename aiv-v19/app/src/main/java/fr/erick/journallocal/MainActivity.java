@@ -106,6 +106,7 @@ public final class MainActivity extends Activity {
         nav.setBackgroundColor(0xff050b12);
         addTab("Présentation","presentation");
         addTab("Applications","applications");
+        addTab("Accès","access");
         addTab("Flux","flows");
         addTab("Shizuku","shizuku");
         scroller.addView(nav);
@@ -139,6 +140,7 @@ public final class MainActivity extends Activity {
             if(v instanceof Button)styleTab((Button)v,id.equals(v.getTag()));
         }
         if("applications".equals(id))renderApplications("");
+        else if("access".equals(id))renderSpecialAccess();
         else if("flows".equals(id))renderFlows("");
         else if("shizuku".equals(id))renderShizuku();
         else renderPresentation();
@@ -187,6 +189,40 @@ public final class MainActivity extends Activity {
         actions.addView(action("Ouvrir les réglages VPN",v->openSetting(Settings.ACTION_VPN_SETTINGS)));
         actions.addView(action("Ouvrir les options développeur",v->openSetting(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)));
         page.addView(actions);
+    }
+
+    private void renderSpecialAccess(){
+        page.removeAllViews();
+        page.addView(sectionTitle("Accès spéciaux"));
+        page.addView(note("AIV demande seulement les accès qui servent à observer ou protéger l'appareil. Cette page distingue visibilité, contrôle Shizuku et accès spéciaux Android; elle ne transforme pas AIV en application système."));
+        try{
+            JSONObject s=SpecialAccess.status(this);
+            page.addView(card("Visibilité des applications",
+                "QUERY_ALL_PACKAGES : "+yesNo(s.optBoolean("query_all_packages"))+
+                "\nApplications visibles : "+s.optInt("visible_packages",-1)+
+                "\nAIV visible dans son propre inventaire : "+yesNo(s.optBoolean("self_visible"))+
+                "\nBut : lire package, version, UID, certificat et permissions déclarées/accordées."));
+            page.addView(card("Accès d'utilisation",
+                "Usage Access : "+yesNo(s.optBoolean("usage_access"))+
+                "\nBut : contexte d'utilisation et statistiques Android. L'utilisateur garde le contrôle du commutateur système."));
+            page.addView(card("VPN et Shizuku",
+                "Autorisation VPN AIV : "+yesNo(s.optBoolean("vpn_prepared"))+
+                "\nShizuku connecté : "+yesNo(s.optBoolean("shizuku_binder"))+
+                "\nShizuku autorisé : "+yesNo(s.optBoolean("shizuku_authorized"))+
+                "\nCes deux accès sont distincts : le VPN observe les flux; Shizuku exécute les actions de contrôle validées."));
+            page.addView(card("Fichiers",
+                "Accès à tous les fichiers : "+(s.optBoolean("all_files_declared")?(s.optBoolean("all_files_granted")?"ACTIF":"DÉCLARÉ, NON ACTIF"):"NON DEMANDÉ")+
+                "\nAIV 1.2.0 ne le demande pas par défaut : cet accès couvre surtout le stockage partagé et ne donne pas accès aux données privées /data/data des autres applications."));
+            page.addView(card("Autres accès",
+                "Superposition : "+yesNo(s.optBoolean("overlay"))+
+                "\nModifier les réglages système : "+yesNo(s.optBoolean("write_settings"))+
+                "\nExemption optimisation batterie : "+yesNo(s.optBoolean("ignore_battery_optimizations"))+
+                "\nIls restent optionnels tant qu'une fonction AIV précise ne les exige pas."));
+        }catch(Exception e){page.addView(card("Accès spéciaux","Lecture impossible : "+e.getClass().getSimpleName()));}
+        page.addView(action("Ouvrir Accès d'utilisation",v->openSetting(Settings.ACTION_USAGE_ACCESS_SETTINGS)));
+        page.addView(action("Ouvrir Accès spéciaux Android",v->openSetting(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)));
+        page.addView(action("Ouvrir les réglages VPN",v->openSetting(Settings.ACTION_VPN_SETTINGS)));
+        page.addView(action("Ouvrir les options développeur",v->openSetting(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)));
     }
 
     private void renderApplications(String query){
