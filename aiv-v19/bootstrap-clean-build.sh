@@ -95,7 +95,7 @@ echo "[preflight] V$VERSION"
 python3 -m py_compile "$ROOT/build.py"
 
 echo "[preflight] native UI only"
-if grep -R -n -E 'android\.webkit|\bWebView\b|addJavascriptInterface' "$ROOT/app/src/main/java"; then
+if grep -R -n -E 'android\.webkit|new[[:space:]]+WebView|addJavascriptInterface|setJavaScriptEnabled' "$ROOT/app/src/main/java"; then
   echo "WebView reference found in AIV 1.2 native runtime" >&2
   exit 5
 fi
