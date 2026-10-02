@@ -104,8 +104,9 @@ if [[ "$BUILD_MODE" == unsigned ]]; then
   SIGN_ARGS=(--unsigned)
 else
   [[ "$BUILD_MODE" == signed ]] || { echo "AIV_BUILD_MODE must be signed or unsigned" >&2; exit 4; }
-  [[ -f "$SIGNING_DIR/journal-local.p12" ]] || { echo "Missing historical signing key" >&2; exit 4; }
+  [[ -f "$SIGNING_DIR/all-in-visible.p12" ]] || { echo "Missing All In Visible signing key" >&2; exit 4; }
   [[ -f "$SIGNING_DIR/password.txt" ]] || { echo "Missing signing password file" >&2; exit 4; }
+  [[ -f "$SIGNING_DIR/certificate.sha256" ]] || { echo "Missing AIV signing certificate pin" >&2; exit 4; }
   SIGN_ARGS=(--signing-dir "$SIGNING_DIR")
 fi
 
@@ -119,10 +120,10 @@ python3 "$ROOT/build.py" \
 
 if [[ "$BUILD_MODE" == unsigned ]]; then
   FINAL="$ROOT/build/AIV-$VERSION-unsigned.apk"
-  cp "$ROOT/build/journal-local-aligned.apk" "$FINAL"
+  cp "$ROOT/build/all-in-visible-aligned.apk" "$FINAL"
 else
   FINAL="$ROOT/build/AIV-$VERSION.apk"
-  cp "$ROOT/build/journal-local.apk" "$FINAL"
+  cp "$ROOT/build/all-in-visible.apk" "$FINAL"
 fi
 
 echo "[verify] package/native shell"
@@ -131,5 +132,11 @@ printf '%s\n' "$BADGING" | head -n 8
 printf '%s\n' "$BADGING" | grep -q "package: name='com.allinvisible.aiv'"
 printf '%s\n' "$BADGING" | grep -q "versionName='$VERSION'"
 printf '%s\n' "$BADGING" | grep -q "application-label:'All In Visible'"
+if unzip -Z1 "$FINAL" | grep -E '^assets/.*\.html
+echo "FINAL_APK=$FINAL"
+ >/dev/null; then
+  echo "Legacy HTML asset unexpectedly packaged in native AIV APK" >&2
+  exit 6
+fi
 sha256sum "$FINAL" | tee "$FINAL.sha256"
 echo "FINAL_APK=$FINAL"
