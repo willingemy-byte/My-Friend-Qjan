@@ -70,6 +70,7 @@ public final class MainActivity extends Activity {
         try{Continuous.initialize(this);}catch(Throwable ignored){}
         try{DefenseMonitor.start(this);}catch(Throwable ignored){}
         try{ShizukuCleanup.attach(this);}catch(Throwable ignored){}
+        previewTier=ProductAccess.demoTier(this);
         buildShell();
         prepareLocalData();
         showPage("presentation");
@@ -151,6 +152,7 @@ public final class MainActivity extends Activity {
 
     private void selectPreviewTier(int tier){
         previewTier=tier;
+        ProductAccess.setDemoTier(this,tier);
         refreshTierFooter();
         if(tier==TIER_FREE)showPage("presentation");
         else if(tier==TIER_PAID)showPage("shizuku");
