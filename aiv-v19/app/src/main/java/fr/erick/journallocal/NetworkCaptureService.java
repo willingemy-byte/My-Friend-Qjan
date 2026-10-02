@@ -8,6 +8,8 @@ import android.os.*;
 import java.io.IOException;
 import java.net.*;
 import java.security.SecureRandom;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.*;
 import org.json.*;
 
@@ -25,6 +27,10 @@ public final class NetworkCaptureService extends VpnService {
     private ConnectivityManager.NetworkCallback callback;
     private Thread engine;
     private EventStore store;
+    private PinVault vpnVault;
+    private String vpnKeyId="";
+    private String vpnSecurityLevel="UNAVAILABLE";
+    private String vpnIdentityError="";
     private Config current;
     private String session="";
     private final HashMap<Long,Flow> flows=new HashMap<>(); // native worker only
@@ -49,6 +55,13 @@ public final class NetworkCaptureService extends VpnService {
     }
     @Override public void onCreate(){
         super.onCreate();main=new Handler(getMainLooper());store=EventStore.get(this);
+        try{
+            vpnVault=PinVault.vpnIdentity();
+            vpnKeyId=vpnVault.keyId();
+            vpnSecurityLevel=vpnVault.securityLevel;
+        }catch(Exception e){
+            vpnIdentityError=e.getClass().getSimpleName();
+        }
         connectivity=(ConnectivityManager)getSystemService(CONNECTIVITY_SERVICE);
         NotificationManager manager=(NotificationManager)getSystemService(NOTIFICATION_SERVICE);
         manager.createNotificationChannel(new NotificationChannel("reseau","Connexions des applications",NotificationManager.IMPORTANCE_LOW));
@@ -123,7 +136,7 @@ public final class NetworkCaptureService extends VpnService {
                 try(ParcelFileDescriptor tunnel=builder.establish()){
                     if(tunnel==null)throw new IOException("Interface VPN non créée");
                     session=UUID.randomUUID().toString();running=true;starting=false;stateText="Connexions actives · "+current.transport;
-                    record("collecteur","All In Visible",once?"Capture réseau reprise":"Capture réseau démarrée","VPN local",EventStore.object("session",session,"no_remote_gateway",true,"tls_decryption",false,"excluded_app",getPackageName(),"dns_source","Réseau physique Android","scope","Paquets IP routés vers cette interface; autres profils et appareils partagés non garantis"));
+                    record("collecteur","All In Visible",once?"Capture réseau reprise":"Capture réseau démarrée","VPN local",EventStore.object("session",session,"no_remote_gateway",true,"tls_decryption",false,"excluded_app",getPackageName(),"dns_source","Réseau physique Android","scope","Paquets IP routés vers cette interface; autres profils et appareils partagés non garantis","vpn_identity_key_id",vpnKeyId,"vpn_identity_security_level",vpnSecurityLevel,"vpn_identity_status",vpnVault==null?"UNAVAILABLE":"READY","vpn_identity_scope","Clé privée dédiée conservée dans Android Keystore; utilisée seulement pour signer localement les métadonnées AIV"));
                     once=true;((NotificationManager)getSystemService(NOTIFICATION_SERVICE)).notify(3,notification(stateText));
                     int result=runNative(tunnel.getFd());
                     if(result!=0&&!stopped)throw new IOException("Relais interrompu, code "+result);
@@ -171,6 +184,48 @@ public final class NetworkCaptureService extends VpnService {
             f.attribution="Propriétaire du flux identifié par l’API Android du VPN actif";
         }catch(Exception e){f.uid=-1;f.attribution="Identification non disponible : "+e.getClass().getSimpleName();}
     }
+    private JSONObject vpnIdentity(long id,Flow f){
+        JSONObject out=EventStore.object(
+            "schema","aiv-vpn-flow-identity/1",
+            "mode","LOCAL_SIGNED_METADATA",
+            "entitlement","PAID",
+            "key_id",vpnKeyId,
+            "security_level",vpnSecurityLevel,
+            "app_identity_id",f.cryptographicIdentity.optString("app_identity_id",
+                f.cryptographicIdentity.optString("uid_identity_id","")),
+            "flow_correlation_id",f.correlationId,
+            "native_flow_id",id,
+            "session_id",session,
+            "scope","Signature locale de métadonnées AIV; aucune clé n'est injectée dans l'application tierce et rien n'est ajouté au paquet Internet"
+        );
+        if(vpnVault==null){
+            try{out.put("status","UNAVAILABLE").put("error",vpnIdentityError);}catch(JSONException ignored){}
+            return out;
+        }
+        try{
+            String canonical="aiv-vpn-flow-identity/1\n"+
+                "key_id="+vpnKeyId+"\n"+
+                "session="+session+"\n"+
+                "flow="+f.correlationId+"\n"+
+                "native_id="+id+"\n"+
+                "app_id="+out.optString("app_identity_id")+"\n"+
+                "uid="+f.uid+"\n"+
+                "proto="+f.protocol+"\n"+
+                "local="+f.local+":"+f.localPort+"\n"+
+                "remote="+f.remote+":"+f.remotePort+"\n"+
+                "first_ms="+f.firstMs;
+            byte[] bytes=canonical.getBytes(StandardCharsets.UTF_8);
+            byte[] sig=vpnVault.sign(bytes);
+            out.put("status","SIGNED");
+            out.put("canonical_sha256",ChainStore.hex(ChainStore.digest().digest(bytes)));
+            out.put("signature_algorithm","SHA256withECDSA");
+            out.put("signature_base64",Base64.getEncoder().encodeToString(sig));
+        }catch(Exception e){
+            try{out.put("status","ERROR").put("error",e.getClass().getSimpleName());}catch(JSONException ignored){}
+        }
+        return out;
+    }
+
     private JSONObject details(long id,Flow f){
         return EventStore.object("flow_id",session+":"+id,"flow_correlation_id",f.correlationId,"native_flow_id",id,
             "correlation_scope","Identifiant local aléatoire 128 bits; il reste dans All In Visible et n’est pas ajouté aux paquets Internet",
@@ -180,7 +235,7 @@ public final class NetworkCaptureService extends VpnService {
             "ip_version",f.version,
             "protocol",f.protocol==6?"TCP":f.protocol==17?"UDP":f.protocol==1?"ICMP":f.protocol==58?"ICMPv6":String.valueOf(f.protocol),
             "local_ip",f.local,"local_port",f.localPort,"remote_ip",f.remote,"port",f.remotePort,"uid",f.uid,"packages",f.packages,"package_list_scope","Paquets retournés par Android; visibilité éventuellement limitée",
-            "attribution",f.attribution,"journal_group",f.journalGroup,"system_app",f.systemApp,"updated_system_app",f.updatedSystemApp,"package_list_scope","Paquets retournés par Android; visibilité éventuellement limitée","app_identity",f.cryptographicIdentity,
+            "attribution",f.attribution,"journal_group",f.journalGroup,"system_app",f.systemApp,"updated_system_app",f.updatedSystemApp,"package_list_scope","Paquets retournés par Android; visibilité éventuellement limitée","app_identity",f.cryptographicIdentity,"vpn_identity",vpnIdentity(id,f),
             "cross_analysis",EventStore.object("status",f.uid<0?"uid_inconnu":(f.packages.length()>1||f.uid==1000)?"uid_partage_non_resolu":"uid_observe","pid",JSONObject.NULL,"process_name",JSONObject.NULL,"service",JSONObject.NULL,
                 "automatic_system_logcat","Non accessible à cette application ordinaire","diagnostic_correlation","Disponible à la demande après import d’un diagnostic horodaté; une coïncidence temporelle ne prouve pas la propriété d’un socket"),
             "security_context",f.security,"tls_sni",f.tlsName,"tls_observation",f.protocol==6?f.tlsStatus:"Non analysé (UDP/QUIC et autres protocoles)","ech_extension_present",f.ech,"sni_scope",f.ech?"Nom externe possible; ECH ou GREASE, nom interne non observable":"Nom annoncé dans le ClientHello; service ou contenu non prouvé","transport",current==null?"Inconnu":current.transport,
