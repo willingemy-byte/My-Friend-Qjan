@@ -41,13 +41,13 @@ public final class RecorderService extends Service {
         if(stopping)return;
         long elapsed=SystemClock.elapsedRealtime();
         if(previousElapsed>0 && elapsed-previousElapsed>AivConfig.COLLECTION_GAP_MS)
-            record("collecteur","Journal local","Intervalle sans signal de vie","Continuité de collecte","Interne","Horloge monotone Android",EventStore.object("interval_ms",elapsed-previousElapsed,"interpretation","Veille ou suspension possible; événements manquants non quantifiables"));
+            record("collecteur","All In Visible","Intervalle sans signal de vie","Continuité de collecte","Interne","Horloge monotone Android",EventStore.object("interval_ms",elapsed-previousElapsed,"interpretation","Veille ou suspension possible; événements manquants non quantifiables"));
         lastAlive=System.currentTimeMillis();
-        if(previousWall>0&&Math.abs((lastAlive-previousWall)-(elapsed-previousElapsed))>AivConfig.COLLECTION_CLOCK_DRIFT_MS)record("collecteur","Journal local","Écart entre horloges détecté","Corrélation temporelle","Interne","Horloges Android",EventStore.object("wall_delta_ms",lastAlive-previousWall,"elapsed_delta_ms",elapsed-previousElapsed,"interpretation","Comparer les temps monotones; les heures civiles ont changé"));
+        if(previousWall>0&&Math.abs((lastAlive-previousWall)-(elapsed-previousElapsed))>AivConfig.COLLECTION_CLOCK_DRIFT_MS)record("collecteur","All In Visible","Écart entre horloges détecté","Corrélation temporelle","Interne","Horloges Android",EventStore.object("wall_delta_ms",lastAlive-previousWall,"elapsed_delta_ms",elapsed-previousElapsed,"interpretation","Comparer les temps monotones; les heures civiles ont changé"));
         previousElapsed=elapsed;previousWall=lastAlive;prefs.edit().putLong("last_alive",lastAlive).apply();
-        record("collecteur","Journal local","Signal de vie","Collecteur","Interne","Service local",EventStore.object("elapsed_ms",elapsed,"network_health",health==null?JSONObject.NULL:health.sample(),"collector_pid",android.os.Process.myPid()));
+        record("collecteur","All In Visible","Signal de vie","Collecteur","Interne","Service local",EventStore.object("elapsed_ms",elapsed,"network_health",health==null?JSONObject.NULL:health.sample(),"collector_pid",android.os.Process.myPid()));
         long rx=TrafficStats.getTotalRxBytes(),tx=TrafficStats.getTotalTxBytes();
-        if(rx>=0 && tx>=0)record("reseau","Journal local","Lecture des compteurs réseau Android","Compteurs depuis le démarrage","Global","TrafficStats",EventStore.object("rx_bytes",rx,"tx_bytes",tx,"attribution","Lecture périodique par le collecteur, tout l’appareil; ni applications ni destinations identifiées"));
+        if(rx>=0 && tx>=0)record("reseau","All In Visible","Lecture des compteurs réseau Android","Compteurs depuis le démarrage","Global","TrafficStats",EventStore.object("rx_bytes",rx,"tx_bytes",tx,"attribution","Lecture périodique par le collecteur, tout l’appareil; ni applications ni destinations identifiées"));
         JournalSegments.request(RecorderService.this);AnomalyMonitor.request(RecorderService.this);TrackerIndex.get(RecorderService.this).request();ApkEvidence.get(RecorderService.this).request();
         DeveloperControl.tick(RecorderService.this);
         long lastInventory=prefs.getLong("last_inventory_request",0);
@@ -66,7 +66,7 @@ public final class RecorderService extends Service {
         Intent open=new Intent(this,MainActivity.class);
         PendingIntent content=PendingIntent.getActivity(this,0,open,PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);
         PendingIntent stop=PendingIntent.getService(this,1,new Intent(this,RecorderService.class).setAction(STOP),PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);
-        return new Notification.Builder(this,"collecte").setSmallIcon(android.R.drawable.ic_menu_recent_history).setContentTitle("Journal local").setContentText(text).setContentIntent(content).setOngoing(ongoing).addAction(android.R.drawable.ic_media_pause,"Arrêter",stop).build();
+        return new Notification.Builder(this,"collecte").setSmallIcon(android.R.drawable.ic_menu_recent_history).setContentTitle("All In Visible").setContentText(text).setContentIntent(content).setOngoing(ongoing).addAction(android.R.drawable.ic_media_pause,"Arrêter",stop).build();
     }
     @Override public int onStartCommand(Intent intent,int flags,int startId){
         String action=intent==null?null:intent.getAction();
@@ -84,9 +84,9 @@ public final class RecorderService extends Service {
     private void startRecording(){
         if(stopping)return;
         long oldAlive=prefs.getLong("last_alive",0);
-        if(prefs.getBoolean("enabled",false)&&oldAlive>0)record("collecteur","Journal local","Reprise après interruption","Continuité de collecte","Interne","État persistant du collecteur",EventStore.object("last_alive_ms",oldAlive,"until_ms",System.currentTimeMillis(),"missing_events","Inconnus"));
+        if(prefs.getBoolean("enabled",false)&&oldAlive>0)record("collecteur","All In Visible","Reprise après interruption","Continuité de collecte","Interne","État persistant du collecteur",EventStore.object("last_alive_ms",oldAlive,"until_ms",System.currentTimeMillis(),"missing_events","Inconnus"));
         prefs.edit().putBoolean("enabled",true).apply();
-        record("collecteur","Journal local","Collecte démarrée","Collecteur","Interne","Service local",EventStore.object("android",Build.VERSION.RELEASE,"api",Build.VERSION.SDK_INT,"model",Build.MODEL,"network_payload_capture",false,"security_patch",Build.VERSION.SECURITY_PATCH,"collector_pid",android.os.Process.myPid(),"system_logcat_access","Non accessible automatiquement; diagnostic externe facultatif"));
+        record("collecteur","All In Visible","Collecte démarrée","Collecteur","Interne","Service local",EventStore.object("android",Build.VERSION.RELEASE,"api",Build.VERSION.SDK_INT,"model",Build.MODEL,"network_payload_capture",false,"security_patch",Build.VERSION.SECURITY_PATCH,"collector_pid",android.os.Process.myPid(),"system_logcat_access","Non accessible automatiquement; diagnostic externe facultatif"));
         PowerManager power=getSystemService(PowerManager.class);
         record("systeme","Android","État initial de l’écran","Écran","Interne","PowerManager",EventStore.object("interactive",power.isInteractive()));
         systemReceiver=new BroadcastReceiver(){@Override public void onReceive(Context context,Intent intent){handleSystem(intent,isInitialStickyBroadcast());}};
@@ -148,9 +148,9 @@ public final class RecorderService extends Service {
             @Override public void onCapabilitiesChanged(Network n,NetworkCapabilities c){sampleSoon();}
         };
         try{connectivity.registerNetworkCallback(new NetworkRequest.Builder().clearCapabilities().addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET).addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN).build(),physicalCallback,worker);}
-        catch(Exception e){record("collecteur","Journal local","Suivi des réseaux physiques limité","Santé des réseaux","Interne","Enregistrement API",EventStore.object("error",e.getClass().getSimpleName(),"fallback","Relevé au signal de vie"));}
+        catch(Exception e){record("collecteur","All In Visible","Suivi des réseaux physiques limité","Santé des réseaux","Interne","Enregistrement API",EventStore.object("error",e.getClass().getSimpleName(),"fallback","Relevé au signal de vie"));}
         try{connectivity.registerDefaultNetworkCallback(networkCallback,worker);networkRegistered=true;}
-        catch(Exception e){networkRegistered=false;record("collecteur","Journal local","Source réseau indisponible","Configuration du collecteur","Interne","Enregistrement API",EventStore.object("error",e.getClass().getSimpleName()));}
+        catch(Exception e){networkRegistered=false;record("collecteur","All In Visible","Source réseau indisponible","Configuration du collecteur","Interne","Enregistrement API",EventStore.object("error",e.getClass().getSimpleName()));}
     }
     private void refreshBluetooth(){
         if(bluetoothReceiver!=null){try{unregisterReceiver(bluetoothReceiver);}catch(IllegalArgumentException ignored){}bluetoothReceiver=null;}bluetoothRegistered=false;
@@ -171,8 +171,8 @@ public final class RecorderService extends Service {
         try{
             // These protected system broadcasts can originate from the separate Bluetooth UID.
             if(Build.VERSION.SDK_INT>=33)registerReceiver(bluetoothReceiver,filter,null,worker,Context.RECEIVER_EXPORTED);else registerReceiver(bluetoothReceiver,filter,null,worker);
-            bluetoothRegistered=true;record("collecteur","Journal local","Source Bluetooth activée","Collecteur Bluetooth","Bluetooth","Service local",EventStore.object("scanning",false,"payload_capture",false));
-        }catch(Exception e){bluetoothRegistered=false;bluetoothReceiver=null;record("collecteur","Journal local","Source Bluetooth indisponible","Collecteur Bluetooth","Bluetooth","Enregistrement API",EventStore.object("error",e.getClass().getSimpleName()));}
+            bluetoothRegistered=true;record("collecteur","All In Visible","Source Bluetooth activée","Collecteur Bluetooth","Bluetooth","Service local",EventStore.object("scanning",false,"payload_capture",false));
+        }catch(Exception e){bluetoothRegistered=false;bluetoothReceiver=null;record("collecteur","All In Visible","Source Bluetooth indisponible","Collecteur Bluetooth","Bluetooth","Enregistrement API",EventStore.object("error",e.getClass().getSimpleName()));}
     }
     @Override public void onDestroy(){
         DefenseMonitor.stop(this);
@@ -183,7 +183,7 @@ public final class RecorderService extends Service {
             if(bluetoothReceiver!=null)try{unregisterReceiver(bluetoothReceiver);}catch(IllegalArgumentException ignored){}
             if(connectivity!=null&&physicalCallback!=null)try{connectivity.unregisterNetworkCallback(physicalCallback);}catch(IllegalArgumentException ignored){}
             if(connectivity!=null&&networkCallback!=null)try{connectivity.unregisterNetworkCallback(networkCallback);}catch(IllegalArgumentException ignored){}
-            store.add("collecteur","Journal local",explicitStop?"Collecte arrêtée à la demande":"Service interrompu","Collecteur","Interne","Cycle de vie du service",EventStore.object("explicit_stop",explicitStop));
+            store.add("collecteur","All In Visible",explicitStop?"Collecte arrêtée à la demande":"Service interrompu","Collecteur","Interne","Cycle de vie du service",EventStore.object("explicit_stop",explicitStop));
             if(explicitStop)prefs.edit().putBoolean("enabled",false).apply();thread.quitSafely();
         });}
         stopForeground(STOP_FOREGROUND_REMOVE);super.onDestroy();
