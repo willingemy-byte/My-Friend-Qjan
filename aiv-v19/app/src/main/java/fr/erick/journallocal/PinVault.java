@@ -6,7 +6,7 @@ import java.security.spec.ECGenParameterSpec;
 
 /** APK signing key and device export key are unrelated and never exchanged. */
 public final class PinVault {
-    private static final String ALIAS="fr.erick.journallocal.aiv.export.ec.v1";
+    private static final String ALIAS="com.allinvisible.aiv.export.ec.v1";
     private final KeyStore store;private final PrivateKey privateKey;private final PublicKey publicKey;
     public final String securityLevel;
     public PinVault()throws Exception{
