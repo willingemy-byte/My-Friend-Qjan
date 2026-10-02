@@ -59,7 +59,7 @@ public final class NetworkCaptureService extends VpnService {
     private Notification notification(String text){
         PendingIntent open=PendingIntent.getActivity(this,30,new Intent(this,MainActivity.class),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
         PendingIntent stop=PendingIntent.getService(this,31,new Intent(this,NetworkCaptureService.class).setAction(STOP),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
-        return new Notification.Builder(this,"reseau").setSmallIcon(android.R.drawable.ic_menu_view).setContentTitle("Journal local · connexions").setContentText(text).setContentIntent(open).setOngoing(true)
+        return new Notification.Builder(this,"reseau").setSmallIcon(android.R.drawable.ic_menu_view).setContentTitle("All In Visible · connexions").setContentText(text).setContentIntent(open).setOngoing(true)
             .addAction(new Notification.Action.Builder(null,"Arrêter les connexions",stop).build()).build();
     }
     @Override public int onStartCommand(Intent intent,int flags,int id){
@@ -110,11 +110,11 @@ public final class NetworkCaptureService extends VpnService {
             System.loadLibrary("journalrelay");
             while(!stopped){
                 reconfigure=false;current=config();
-                if(current==null){stateText="En attente d’un réseau avec DNS";if(waitingAt==0){waitingAt=SystemClock.elapsedRealtime();record("collecteur","Journal local","Capture en attente de réseau","Relais local",EventStore.object("coverage_gap",true,"reason","Aucun réseau physique avec configuration DNS disponible; ne prouve pas une panne de l’opérateur"));}Thread.sleep(250);continue;}
-                if(waitingAt>0){record("collecteur","Journal local","Réseau disponible pour la capture","Relais local",EventStore.object("waiting_interval_ms",SystemClock.elapsedRealtime()-waitingAt,"coverage_gap",true));waitingAt=0;}
+                if(current==null){stateText="En attente d’un réseau avec DNS";if(waitingAt==0){waitingAt=SystemClock.elapsedRealtime();record("collecteur","All In Visible","Capture en attente de réseau","Relais local",EventStore.object("coverage_gap",true,"reason","Aucun réseau physique avec configuration DNS disponible; ne prouve pas une panne de l’opérateur"));}Thread.sleep(250);continue;}
+                if(waitingAt>0){record("collecteur","All In Visible","Réseau disponible pour la capture","Relais local",EventStore.object("waiting_interval_ms",SystemClock.elapsedRealtime()-waitingAt,"coverage_gap",true));waitingAt=0;}
                 if(VpnService.prepare(this)!=null)throw new IOException("Autorisation VPN requise");
                 activeConfig=current.key;
-                Builder builder=new Builder().setSession("Journal local · connexions").setMtu(1500)
+                Builder builder=new Builder().setSession("All In Visible · connexions").setMtu(1500)
                     .addAddress("10.203.0.1",32).addAddress("fd75:6a6f:7572::1",128)
                     .addRoute("0.0.0.0",0).addRoute("::",0).setBlocking(false)
                     .addDisallowedApplication(getPackageName()).setUnderlyingNetworks(new Network[]{current.network});
@@ -123,24 +123,24 @@ public final class NetworkCaptureService extends VpnService {
                 try(ParcelFileDescriptor tunnel=builder.establish()){
                     if(tunnel==null)throw new IOException("Interface VPN non créée");
                     session=UUID.randomUUID().toString();running=true;starting=false;stateText="Connexions actives · "+current.transport;
-                    record("collecteur","Journal local",once?"Capture réseau reprise":"Capture réseau démarrée","VPN local",EventStore.object("session",session,"no_remote_gateway",true,"tls_decryption",false,"excluded_app",getPackageName(),"dns_source","Réseau physique Android","scope","Paquets IP routés vers cette interface; autres profils et appareils partagés non garantis"));
+                    record("collecteur","All In Visible",once?"Capture réseau reprise":"Capture réseau démarrée","VPN local",EventStore.object("session",session,"no_remote_gateway",true,"tls_decryption",false,"excluded_app",getPackageName(),"dns_source","Réseau physique Android","scope","Paquets IP routés vers cette interface; autres profils et appareils partagés non garantis"));
                     once=true;((NotificationManager)getSystemService(NOTIFICATION_SERVICE)).notify(3,notification(stateText));
                     int result=runNative(tunnel.getFd());
                     if(result!=0&&!stopped)throw new IOException("Relais interrompu, code "+result);
                 }finally{running=false;activeConfig="";flows.clear();}
-                if(!stopped){starting=true;stateText="Reconnexion";record("collecteur","Journal local","Changement du réseau de capture","Interruption de la capture",EventStore.object("coverage_gap",true,"reason","Reconfiguration du réseau physique ou DNS"));}
+                if(!stopped){starting=true;stateText="Reconnexion";record("collecteur","All In Visible","Changement du réseau de capture","Interruption de la capture",EventStore.object("coverage_gap",true,"reason","Reconfiguration du réseau physique ou DNS"));}
             }
         }catch(InterruptedException e){Thread.currentThread().interrupt();}
-        catch(Throwable e){lastError="Capture interrompue : "+e.getClass().getSimpleName()+" · "+String.valueOf(e.getMessage());record("collecteur","Journal local","Erreur de capture réseau","Relais local",EventStore.object("error",lastError,"coverage_gap",true));}
+        catch(Throwable e){lastError="Capture interrompue : "+e.getClass().getSimpleName()+" · "+String.valueOf(e.getMessage());record("collecteur","All In Visible","Erreur de capture réseau","Relais local",EventStore.object("error",lastError,"coverage_gap",true));}
         finally{
             running=false;starting=false;activeConfig="";stateText=lastError.isEmpty()?"Arrêté":"Arrêté avec erreur";
-            record("collecteur","Journal local","Capture réseau arrêtée","VPN local",EventStore.object("coverage_gap",true,"no_boot_restart",true));
+            record("collecteur","All In Visible","Capture réseau arrêtée","VPN local",EventStore.object("coverage_gap",true,"no_boot_restart",true));
             main.post(()->stopSelf());
         }
     }
     private void record(String category,String actor,String action,String destination,JSONObject details){
         String transport=("trafic".equals(category)||"dns".equals(category))&&current!=null?current.transport:"Interne";
-        if(!store.add(category,actor,action,destination,transport,"VPN local · Journal local",details)){lastError=EventStore.lastError;stopped=true;}
+        if(!store.add(category,actor,action,destination,transport,"VPN local · All In Visible",details)){lastError=EventStore.lastError;stopped=true;}
     }
     // Called on the native worker thread. Socket duplicate must not close the original.
     public boolean protectNativeSocket(int fd){
@@ -173,7 +173,7 @@ public final class NetworkCaptureService extends VpnService {
     }
     private JSONObject details(long id,Flow f){
         return EventStore.object("flow_id",session+":"+id,"flow_correlation_id",f.correlationId,"native_flow_id",id,
-            "correlation_scope","Identifiant local aléatoire 128 bits; il reste dans Journal local et n’est pas ajouté aux paquets Internet",
+            "correlation_scope","Identifiant local aléatoire 128 bits; il reste dans All In Visible et n’est pas ajouté aux paquets Internet",
             "first_observed_ms",f.firstMs,"first_outbound_ms",f.firstOutboundMs==0?JSONObject.NULL:f.firstOutboundMs,"first_inbound_ms",f.firstInboundMs==0?JSONObject.NULL:f.firstInboundMs,
             "outbound_observed",f.firstOutboundMs!=0,"inbound_observed",f.firstInboundMs!=0,
             "flow_linkage","Les deux directions partagent le même état de connexion du relais local; cela relie le retour réseau au flux sans déchiffrer TLS et sans résoudre un UID partagé en paquet individuel",
@@ -226,7 +226,7 @@ public final class NetworkCaptureService extends VpnService {
         catch(Exception e){try{d.put("tracker_error",e.getClass().getSimpleName());}catch(JSONException ignored){}}
         return d;
     }
-    public void onNativeProblem(String label,long count){record("collecteur","Journal local",label,"Relais local",EventStore.object("count",count,"coverage_gap",true));}
+    public void onNativeProblem(String label,long count){record("collecteur","All In Visible",label,"Relais local",EventStore.object("count",count,"coverage_gap",true));}
     @Override public void onRevoke(){Continuous.prefs(this).edit().putBoolean("vpn_enabled",false).apply();stopped=true;main.post(()->stopSelf());}
     @Override public void onDestroy(){
         stopped=true;if(callback!=null)try{connectivity.unregisterNetworkCallback(callback);}catch(Exception ignored){}
