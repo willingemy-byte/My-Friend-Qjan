@@ -55,12 +55,16 @@ public final class NetworkCaptureService extends VpnService {
     }
     @Override public void onCreate(){
         super.onCreate();main=new Handler(getMainLooper());store=EventStore.get(this);
-        try{
-            vpnVault=PinVault.vpnIdentity();
-            vpnKeyId=vpnVault.keyId();
-            vpnSecurityLevel=vpnVault.securityLevel;
-        }catch(Exception e){
-            vpnIdentityError=e.getClass().getSimpleName();
+        if(ProductAccess.paidEnabled(this)){
+            try{
+                vpnVault=PinVault.vpnIdentity();
+                vpnKeyId=vpnVault.keyId();
+                vpnSecurityLevel=vpnVault.securityLevel;
+            }catch(Exception e){
+                vpnIdentityError=e.getClass().getSimpleName();
+            }
+        }else{
+            vpnIdentityError="PAID_REQUIRED";
         }
         connectivity=(ConnectivityManager)getSystemService(CONNECTIVITY_SERVICE);
         NotificationManager manager=(NotificationManager)getSystemService(NOTIFICATION_SERVICE);
@@ -189,6 +193,7 @@ public final class NetworkCaptureService extends VpnService {
             "schema","aiv-vpn-flow-identity/1",
             "mode","LOCAL_SIGNED_METADATA",
             "entitlement","PAID",
+            "entitlement_state",ProductAccess.status(this),
             "key_id",vpnKeyId,
             "security_level",vpnSecurityLevel,
             "app_identity_id",f.cryptographicIdentity.optString("app_identity_id",
