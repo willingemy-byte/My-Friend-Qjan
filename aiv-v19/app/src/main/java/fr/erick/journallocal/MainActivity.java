@@ -202,7 +202,7 @@ public final class MainActivity extends Activity {
         page.addView(card("User Free · inclus",
             "Journal local · Inventaire des applications · Permissions · Flux VPN · Traqueurs · Anomalies · Intégrité d'affichage (opt-in) · Exports locaux"));
         page.addView(card("User Paid · contrôle",
-            "Tout User Free + Shizuku · retrait contrôlé des permissions · restauration · surveillance persistante des états attendus"));
+            "Tout User Free + Shizuku · retrait contrôlé des permissions · restauration · surveillance persistante · identité cryptographique VPN signée par Android Keystore"));
         page.addView(card("TI · parc",
             "Tout User Paid + vue parc · enrôlement · politiques · rapports. Présentation seulement dans cette version."));
         page.addView(card("Identité de l'application","Nom : All In Visible\nPackage Android : "+getPackageName()+"\nInterface : NATIVE\nWebView : AUCUN"));
@@ -381,7 +381,7 @@ public final class MainActivity extends Activity {
         page.addView(card("User Free",
             "Tu peux observer le journal, les applications, les permissions, les flux, les traqueurs, les anomalies et l'intégrité d'affichage."));
         page.addView(card("User Paid",
-            "Ajoute le contrôle Shizuku, le retrait contrôlé des permissions, la restauration et la surveillance persistante."));
+            "Ajoute le contrôle Shizuku, le retrait contrôlé des permissions, la restauration, la surveillance persistante et l'identité cryptographique VPN."));
         page.addView(action("Passer à User Paid",v->renderUpgradeCheckout()));
     }
 
@@ -390,7 +390,7 @@ public final class MainActivity extends Activity {
         page.addView(sectionTitle("Passer à User Paid"));
         page.addView(note("Écran de conversion produit. Le fournisseur de paiement n'est pas encore connecté dans cette build."));
         page.addView(card("User Paid",
-            "Contrôle Shizuku · plan de retrait · application par lots · vérification avant/après · restauration · watcher persistant"));
+            "Contrôle Shizuku · plan de retrait · application par lots · vérification avant/après · restauration · watcher persistant · identité cryptographique VPN Android Keystore"));
         Button pay=action("Continuer vers le paiement",v->toast("Paiement à connecter avant commercialisation"));
         page.addView(pay);
         page.addView(action("Voir l'aperçu User Paid",v->{previewTier=TIER_PAID;refreshTierFooter();showPage("shizuku");}));
