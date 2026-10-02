@@ -54,6 +54,11 @@ public final class MainActivity extends Activity {
     private final AtomicInteger generation=new AtomicInteger();
     private LinearLayout page;
     private LinearLayout nav;
+    private LinearLayout tierFooter;
+    private static final int TIER_FREE=1;
+    private static final int TIER_PAID=2;
+    private static final int TIER_IT=3;
+    private int previewTier=TIER_FREE;
     private String currentPage="presentation";
 
     @Override public void onCreate(Bundle state){
@@ -119,8 +124,52 @@ public final class MainActivity extends Activity {
         page.setPadding(dp(12),dp(12),dp(12),dp(40));
         scroll.addView(page,new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT));
         root.addView(scroll,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,0,1f));
+
+        tierFooter=new LinearLayout(this);
+        tierFooter.setOrientation(LinearLayout.HORIZONTAL);
+        tierFooter.setGravity(Gravity.CENTER);
+        tierFooter.setPadding(dp(8),dp(7),dp(8),dp(7));
+        tierFooter.setBackgroundColor(0xff050b12);
+        addTierButton("User Free",TIER_FREE);
+        addTierButton("User Paid",TIER_PAID);
+        addTierButton("TI",TIER_IT);
+        root.addView(tierFooter,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,dp(58)));
+        refreshTierFooter();
+
         setContentView(root);
         root.requestApplyInsets();
+    }
+
+    private void addTierButton(String label,int tier){
+        Button b=button(label);
+        b.setTag(tier);
+        b.setOnClickListener(v->selectPreviewTier((Integer)v.getTag()));
+        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(44),1f);
+        lp.setMargins(dp(4),0,dp(4),0);
+        tierFooter.addView(b,lp);
+    }
+
+    private void selectPreviewTier(int tier){
+        previewTier=tier;
+        refreshTierFooter();
+        if(tier==TIER_FREE)showPage("presentation");
+        else if(tier==TIER_PAID)showPage("shizuku");
+        else renderTiPreview();
+    }
+
+    private void refreshTierFooter(){
+        if(tierFooter==null)return;
+        for(int i=0;i<tierFooter.getChildCount();i++){
+            View v=tierFooter.getChildAt(i);
+            if(!(v instanceof Button))continue;
+            Button b=(Button)v;
+            Object tag=b.getTag();
+            int tier=tag instanceof Integer?(Integer)tag:TIER_FREE;
+            boolean selected=tier==previewTier;
+            int accent=tier==TIER_FREE?BLUE:ORANGE;
+            b.setTextColor(selected?0xff07111a:0xffd7e2ea);
+            b.setBackground(panelDrawable(selected?accent:0xff111c25,accent,999));
+        }
     }
 
     private void addTab(String label,String id){
@@ -142,7 +191,7 @@ public final class MainActivity extends Activity {
         if("applications".equals(id))renderApplications("");
         else if("access".equals(id))renderSpecialAccess();
         else if("flows".equals(id))renderFlows("");
-        else if("shizuku".equals(id))renderShizuku();
+        else if("shizuku".equals(id)){ if(previewTier>=TIER_PAID)renderShizuku(); else renderUpgradeGate(); }
         else renderPresentation();
     }
 
@@ -150,6 +199,12 @@ public final class MainActivity extends Activity {
         page.removeAllViews();
         page.addView(sectionTitle("Présentation"));
         page.addView(note("Cette vue est rendue par des composants Android natifs. Aucun HTML, JavaScript ou WebView n'intervient dans ce que tu vois ici."));
+        page.addView(card("User Free · inclus",
+            "Journal local · Inventaire des applications · Permissions · Flux VPN · Traqueurs · Anomalies · Intégrité d'affichage (opt-in) · Exports locaux"));
+        page.addView(card("User Paid · contrôle",
+            "Tout User Free + Shizuku · retrait contrôlé des permissions · restauration · surveillance persistante des états attendus"));
+        page.addView(card("TI · parc",
+            "Tout User Paid + vue parc · enrôlement · politiques · rapports. Présentation seulement dans cette version."));
         page.addView(card("Identité de l'application","Nom : All In Visible\nPackage Android : "+getPackageName()+"\nInterface : NATIVE\nWebView : AUCUN"));
         try{
             JSONObject audit=PermissionAudit.get(this).summary();
@@ -307,7 +362,8 @@ public final class MainActivity extends Activity {
     private void renderShizuku(){
         page.removeAllViews();
         page.addView(sectionTitle("Shizuku"));
-        page.addView(note("Cette page ne lance aucune commande de nettoyage automatiquement. Elle montre l'état réel de la connexion Shizuku et guide vers les réglages Android."));
+        page.addView(note("User Paid · aperçu du contrôle. Cette page montre l'état réel de Shizuku. Les opérations de contrôle devront être liées à un droit Paid vérifié avant commercialisation."));
+        page.addView(card("Accès commercial","Aperçu User Paid actif pour la présentation. Le paiement et l'entitlement vérifié ne sont pas encore connectés; aucune fonction payante ne doit dépendre uniquement de ce sélecteur visuel."));
         try{
             JSONObject s=ShizukuCleanup.state(this);
             page.addView(card("État Shizuku",
@@ -317,6 +373,42 @@ public final class MainActivity extends Activity {
         page.addView(action("Ouvrir Shizuku",v->openPackage("moe.shizuku.privileged.api")));
         page.addView(action("Ouvrir les options développeur",v->openSetting(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)));
         page.addView(action("Ouvrir les réglages VPN",v->openSetting(Settings.ACTION_VPN_SETTINGS)));
+    }
+
+    private void renderUpgradeGate(){
+        page.removeAllViews();
+        page.addView(sectionTitle("Shizuku · User Paid"));
+        page.addView(card("User Free",
+            "Tu peux observer le journal, les applications, les permissions, les flux, les traqueurs, les anomalies et l'intégrité d'affichage."));
+        page.addView(card("User Paid",
+            "Ajoute le contrôle Shizuku, le retrait contrôlé des permissions, la restauration et la surveillance persistante."));
+        page.addView(action("Passer à User Paid",v->renderUpgradeCheckout()));
+    }
+
+    private void renderUpgradeCheckout(){
+        page.removeAllViews();
+        page.addView(sectionTitle("Passer à User Paid"));
+        page.addView(note("Écran de conversion produit. Le fournisseur de paiement n'est pas encore connecté dans cette build."));
+        page.addView(card("User Paid",
+            "Contrôle Shizuku · plan de retrait · application par lots · vérification avant/après · restauration · watcher persistant"));
+        Button pay=action("Continuer vers le paiement",v->toast("Paiement à connecter avant commercialisation"));
+        page.addView(pay);
+        page.addView(action("Voir l'aperçu User Paid",v->{previewTier=TIER_PAID;refreshTierFooter();showPage("shizuku");}));
+    }
+
+    private void renderTiPreview(){
+        currentPage="ti";
+        generation.incrementAndGet();
+        for(int i=0;i<nav.getChildCount();i++){
+            View v=nav.getChildAt(i);
+            if(v instanceof Button)styleTab((Button)v,false);
+        }
+        page.removeAllViews();
+        page.addView(sectionTitle("TI · parc"));
+        page.addView(note("Aperçu investisseur. La gestion de parc n'est pas finalisée dans cette version."));
+        page.addView(card("Vue parc",
+            "Appareils enrôlés · état de conformité · anomalies · politiques · rapports · bascule entre vue appareil et vue parc"));
+        page.addView(card("Statut","Architecture prévue · fonctions de parc non activées dans AIV 1.2.0."));
     }
 
     private void prepareLocalData(){
