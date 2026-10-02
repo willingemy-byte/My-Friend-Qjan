@@ -17,8 +17,8 @@ import java.net.InetAddress;
 import java.util.HashMap;
 
 public final class RecorderService extends Service {
-    public static final String STOP="fr.erick.journallocal.STOP";
-    public static final String REFRESH="fr.erick.journallocal.REFRESH";
+    public static final String STOP="com.allinvisible.aiv.STOP";
+    public static final String REFRESH="com.allinvisible.aiv.REFRESH";
     public static volatile boolean running=false;
     public static volatile boolean networkRegistered=false;
     public static volatile boolean bluetoothRegistered=false;
