@@ -435,7 +435,10 @@ public final class MainActivity extends Activity {
                 requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},NOTIFICATION_REQUEST);
             Intent consent=VpnService.prepare(this);
             if(consent!=null)startActivityForResult(consent,VPN_REQUEST);
-            else startForegroundService(new Intent(this,NetworkCaptureService.class));
+            else{
+                NetworkCaptureService.lastError="";
+                startForegroundService(new Intent(this,NetworkCaptureService.class));
+            }
             toast("Collecte demandée");
             main.postDelayed(this::renderPresentation,700);
         }catch(Exception e){toast("Démarrage impossible : "+e.getClass().getSimpleName());}
