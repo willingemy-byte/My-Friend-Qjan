@@ -33,8 +33,6 @@ def run(*args,env=None):
 
 run('python3',root/'tools/generate_config.py')
 run('python3',root/'tools/generate_access_policy.py')
-run('python3',root/'tools/build_frontend.py')
-run('python3',root/'tools/connect_reader.py')
 
 reuse_apk=a.reuse_native_apk_06 or a.reuse_native_apk
 vendor=root/'third_party/zdtun'
@@ -93,9 +91,23 @@ run('java','-cp',a.build_tools/'lib/d8.jar','com.android.tools.r8.D8',
 
 resources=build/'resources.zip'
 run(a.build_tools/'aapt2','compile','--dir',root/'app/src/main/res','-o',resources)
-unsigned=build/'journal-local-unsigned.apk'
+
+# AIV 1.2 runtime is native. Keep legacy HTML in the repository for design/history,
+# but do not package any HTML into the Android application.
+asset_src=root/'app/src/main/assets'
+runtime_assets=build/'runtime-assets'
+if runtime_assets.exists(): shutil.rmtree(runtime_assets)
+runtime_assets.mkdir(parents=True,exist_ok=True)
+for src in asset_src.rglob('*'):
+    if not src.is_file() or src.suffix.lower()=='.html':
+        continue
+    dst=runtime_assets/src.relative_to(asset_src)
+    dst.parent.mkdir(parents=True,exist_ok=True)
+    shutil.copy2(src,dst)
+
+unsigned=build/'all-in-visible-unsigned.apk'
 run(a.build_tools/'aapt2','link','--manifest',root/'app/src/main/AndroidManifest.xml',
-    '-I',a.android_jar,'-A',root/'app/src/main/assets','--min-sdk-version','26',
+    '-I',a.android_jar,'-A',runtime_assets,'--min-sdk-version','26',
     '--target-sdk-version','35','-o',unsigned,resources)
 
 with zipfile.ZipFile(unsigned,'a',compression=zipfile.ZIP_DEFLATED) as z:
@@ -104,8 +116,8 @@ with zipfile.ZipFile(unsigned,'a',compression=zipfile.ZIP_DEFLATED) as z:
     for f in sorted((build/'lib').rglob('*.so')):
         z.write(f,str(f.relative_to(build)))
 
-aligned=build/'journal-local-aligned.apk'
-signed=build/'journal-local.apk'
+aligned=build/'all-in-visible-aligned.apk'
+signed=build/'all-in-visible.apk'
 run(a.build_tools/'zipalign','-f','-p','4',unsigned,aligned)
 
 if a.unsigned:
@@ -114,20 +126,24 @@ if a.unsigned:
     raise SystemExit(0)
 
 password_file=a.signing_dir/'password.txt'
-keystore=a.signing_dir/'journal-local.p12'
-if not keystore.is_file() or not password_file.is_file():
-    raise SystemExit('Existing signing files are required for a signed update.')
+keystore=a.signing_dir/'all-in-visible.p12'
+pin_file=a.signing_dir/'certificate.sha256'
+alias='all-in-visible'
+if not keystore.is_file() or not password_file.is_file() or not pin_file.is_file():
+    raise SystemExit('AIV signing requires private all-in-visible.p12, password.txt and certificate.sha256 outside the repository.')
 
 keytool=shutil.which('keytool') or '/usr/bin/keytool'
 certificate=subprocess.check_output([
-    keytool,'-exportcert','-keystore',str(keystore),'-alias','journal-local',
+    keytool,'-exportcert','-keystore',str(keystore),'-alias',alias,
     '-storepass:file',str(password_file)
 ])
-if hashlib.sha256(certificate).hexdigest()!='4a14b9e2cf3869fa9faf2317cba96e948145e4dba32240f9547380c040deba7b':
-    raise SystemExit('Signing certificate differs from the recorded certificate.')
+actual=hashlib.sha256(certificate).hexdigest()
+expected=pin_file.read_text().strip().lower()
+if actual!=expected:
+    raise SystemExit('All In Visible signing certificate differs from the private recorded certificate.')
 
 run('java','-jar',a.build_tools/'lib/apksigner.jar','sign',
-    '--ks',keystore,'--ks-key-alias','journal-local',
+    '--ks',keystore,'--ks-key-alias',alias,
     '--ks-pass','file:'+str(password_file),'--out',signed,aligned)
 run('java','-jar',a.build_tools/'lib/apksigner.jar','verify','--verbose',signed)
 print('APK:',signed)

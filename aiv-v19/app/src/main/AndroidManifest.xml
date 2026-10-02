@@ -1,4 +1,4 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="fr.erick.journallocal" android:versionCode="115" android:versionName="1.1.5">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.allinvisible.aiv" android:versionCode="120" android:versionName="1.2.0">
     <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="35" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
@@ -10,30 +10,32 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
     <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
     <queries>
         <intent><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent>
         <package android:name="com.openai.chatgpt" />
         <package android:name="com.sec.android.daemonapp" />
+        <package android:name="moe.shizuku.privileged.api" />
     </queries>
-    <application android:extractNativeLibs="true" android:label="Journal local" android:icon="@drawable/aiv_logo" android:theme="@style/AivTheme" android:allowBackup="false" android:usesCleartextTraffic="false" android:supportsRtl="true">
+    <application android:extractNativeLibs="true" android:label="All In Visible" android:icon="@drawable/aiv_logo" android:roundIcon="@drawable/aiv_logo" android:theme="@style/AivTheme" android:allowBackup="false" android:usesCleartextTraffic="false" android:supportsRtl="true">
         <meta-data android:name="moe.shizuku.client.V3_SUPPORT" android:value="true" />
-        <provider android:name="rikka.shizuku.ShizukuProvider" android:authorities="fr.erick.journallocal.shizuku" android:multiprocess="false" android:enabled="true" android:exported="true" android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
-        <receiver android:name=".ResumeReceiver" android:exported="false"><intent-filter><action android:name="android.intent.action.BOOT_COMPLETED" /><action android:name="android.intent.action.MY_PACKAGE_REPLACED" /></intent-filter></receiver>
-        <activity android:name=".MainActivity" android:exported="true">
+        <provider android:name="rikka.shizuku.ShizukuProvider" android:authorities="com.allinvisible.aiv.shizuku" android:multiprocess="false" android:enabled="true" android:exported="true" android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
+        <receiver android:name="fr.erick.journallocal.ResumeReceiver" android:exported="false"><intent-filter><action android:name="android.intent.action.BOOT_COMPLETED" /><action android:name="android.intent.action.MY_PACKAGE_REPLACED" /></intent-filter></receiver>
+        <activity android:name="fr.erick.journallocal.MainActivity" android:exported="true">
             <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
         </activity>
-        <service android:name=".WatcherService" android:exported="false" android:foregroundServiceType="specialUse">
-            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User-started offline analysis of the local journal. Persistent notification and stop action. No network synchronization or other-app AppOps access." />
+        <service android:name="fr.erick.journallocal.WatcherService" android:exported="false" android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User-started offline analysis of the local All In Visible journal. Persistent notification and stop action. No network synchronization or other-app AppOps access." />
         </service>
-        <service android:name=".RecorderService" android:exported="false" android:foregroundServiceType="specialUse">
-            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User-started local event journal: network state, battery, power, screen, USB host and optional Bluetooth connection events. Visible persistent notification with stop action. No Internet transmission or media recording." />
+        <service android:name="fr.erick.journallocal.RecorderService" android:exported="false" android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User-started local All In Visible event journal: network state, battery, power, screen, USB host and optional Bluetooth connection events. Visible persistent notification with stop action. No Internet transmission or media recording." />
         </service>
-        <service android:name=".NetworkCaptureService" android:exported="true" android:permission="android.permission.BIND_VPN_SERVICE" android:foregroundServiceType="specialUse">
+        <service android:name="fr.erick.journallocal.NetworkCaptureService" android:exported="true" android:permission="android.permission.BIND_VPN_SERVICE" android:foregroundServiceType="specialUse">
             <intent-filter><action android:name="android.net.VpnService" /></intent-filter>
             <meta-data android:name="android.net.VpnService.SUPPORTS_ALWAYS_ON" android:value="true" />
-            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User-activated local VPN for per-app connection metadata. Relays directly to original destinations; no remote VPN server or TLS decryption. Visible notification and stop action." />
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User-activated All In Visible local VPN for per-app connection metadata. Relays directly to original destinations; no remote VPN server or TLS decryption. Visible notification and stop action." />
         </service>
     </application>
 </manifest>

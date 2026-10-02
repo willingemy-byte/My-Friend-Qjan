@@ -10,7 +10,7 @@ BUILD_MODE="${AIV_BUILD_MODE:-unsigned}"
 mkdir -p "$DL" "$SDK/platforms" "$SDK/build-tools" "$SDK/ndk" "$SIGNING_DIR"
 
 need(){ command -v "$1" >/dev/null 2>&1 || { echo "Missing required host tool: $1" >&2; exit 2; }; }
-for x in python3 node java javac keytool unzip curl sha256sum stat; do need "$x"; done
+for x in python3 java javac keytool unzip curl sha256sum stat grep; do need "$x"; done
 
 fetch(){
   local name="$1"
@@ -93,29 +93,20 @@ VERSION="$(python3 -c 'import sys,xml.etree.ElementTree as E; print(E.parse(sys.
 
 echo "[preflight] V$VERSION"
 python3 -m py_compile "$ROOT/build.py"
-python3 "$ROOT/tools/connect_reader.py"
 
-echo "[preflight] embedded reader completeness + JavaScript syntax"
-python3 - "$ROOT/app/src/main/assets/journal.html" "$TOOLROOT/reader-script.js" <<'PY'
-import re,sys
-from pathlib import Path
-html=Path(sys.argv[1]).read_text(encoding='utf-8')
-if not html.rstrip().endswith('</main></body></html>'):
-    raise SystemExit('journal.html is truncated: closing document marker missing')
-scripts=re.findall(r'<script(?:\s[^>]*)?>([\s\S]*?)</script>',html,re.I)
-if not scripts:
-    raise SystemExit('journal.html contains no complete script block')
-Path(sys.argv[2]).write_text('\n;\n'.join(scripts),encoding='utf-8')
-print('journal.html complete:',len(html),'bytes,',len(scripts),'script block(s)')
-PY
-node --check "$TOOLROOT/reader-script.js"
+echo "[preflight] native UI only"
+if grep -R -n -E 'android\.webkit|new[[:space:]]+WebView|addJavascriptInterface|setJavaScriptEnabled' "$ROOT/app/src/main/java"; then
+  echo "WebView reference found in AIV 1.2 native runtime" >&2
+  exit 5
+fi
 
 if [[ "$BUILD_MODE" == unsigned ]]; then
   SIGN_ARGS=(--unsigned)
 else
   [[ "$BUILD_MODE" == signed ]] || { echo "AIV_BUILD_MODE must be signed or unsigned" >&2; exit 4; }
-  [[ -f "$SIGNING_DIR/journal-local.p12" ]] || { echo "Missing historical signing key" >&2; exit 4; }
+  [[ -f "$SIGNING_DIR/all-in-visible.p12" ]] || { echo "Missing All In Visible signing key" >&2; exit 4; }
   [[ -f "$SIGNING_DIR/password.txt" ]] || { echo "Missing signing password file" >&2; exit 4; }
+  [[ -f "$SIGNING_DIR/certificate.sha256" ]] || { echo "Missing AIV signing certificate pin" >&2; exit 4; }
   SIGN_ARGS=(--signing-dir "$SIGNING_DIR")
 fi
 
@@ -129,22 +120,21 @@ python3 "$ROOT/build.py" \
 
 if [[ "$BUILD_MODE" == unsigned ]]; then
   FINAL="$ROOT/build/AIV-$VERSION-unsigned.apk"
-  cp "$ROOT/build/journal-local-aligned.apk" "$FINAL"
+  cp "$ROOT/build/all-in-visible-aligned.apk" "$FINAL"
 else
   FINAL="$ROOT/build/AIV-$VERSION.apk"
-  cp "$ROOT/build/journal-local.apk" "$FINAL"
+  cp "$ROOT/build/all-in-visible.apk" "$FINAL"
 fi
 
-echo "[verify] package/content"
-"$SDK/build-tools/35.0.0/aapt2" dump badging "$FINAL" 2>/dev/null | head -n 8 || true
-python3 - "$FINAL" "$VERSION" <<'PY'
-import sys,zipfile
-with zipfile.ZipFile(sys.argv[1]) as z:
-    html=z.read('assets/journal.html').decode('utf-8')
-assert ('AIV '+sys.argv[2]) in html, 'Version marker missing from journal.html'
-assert 'id="ja-scan"' in html and 'id="ja-export"' in html
-assert html.rstrip().endswith('</main></body></html>'), 'Embedded journal.html is truncated'
-assert 'beginStartup();' in html, 'Reader startup hook missing'
-PY
+echo "[verify] package/native shell"
+BADGING="$("$SDK/build-tools/35.0.0/aapt2" dump badging "$FINAL" 2>/dev/null)"
+printf '%s\n' "$BADGING" | head -n 8
+printf '%s\n' "$BADGING" | grep -q "package: name='com.allinvisible.aiv'"
+printf '%s\n' "$BADGING" | grep -q "versionName='$VERSION'"
+printf '%s\n' "$BADGING" | grep -q "application-label:'All In Visible'"
+if unzip -Z1 "$FINAL" | grep -E '^assets/.*\.html$' >/dev/null; then
+  echo "Legacy HTML asset unexpectedly packaged in native AIV APK" >&2
+  exit 6
+fi
 sha256sum "$FINAL" | tee "$FINAL.sha256"
 echo "FINAL_APK=$FINAL"

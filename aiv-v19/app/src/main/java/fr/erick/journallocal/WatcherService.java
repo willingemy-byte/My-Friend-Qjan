@@ -8,7 +8,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 /** Explicit, low-priority scheduler. Same UID; no OS isolation boundary. */
 public final class WatcherService extends Service {
-    private static final String START="fr.erick.journallocal.AIV_START",STOP="fr.erick.journallocal.AIV_STOP",VERIFY="fr.erick.journallocal.AIV_VERIFY";
+    private static final String START="com.allinvisible.aiv.AIV_START",STOP="com.allinvisible.aiv.AIV_STOP",VERIFY="com.allinvisible.aiv.AIV_VERIFY";
     public static volatile boolean running,analysisActive;
     public static volatile String operation="Analyse AIV en pause";
     private static volatile WatcherService active;
