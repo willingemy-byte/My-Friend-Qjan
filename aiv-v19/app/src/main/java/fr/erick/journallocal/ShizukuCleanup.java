@@ -52,16 +52,22 @@ public final class ShizukuCleanup {
 
     public static JSONObject state(Context c)throws Exception{
         JSONObject out=EventStore.object("status",status,"running",running,"pending",pending);
+        boolean binder=false,authorized=false;
         try{
-            boolean binder=Shizuku.pingBinder();
+            binder=Shizuku.pingBinder();
+            authorized=binder&&Shizuku.checkSelfPermission()==PackageManager.PERMISSION_GRANTED;
             out.put("binder",binder);
-            out.put("authorized",binder&&Shizuku.checkSelfPermission()==PackageManager.PERMISSION_GRANTED);
+            out.put("authorized",authorized);
             out.put("server_uid",binder?safeServerUid():-1);
         }catch(Throwable t){
             out.put("binder",false).put("authorized",false).put("shizuku_error",t.getClass().getSimpleName());
         }
-        try{out.put("candidates",DefenseStore.get(c).automaticCandidates().length());}
-        catch(Throwable t){out.put("candidates",-1).put("candidate_error",t.getClass().getSimpleName());}
+        try{
+            int candidates=DefenseStore.get(c).automaticCandidates().length();
+            out.put("candidates",candidates);
+            if(!running&&!pending&&binder&&authorized&&"En attente de l’inventaire".equals(status))
+                out.put("status","Prêt · "+candidates+" candidat(s) admissible(s)");
+        }catch(Throwable t){out.put("candidates",-1).put("candidate_error",t.getClass().getSimpleName());}
         return out;
     }
 
