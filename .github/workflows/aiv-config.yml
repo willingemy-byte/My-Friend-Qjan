@@ -3,7 +3,7 @@ on:
   pull_request:
     paths: ['aiv-v19/**', 'AIV_CONFIG.json', 'AIV_VALUES.json', '.github/workflows/aiv-config.yml']
   push:
-    branches: [aiv-config-centralization, aiv-control-reversible-20261002]
+    branches: [aiv-config-centralization, aiv-control-reversible-20261002, aiv-1.2.0-native-shell]
   workflow_dispatch:
 permissions:
   contents: read
@@ -96,9 +96,10 @@ jobs:
           PY
           bash bootstrap-clean-build.sh
           mkdir -p build/free
-          cp build/AIV-1.1.5-unsigned.apk build/free/AIV-1.1.5-free-unsigned.apk
+          VERSION="$(python3 -c 'import xml.etree.ElementTree as E; r=E.parse("app/src/main/AndroidManifest.xml").getroot(); print(r.attrib["{http://schemas.android.com/apk/res/android}versionName"])')"
+          cp "build/AIV-$VERSION-unsigned.apk" "build/free/AIV-$VERSION-free-unsigned.apk"
           cd build/free
-          sha256sum AIV-1.1.5-free-unsigned.apk > AIV-1.1.5-free-unsigned.apk.sha256
+          sha256sum "AIV-$VERSION-free-unsigned.apk" > "AIV-$VERSION-free-unsigned.apk.sha256"
       - uses: actions/upload-artifact@v4
         with:
           name: aiv-free-unsigned
