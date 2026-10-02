@@ -20,7 +20,10 @@
     "fleet.view": 3,
     "fleet.enroll": 3,
     "fleet.policy": 3,
-    "fleet.report": 3
+    "fleet.report": 3,
+    "screen.integrity": 1,
+    "screen.integrity.overlay": 1,
+    "upgrade.checkout": 1
   },
   "distribution_profile": "personal"
 }
