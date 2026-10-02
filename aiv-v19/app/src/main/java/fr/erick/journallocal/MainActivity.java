@@ -216,11 +216,12 @@ public final class MainActivity extends Activity {
             page.addView(card("Autres accès",
                 "Superposition : "+yesNo(s.optBoolean("overlay"))+
                 "\nModifier les réglages système : "+yesNo(s.optBoolean("write_settings"))+
+                "\nInstaller des applis inconnues : "+yesNo(s.optBoolean("can_request_package_installs"))+
                 "\nExemption optimisation batterie : "+yesNo(s.optBoolean("ignore_battery_optimizations"))+
-                "\nIls restent optionnels tant qu'une fonction AIV précise ne les exige pas."));
+                "\nAIV ne demande pas ces accès juste parce qu’ils existent; ils restent optionnels tant qu’une fonction précise ne les exige pas."));
         }catch(Exception e){page.addView(card("Accès spéciaux","Lecture impossible : "+e.getClass().getSimpleName()));}
         page.addView(action("Ouvrir Accès d'utilisation",v->openSetting(Settings.ACTION_USAGE_ACCESS_SETTINGS)));
-        page.addView(action("Ouvrir Accès spéciaux Android",v->openSetting(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)));
+        page.addView(action("Ouvrir Accès spéciaux Android",v->openSetting("android.settings.MANAGE_SPECIAL_APP_ACCESSES")));
         page.addView(action("Ouvrir les réglages VPN",v->openSetting(Settings.ACTION_VPN_SETTINGS)));
         page.addView(action("Ouvrir les options développeur",v->openSetting(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)));
     }
