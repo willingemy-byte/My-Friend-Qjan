@@ -1,9 +1,9 @@
 name: AIV centralized config checks
 on:
   pull_request:
-    paths: ['aiv-v19/**', '.github/workflows/aiv-config.yml']
+    paths: ['aiv-v19/**', 'AIV_CONFIG.json', 'AIV_VALUES.json', '.github/workflows/aiv-config.yml']
   push:
-    branches: [aiv-config-centralization]
+    branches: [aiv-config-centralization, aiv-control-reversible-20261002]
   workflow_dispatch:
 permissions:
   contents: read
@@ -19,13 +19,16 @@ jobs:
       - run: python3 aiv-v19/tools/build_frontend.py --check
       - run: python3 aiv-v19/tools/generate_config.py --check
       - run: python3 aiv-v19/tools/generate_access_policy.py --check
+      - run: python3 aiv-v19/tools/list_public_values.py --check
+      - run: python3 -m unittest discover -s aiv-v19/tests -p test_public_config.py -v
       - run: python3 -m unittest discover -s aiv-v19/tests -p test_access_policy.py -v
       - run: python3 -m unittest discover -s aiv-v19/tests -p test_config.py -v
       - name: Compile configured pure Java engines
         run: |
           mkdir -p /tmp/aiv-config-classes
-          javac -d /tmp/aiv-config-classes aiv-v19/app/src/main/java/fr/erick/journallocal/{AivConfig,AnomalyRules,WorkBudget,AccessPolicy}.java aiv-v19/tests/AccessPolicyTest.java
+          javac -d /tmp/aiv-config-classes aiv-v19/app/src/main/java/fr/erick/journallocal/{AivConfig,AnomalyRules,WorkBudget,AccessPolicy}.java aiv-v19/tests/AccessPolicyTest.java aiv-v19/app/src/main/java/fr/erick/journallocal/{ControlRules,ControlCoordinator}.java aiv-v19/tests/ControlRulesTest.java
           java -cp /tmp/aiv-config-classes fr.erick.journallocal.AccessPolicyTest
+          java -cp /tmp/aiv-config-classes fr.erick.journallocal.ControlRulesTest
       - run: bash aiv-v19/tests/run-v23.sh
   design:
     runs-on: ubuntu-latest
@@ -41,7 +44,9 @@ jobs:
       - name: Check startup and control interface
         env:
           NODE_PATH: ${{ runner.temp }}/aiv-browser/node_modules
-        run: node aiv-v19/tests/design-control.cjs
+        run: |
+          node aiv-v19/tests/design-control.cjs
+          node aiv-v19/tests/developer-control.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -49,6 +54,7 @@ jobs:
           path: |
             /tmp/aiv-startup.png
             /tmp/aiv-shizuku.png
+            /tmp/aiv-developer-control.png
           if-no-files-found: ignore
   android:
     runs-on: ubuntu-24.04
@@ -90,9 +96,9 @@ jobs:
           PY
           bash bootstrap-clean-build.sh
           mkdir -p build/free
-          cp build/AIV-1.1.4-unsigned.apk build/free/AIV-1.1.4-free-unsigned.apk
+          cp build/AIV-1.1.5-unsigned.apk build/free/AIV-1.1.5-free-unsigned.apk
           cd build/free
-          sha256sum AIV-1.1.4-free-unsigned.apk > AIV-1.1.4-free-unsigned.apk.sha256
+          sha256sum AIV-1.1.5-free-unsigned.apk > AIV-1.1.5-free-unsigned.apk.sha256
       - uses: actions/upload-artifact@v4
         with:
           name: aiv-free-unsigned

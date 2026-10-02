@@ -1,7 +1,7 @@
 // Synthetic browser test: never executes commands on a real Android device.
 const assert=require('node:assert/strict'),path=require('node:path'),{chromium}=require('playwright');
 (async()=>{
- const browser=await chromium.launch({headless:true});
+ const browser=await chromium.launch({headless:true,executablePath:process.env.AIV_TEST_CHROMIUM||undefined});
  try {
   const page=await browser.newPage({viewport:{width:412,height:900}}),errors=[];
   page.on('pageerror',e=>errors.push(e.message));

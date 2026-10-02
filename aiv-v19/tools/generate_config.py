@@ -4,7 +4,10 @@ import argparse
 import hashlib
 import json
 import re
+import sys
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from public_config import config_source
 
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = {
@@ -13,13 +16,14 @@ SPEC = {
     'collection': {'gap_ms': (1000, 86400000), 'clock_drift_ms': (1, 60000), 'inventory_interval_ms': (60000, 86400000), 'heartbeat_ms': (1000, 3600000)},
     'main': {'inventory_max_age_ms': (1000, 604800000), 'threshold_bytes_default': (0, 2147483647), 'config_max_chars': (1024, 1048576), 'list_max_items': (1, 1000)},
     'reference': {'import_max_bytes': (1024, 67108864), 'max_apps': (1, 100000), 'app_max_chars': (1024, 1048576), 'max_expected_ips': (1, 1000)},
+    'control': {'batch_max_apps': (1, 50), 'request_max_chars': (1024, 65536), 'preview_valid_ms': (10000, 300000), 'command_timeout_ms': (1000, 30000), 'output_max_bytes': (4096, 65536), 'report_max_bytes': (1048576, 33554432), 'watch_max_failures': (1, 5)},
 }
 
 def validate(data):
     if set(data) != {'schema', 'paths', *SPEC} or data['schema'] != 'aiv-config/1':
         raise ValueError('Invalid config schema or unknown sections')
     paths=data['paths']
-    if not isinstance(paths, dict) or set(paths) != {'exports_cache', 'cleanup_snapshot'}:
+    if not isinstance(paths, dict) or set(paths) != {'exports_cache', 'cleanup_snapshot', 'control_reports', 'control_draft', 'control_preferences'}:
         raise ValueError('Invalid paths')
     for value in paths.values():
         if not isinstance(value, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,63}', value):
@@ -54,7 +58,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--check', action='store_true')
     args = parser.parse_args()
-    content = render(json.loads((ROOT/'config/defaults.json').read_text()))
+    content = render(json.loads(config_source('DEFAULTS_CONFIG').read_text()))
     target = ROOT/'app/src/main/java/fr/erick/journallocal/AivConfig.java'
     if args.check:
         if not target.is_file() or target.read_text() != content:

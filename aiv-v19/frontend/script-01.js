@@ -1807,6 +1807,44 @@ if(typeof module!=='undefined')module.exports=PenaltyModel;
   root.querySelectorAll('[data-jc-tab="trackers"],#jc-shizuku-run,#jc-shizuku-restore,#v23-shizuku-launch').forEach(b=>b.classList.add('aiv-action'));
   root.querySelectorAll('[data-jc-tab="shizuku"]').forEach(b=>b.classList.add('aiv-action'));
 
+  // Explicit developer control: package targets, pre-state, verified report, reversible disabling.
+  const control=element('section',undefined,'jc-form');control.id='aiv-developer-control';
+  control.innerHTML='<h3>Contrôle développeur · applications choisies</h3><p class="jc-sub">Arrêter ou désactiver sans désinstaller ni effacer les données. L’état avant intervention est enregistré ; ce relevé ne sauvegarde pas le contenu de tes fichiers. La désactivation peut aussi arrêter des fonctions dépendantes.</p><div class="jc-actions"><button id="aiv-control-load" type="button">Charger les applications</button><button id="aiv-control-export" type="button">Exporter tous les rapports</button></div><input id="aiv-control-filter" placeholder="Chercher un nom ou un package" aria-label="Filtrer les cibles"><div id="aiv-control-targets" style="max-height:340px;overflow:auto"></div><label>Action<select id="aiv-control-action"><option value="stop">Forcer l’arrêt</option><option value="disable">Désactiver pour ce profil</option></select></label><label><input id="aiv-control-watch" type="checkbox"> Maintenir cet état pendant la collecte, avec Shizuku disponible</label><div class="jc-actions"><button id="aiv-control-preview" type="button">Prendre l’état avant intervention</button><button id="aiv-control-apply" type="button" disabled>Appliquer aux cibles affichées</button><button id="aiv-control-restore" type="button">Restaurer la dernière intervention</button><button id="aiv-control-pause" type="button">Pause surveillance</button><button id="aiv-control-resume" type="button">Reprendre surveillance</button><button id="aiv-control-report" type="button">Actualiser le rapport</button></div><p id="aiv-control-state" role="status"></p><pre id="aiv-control-preview-result"></pre><div id="aiv-control-results"></div>';
+  shizukuPane.append(control);
+  control.querySelectorAll("button").forEach(b=>b.classList.add("aiv-action"));
+  let controlApps=[],controlDraft=null;const controlSelected=new Set();
+  function controlCall(name,...args){if(!nativeBridge?.[name])throw Error('Fonction indisponible dans cette version');const r=JSON.parse(nativeBridge[name](...args));if(r.error)throw Error(r.error);return r;}
+  function controlMessage(message){$('aiv-control-state').textContent=message;}
+  function invalidateControl(){controlDraft=null;$('aiv-control-apply').disabled=true;$('aiv-control-preview-result').textContent='';}
+  function renderControlTargets(){
+    const area=$('aiv-control-targets');area.replaceChildren();const query=$('aiv-control-filter').value.toLowerCase();
+    controlApps.filter(a=>(a.label+' '+a.package).toLowerCase().includes(query)).forEach(a=>{
+      const label=element('label'),box=element('input');box.type='checkbox';box.checked=controlSelected.has(a.package);box.disabled=Boolean(a.reserved_reason);box.style.display='inline';box.style.width='auto';
+      box.onchange=()=>{if(box.checked)controlSelected.add(a.package);else controlSelected.delete(a.package);invalidateControl();};
+      label.style.display='block';label.append(box,document.createTextNode(' '+a.label+' · '+a.package+' · '+(a.system?'préinstallée':'utilisateur')+' · '+(a.enabled===3?'désactivée':a.stopped?'arrêtée':'active/autorisée')+(a.reserved_reason?' · '+a.reserved_reason:'')));area.append(label);
+    });
+  }
+  function refreshControlReport(){try{
+    const state=controlCall('developerControlState'),report=controlCall('developerControlReport');
+    const suspended=Object.entries(state.watch||{}).filter(([,v])=>v.failures>=3).map(([pkg,v])=>pkg+' : '+(v.suspended_reason||v.error||'3 échecs'));
+    controlMessage(state.status+' · surveillance '+(state.watch_enabled?(state.shizuku&&state.collector?'active':'interrompue : Shizuku ou collecte arrêté'):'en pause')+' · '+state.watch_count+' cible(s)'+(suspended.length?' · suspendues : '+suspended.join('; '):''));
+    const area=$('aiv-control-results');area.replaceChildren();
+    const names={confirmed:'État confirmé',refused:'Refusé',no_effect:'Commande sans effet',unverifiable:'Non vérifiable',state_changed:'État changé avant action',identity_changed:'Identité changée',restore_refused:'Restauration refusée',no_change:'Aucun changement',requested:'Demandé, résultat encore inconnu'};
+    area.append(element('p',(report.id||'Aucun rapport')+' · '+(report.phase||'')));
+    (report.entries||[]).forEach(e=>{const details=element('details'),summary=element('summary',e.package+' · '+(e.action||'')+' · '+(names[e.outcome]||e.outcome));details.append(summary,element('pre',JSON.stringify(e,null,2)));area.append(details);});
+    $('aiv-control-preview').disabled=Boolean(state.busy);$('aiv-control-apply').disabled=Boolean(state.busy)||!controlDraft?.before?.length;$('aiv-control-restore').disabled=Boolean(state.busy);
+  }catch(e){controlMessage(e.message);}}
+  $('aiv-control-load').onclick=()=>{try{const r=controlCall('developerControlTargets');controlApps=r.applications.sort((a,b)=>a.label.localeCompare(b.label));invalidateControl();renderControlTargets();refreshControlReport();}catch(e){controlMessage(e.message);}};
+  $('aiv-control-filter').oninput=renderControlTargets;
+  $('aiv-control-action').onchange=invalidateControl;
+  $('aiv-control-preview').onclick=()=>{try{controlDraft=controlCall('developerControlPreview',JSON.stringify([...controlSelected]),$('aiv-control-action').value);$('aiv-control-preview-result').textContent='Action : '+(controlDraft.action==='disable'?'désactivation':'arrêt forcé')+'\n'+controlDraft.before.map(a=>a.label+' · '+a.package+' · profil '+a.user+' · état '+a.enabled).join('\n')+'\nExclusions : '+controlDraft.excluded.map(a=>a.package+' : '+a.reason).join('\n');$('aiv-control-apply').disabled=!controlDraft.before.length;controlMessage('État avant enregistré. '+controlDraft.before.length+' cible(s).');}catch(e){invalidateControl();controlMessage(e.message);}};
+  $('aiv-control-apply').onclick=()=>{if(!controlDraft)return;try{const r=controlCall('developerControlApply',controlDraft.stamp,$('aiv-control-watch').checked);invalidateControl();controlMessage(r.status);setTimeout(refreshControlReport,1500);}catch(e){invalidateControl();controlMessage(e.message);}};
+  $('aiv-control-restore').onclick=()=>{try{controlMessage(controlCall('developerControlRestore').status);invalidateControl();setTimeout(refreshControlReport,1500);}catch(e){controlMessage(e.message);}};
+  $('aiv-control-pause').onclick=()=>{try{controlCall('developerControlMonitoring',false);refreshControlReport();}catch(e){controlMessage(e.message);}};
+  $('aiv-control-resume').onclick=()=>{try{controlCall('developerControlMonitoring',true);refreshControlReport();}catch(e){controlMessage(e.message);}};
+  $('aiv-control-report').onclick=refreshControlReport;
+  $('aiv-control-export').onclick=()=>nativeBridge?.command('export-control');
+  setInterval(()=>{if(state.tab==='shizuku'&&controlDraft===null)refreshControlReport();},5000);
   beginStartup();
 
 })();
