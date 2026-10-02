@@ -2,327 +2,357 @@ package fr.erick.journallocal;
 
 import android.Manifest;
 import android.app.Activity;
-import android.app.AlertDialog;
-import android.content.*;
+import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.Color;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
+import android.net.VpnService;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.provider.Settings;
+import android.view.Gravity;
+import android.view.View;
+import android.view.ViewGroup;
 import android.view.WindowInsets;
-import android.webkit.*;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.HorizontalScrollView;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
+import android.widget.TextView;
 import android.widget.Toast;
-import java.io.*;
-import java.nio.charset.StandardCharsets;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import java.util.Locale;
+import java.util.concurrent.atomic.AtomicInteger;
 
+/**
+ * AIV 1.2 native shell.
+ *
+ * Deliberately contains no WebView, JavaScript bridge or HTML renderer.
+ * Data shown here is read directly from the local Android/SQLite sources.
+ */
 public final class MainActivity extends Activity {
-    private WebView reader;
-    private static final int NOTIFICATION_REQUEST=10,BLUETOOTH_REQUEST=11,EXPORT_REQUEST=12,VPN_REQUEST=13,ANALYSIS_EXPORT_REQUEST=14,LINES_EXPORT_REQUEST=15,RECOVER_IMPORT_REQUEST=16,RECOVER_EXPORT_REQUEST=17,DIAGNOSTIC_IMPORT_REQUEST=18,CORRELATION_EXPORT_REQUEST=19,LAST_EXPORT_REQUEST=20;
-    private static volatile String fileStatus="";
-    private static final int AUDIT_EXPORT_REQUEST=21,AUDIT_IMPORT_REQUEST=22,AIV_EXPORT_REQUEST=23,AIV_REFERENCE_REQUEST=24,PENALTY_EXPORT_REQUEST=25,PENALTY_IMPORT_REQUEST=26,REFERENCE_EXPORT_REQUEST=27,AUDIT_FULL_EXPORT_REQUEST=28,TRACKER_EXPORT_REQUEST=29;
-    private volatile String penaltyImport="";
-    private static final int DEFENSE_EXPORT_REQUEST=30,CONTROL_EXPORT_REQUEST=31;
-    private boolean defenseResumed,defenseResultHandled;
+    private static final int VPN_REQUEST=1201;
+    private static final int NOTIFICATION_REQUEST=1202;
+    private static final int BG=0xff04102f;
+    private static final int PANEL=0xff081827;
+    private static final int PANEL_2=0xff0c2233;
+    private static final int BORDER=0xff28506a;
+    private static final int TEXT=0xffeef7ff;
+    private static final int MUTED=0xff9fb5c8;
+    private static final int BLUE=0xff58b8ff;
+    private static final int GREEN=0xff65df70;
+    private static final int ORANGE=0xfff2a44d;
+    private static final int RED=0xffff6673;
+
+    private final Handler main=new Handler(Looper.getMainLooper());
+    private final AtomicInteger generation=new AtomicInteger();
+    private LinearLayout page;
+    private LinearLayout nav;
+    private String currentPage="presentation";
+
     @Override public void onCreate(Bundle state){
         super.onCreate(state);
-        // V37 recovery: no optional subsystem may prevent the journal UI from opening.
+        if(Build.VERSION.SDK_INT>=21){
+            getWindow().setStatusBarColor(BG);
+            getWindow().setNavigationBarColor(BG);
+        }
         try{Continuous.initialize(this);}catch(Throwable ignored){}
         try{DefenseMonitor.start(this);}catch(Throwable ignored){}
         try{ShizukuCleanup.attach(this);}catch(Throwable ignored){}
-        try{prepareStartup();}catch(Throwable e){startupState="Erreur";startupError="Initialisation : "+e.getClass().getSimpleName();}
-        reader=new WebView(this);reader.setBackgroundColor(0xFF04102F);
-        reader.setOnApplyWindowInsetsListener((view,insets)->{
-            if(Build.VERSION.SDK_INT>=30){android.graphics.Insets bars=insets.getInsets(WindowInsets.Type.systemBars());view.setPadding(bars.left,bars.top,bars.right,bars.bottom);}
-            else view.setPadding(insets.getSystemWindowInsetLeft(),insets.getSystemWindowInsetTop(),insets.getSystemWindowInsetRight(),insets.getSystemWindowInsetBottom());
+        buildShell();
+        prepareLocalData();
+        showPage("presentation");
+    }
+
+    private void buildShell(){
+        LinearLayout root=new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackgroundColor(BG);
+        root.setOnApplyWindowInsetsListener((view,insets)->{
+            if(Build.VERSION.SDK_INT>=30){
+                android.graphics.Insets bars=insets.getInsets(WindowInsets.Type.systemBars());
+                view.setPadding(bars.left,bars.top,bars.right,bars.bottom);
+            }else{
+                view.setPadding(insets.getSystemWindowInsetLeft(),insets.getSystemWindowInsetTop(),insets.getSystemWindowInsetRight(),insets.getSystemWindowInsetBottom());
+            }
             return insets;
         });
-        setContentView(reader);reader.requestApplyInsets();
-        WebSettings settings=reader.getSettings();settings.setJavaScriptEnabled(true);settings.setDomStorageEnabled(false);
-        settings.setAllowFileAccess(false);settings.setAllowContentAccess(false);settings.setBlockNetworkLoads(true);settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);settings.setSupportMultipleWindows(false);
-        WebView.setWebContentsDebuggingEnabled(false);
-        reader.setWebViewClient(new WebViewClient(){
-            @Override public boolean shouldOverrideUrlLoading(WebView view,WebResourceRequest request){return true;}
-            @Override public boolean shouldOverrideUrlLoading(WebView view,String url){return true;}
-            @Override public WebResourceResponse shouldInterceptRequest(WebView view,WebResourceRequest request){return new WebResourceResponse("text/plain","UTF-8",new ByteArrayInputStream(new byte[0]));}
-        });
-        reader.setWebChromeClient(new WebChromeClient(){@Override public void onPermissionRequest(PermissionRequest request){request.deny();}});
-        reader.addJavascriptInterface(new Bridge(),"JournalAndroid");
-        try(InputStream input=getAssets().open("journal.html")){
-            ByteArrayOutputStream data=new ByteArrayOutputStream();byte[] buffer=new byte[8192];int count;while((count=input.read(buffer))!=-1)data.write(buffer,0,count);
-            reader.loadDataWithBaseURL("https://journal.local.invalid/",new String(data.toByteArray(),StandardCharsets.UTF_8),"text/html","UTF-8",null);
-        }catch(Exception e){new AlertDialog.Builder(this).setTitle("Lecteur indisponible").setMessage(e.getClass().getSimpleName()).setPositiveButton("Fermer",(d,w)->finish()).show();}
+
+        LinearLayout head=new LinearLayout(this);
+        head.setOrientation(LinearLayout.VERTICAL);
+        head.setPadding(dp(18),dp(14),dp(18),dp(12));
+        head.setBackgroundColor(0xff051329);
+        TextView title=text("ALL IN VISIBLE",24,TEXT,true);
+        title.setLetterSpacing(.09f);
+        TextView sub=text("AIV 1.2.0 · interface Android native",13,MUTED,false);
+        TextView nativeTag=text("●  NATIF · WebView absent",13,GREEN,true);
+        nativeTag.setPadding(0,dp(7),0,0);
+        head.addView(title);
+        head.addView(sub);
+        head.addView(nativeTag);
+        root.addView(head,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        HorizontalScrollView scroller=new HorizontalScrollView(this);
+        scroller.setHorizontalScrollBarEnabled(false);
+        nav=new LinearLayout(this);
+        nav.setOrientation(LinearLayout.HORIZONTAL);
+        nav.setPadding(dp(10),dp(8),dp(10),dp(8));
+        nav.setBackgroundColor(0xff050b12);
+        addTab("Présentation","presentation");
+        addTab("Applications","applications");
+        addTab("Flux","flows");
+        addTab("Shizuku","shizuku");
+        scroller.addView(nav);
+        root.addView(scroller,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        ScrollView scroll=new ScrollView(this);
+        scroll.setFillViewport(true);
+        page=new LinearLayout(this);
+        page.setOrientation(LinearLayout.VERTICAL);
+        page.setPadding(dp(12),dp(12),dp(12),dp(40));
+        scroll.addView(page,new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT));
+        root.addView(scroll,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,0,1f));
+        setContentView(root);
+        root.requestApplyInsets();
     }
-    private volatile String startupState="Calcul en cours", startupResult="", startupError="";
-    private void runShizukuCleanupNow(){
-        ShizukuCleanup.requestOrRun();
-        refreshDefenseReader();
+
+    private void addTab(String label,String id){
+        Button b=button(label);
+        b.setTag(id);
+        b.setOnClickListener(v->showPage((String)v.getTag()));
+        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,dp(44));
+        lp.setMargins(dp(4),0,dp(4),0);
+        nav.addView(b,lp);
     }
-    private void prepareStartup(){
+
+    private void showPage(String id){
+        currentPage=id;
+        generation.incrementAndGet();
+        for(int i=0;i<nav.getChildCount();i++){
+            View v=nav.getChildAt(i);
+            if(v instanceof Button)styleTab((Button)v,id.equals(v.getTag()));
+        }
+        if("applications".equals(id))renderApplications("");
+        else if("flows".equals(id))renderFlows("");
+        else if("shizuku".equals(id))renderShizuku();
+        else renderPresentation();
+    }
+
+    private void renderPresentation(){
+        page.removeAllViews();
+        page.addView(sectionTitle("Présentation"));
+        page.addView(note("Cette vue est rendue par des composants Android natifs. Aucun HTML, JavaScript ou WebView n'intervient dans ce que tu vois ici."));
+        page.addView(card("Identité de l'application","Nom : All In Visible\nPackage Android : "+getPackageName()+"\nInterface : NATIVE\nWebView : AUCUN"));
+        try{
+            JSONObject audit=PermissionAudit.get(this).summary();
+            long total=audit.optLong("total"),system=audit.optLong("system");
+            page.addView(card("Inventaire Android",
+                "Scan : "+audit.optLong("scan_id")+"\nApplications : "+total+"\nSystème : "+system+"\nUtilisateur : "+Math.max(0,total-system)+"\nÉtat : "+(audit.optBoolean("busy")?"calcul en cours":"prêt")));
+        }catch(Exception e){page.addView(card("Inventaire Android","Indisponible : "+e.getClass().getSimpleName()));}
+
+        try{
+            long events=EventStore.get(this).latestId();
+            String vpn=NetworkCaptureService.running?NetworkCaptureService.stateText:(NetworkCaptureService.starting?"Démarrage":NetworkCaptureService.stateText);
+            page.addView(card("Journal et réseau",
+                "Événements : "+events+"\nCollecteur : "+yesNo(RecorderService.running)+"\nAnalyse : "+yesNo(WatcherService.analysisActive)+"\nVPN AIV : "+vpn+
+                (NetworkCaptureService.lastError.isEmpty()?"":"\nErreur VPN : "+NetworkCaptureService.lastError)));
+        }catch(Exception e){page.addView(card("Journal et réseau","Indisponible : "+e.getClass().getSimpleName()));}
+
+        try{
+            JSONObject s=ShizukuCleanup.state(this);
+            page.addView(card("Shizuku",
+                "Binder : "+yesNo(s.optBoolean("binder"))+"\nAutorisé : "+yesNo(s.optBoolean("authorized"))+"\nCandidats automatiques actuels : "+s.optInt("candidates",-1)+"\nÉtat : "+s.optString("status")));
+        }catch(Exception e){page.addView(card("Shizuku","Indisponible : "+e.getClass().getSimpleName()));}
+
+        try{
+            JSONObject app=AppIdentity.forPackage(this,getPackageName());
+            String id=app.optString("app_identity_id");
+            if(id.length()>24)id=id.substring(0,24)+"…";
+            PinVault vault=new PinVault();
+            String key=vault.keyId();if(key.length()>24)key=key.substring(0,24)+"…";
+            page.addView(card("Identité cryptographique AIV",
+                "App ID : "+id+"\nClé appareil : "+key+"\nNiveau clé : "+vault.securityLevel+"\nSource app : certificats PackageManager"));
+        }catch(Exception e){page.addView(card("Identité cryptographique AIV","Initialisation : "+e.getClass().getSimpleName()));}
+
+        LinearLayout actions=new LinearLayout(this);actions.setOrientation(LinearLayout.VERTICAL);
+        actions.addView(action("Actualiser l'inventaire",v->{PermissionAudit.get(this).scan();toast("Inventaire lancé");main.postDelayed(this::renderPresentation,900);}));
+        actions.addView(action("Démarrer la collecte AIV",v->startCollection()));
+        actions.addView(action("Arrêter la collecte AIV",v->{Continuous.stop(this);toast("Collecte arrêtée");main.postDelayed(this::renderPresentation,400);}));
+        actions.addView(action("Ouvrir les réglages VPN",v->openSetting(Settings.ACTION_VPN_SETTINGS)));
+        actions.addView(action("Ouvrir les options développeur",v->openSetting(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)));
+        page.addView(actions);
+    }
+
+    private void renderApplications(String query){
+        int ticket=generation.incrementAndGet();
+        page.removeAllViews();
+        page.addView(sectionTitle("Applications"));
+        page.addView(note("Recherche native dans le dernier inventaire PackageManager. Les résultats viennent de la base locale AIV, pas du texte d'une page Web."));
+        EditText search=searchBox("Nom ou package",query);
+        Button go=action("Rechercher",v->renderApplications(search.getText().toString()));
+        page.addView(search);
+        page.addView(go);
+        TextView loading=text("Lecture de l'inventaire…",14,MUTED,false);page.addView(loading);
+        new Thread(()->{
+            try{
+                JSONObject inv=PermissionAudit.get(this).coherenceInventory();
+                JSONArray apps=inv.optJSONArray("apps");
+                String needle=query==null?"":query.trim().toLowerCase(Locale.ROOT);
+                JSONArray matches=new JSONArray();
+                if(apps!=null)for(int i=0;i<apps.length();i++){
+                    JSONObject a=apps.getJSONObject(i);
+                    String hay=(a.optString("label")+" "+a.optString("package")).toLowerCase(Locale.ROOT);
+                    if(needle.isEmpty()||hay.contains(needle))matches.put(a);
+                }
+                main.post(()->{
+                    if(ticket!=generation.get()||!"applications".equals(currentPage))return;
+                    page.removeView(loading);
+                    page.addView(text(matches.length()+" résultat(s)",14,MUTED,true));
+                    int shown=Math.min(matches.length(),120);
+                    for(int i=0;i<shown;i++){
+                        JSONObject a=matches.optJSONObject(i);if(a==null)continue;
+                        JSONArray perms=a.optJSONArray("permissions");
+                        String body=a.optString("package")+"\nUID "+a.optInt("uid",-1)+" · "+(a.optBoolean("system_app")?"Système":"Utilisateur")+" · "+(perms==null?0:perms.length())+" permission(s) déclarée(s)";
+                        LinearLayout c=card(a.optString("label",a.optString("package")),body);
+                        String pkg=a.optString("package");
+                        c.setOnClickListener(v->openAppSettings(pkg));
+                        page.addView(c);
+                    }
+                    if(matches.length()>shown)page.addView(note((matches.length()-shown)+" autre(s) résultat(s) non affiché(s) dans cette vue bornée."));
+                });
+            }catch(Exception e){
+                main.post(()->{if(ticket==generation.get()){page.removeView(loading);page.addView(card("Erreur inventaire",e.getClass().getSimpleName()+": "+String.valueOf(e.getMessage())));}});
+            }
+        },"aiv-native-apps").start();
+    }
+
+    private void renderFlows(String query){
+        int ticket=generation.incrementAndGet();
+        page.removeAllViews();
+        page.addView(sectionTitle("Flux"));
+        page.addView(note("Projection native des événements du VPN AIV. Aucun contenu TLS n'est déchiffré et aucun marqueur n'est injecté dans Internet."));
+        EditText search=searchBox("Application, UID, IP, domaine ou ID",query);
+        page.addView(search);
+        page.addView(action("Actualiser",v->renderFlows(search.getText().toString())));
+        TextView loading=text("Lecture des flux…",14,MUTED,false);page.addView(loading);
+        new Thread(()->{
+            try{
+                JSONObject data=EventStore.get(this).flowPage(query,0,100);
+                JSONArray flows=data.optJSONArray("flows");
+                main.post(()->{
+                    if(ticket!=generation.get()||!"flows".equals(currentPage))return;
+                    page.removeView(loading);
+                    page.addView(text((flows==null?0:flows.length())+" flux · "+data.optInt("scanned_events")+" événements examinés",14,MUTED,true));
+                    if(flows==null)return;
+                    for(int i=0;i<flows.length();i++){
+                        JSONObject f=flows.optJSONObject(i);if(f==null)continue;
+                        String actor=f.optString("actor","Application non identifiée");
+                        int uid=f.optInt("uid",-1);
+                        String dest=f.optString("tls_sni");
+                        if(dest.isEmpty())dest=f.optString("destination");
+                        String body=(uid>=0?"UID "+uid:"UID non attribué")+" · "+f.optString("protocol")+"\n"+dest+
+                            "\n↑ "+f.optLong("tx_bytes")+" o · ↓ "+f.optLong("rx_bytes")+" o · "+f.optString("attribution_status");
+                        page.addView(card(actor,body));
+                    }
+                });
+            }catch(Exception e){
+                main.post(()->{if(ticket==generation.get()){page.removeView(loading);page.addView(card("Erreur flux",e.getClass().getSimpleName()+": "+String.valueOf(e.getMessage())));}});
+            }
+        },"aiv-native-flows").start();
+    }
+
+    private void renderShizuku(){
+        page.removeAllViews();
+        page.addView(sectionTitle("Shizuku"));
+        page.addView(note("Cette page ne lance aucune commande de nettoyage automatiquement. Elle montre l'état réel de la connexion Shizuku et guide vers les réglages Android."));
+        try{
+            JSONObject s=ShizukuCleanup.state(this);
+            page.addView(card("État Shizuku",
+                "Binder : "+yesNo(s.optBoolean("binder"))+"\nAutorisé : "+yesNo(s.optBoolean("authorized"))+"\nUID serveur : "+s.optInt("server_uid",-1)+"\nCandidats actuels : "+s.optInt("candidates",-1)+"\n"+s.optString("status")));
+        }catch(Exception e){page.addView(card("État Shizuku","Indisponible : "+e.getClass().getSimpleName()));}
+        page.addView(action("Actualiser",v->renderShizuku()));
+        page.addView(action("Ouvrir Shizuku",v->openPackage("moe.shizuku.privileged.api")));
+        page.addView(action("Ouvrir les options développeur",v->openSetting(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)));
+        page.addView(action("Ouvrir les réglages VPN",v->openSetting(Settings.ACTION_VPN_SETTINGS)));
+    }
+
+    private void prepareLocalData(){
         new Thread(()->{
             try{
                 PermissionAudit audit=PermissionAudit.get(this);
-                org.json.JSONObject summary=audit.summary();
-                if(summary.optLong("scan_id",0L)<=0L){
-                    startupState="Premier inventaire lancé en arrière-plan";
-                    audit.scan();
-                    startupResult=audit.penaltyData().toString();
-                }else{
-                    startupState="Chargement du dernier inventaire";
-                    startupResult=audit.penaltyData().toString();
-                }
-                startupState="Prêt";
-                AnomalyMonitor.request(this);TrackerIndex.get(this).request();ApkEvidence.get(this).request();
-            }catch(Exception e){startupError=e.getMessage()==null?e.getClass().getSimpleName():e.getMessage();startupState="Erreur";}
-        },"aiv-initialisation").start();
+                JSONObject s=audit.summary();
+                if(s.optLong("scan_id",0)<=0)audit.scan();
+                AnomalyMonitor.request(this);
+                TrackerIndex.get(this).request();
+                ApkEvidence.get(this).request();
+            }catch(Throwable ignored){}
+            main.postDelayed(()->{if("presentation".equals(currentPage))renderPresentation();},800);
+        },"aiv-native-init").start();
     }
-    private final java.util.concurrent.ExecutorService journalReads=java.util.concurrent.Executors.newSingleThreadExecutor();
-    private final java.util.concurrent.atomic.AtomicInteger journalRequestId=new java.util.concurrent.atomic.AtomicInteger();
-    private volatile String journalReply="";
-    private volatile int journalReplyId=0;
-    public final class Bridge {
-        @JavascriptInterface public String developerControlTargets(){try{return DeveloperControl.targets(MainActivity.this).toString();}catch(Exception e){return auditError(e);}}
-        @JavascriptInterface public String developerControlState(){try{return DeveloperControl.state(MainActivity.this).toString();}catch(Exception e){return auditError(e);}}
-        @JavascriptInterface public String developerControlPreview(String packages,String action){try{return DeveloperControl.preview(MainActivity.this,packages,action).toString();}catch(Exception e){return auditError(e);}}
-        @JavascriptInterface public String developerControlApply(String stamp,boolean watch){try{return DeveloperControl.apply(MainActivity.this,stamp,watch).toString();}catch(Exception e){return auditError(e);}}
-        @JavascriptInterface public String developerControlReport(){try{return DeveloperControl.report(MainActivity.this).toString();}catch(Exception e){return auditError(e);}}
-        @JavascriptInterface public String developerControlRestore(){try{return DeveloperControl.restore(MainActivity.this).toString();}catch(Exception e){return auditError(e);}}
-        @JavascriptInterface public String developerControlMonitoring(boolean enabled){try{return DeveloperControl.monitoring(MainActivity.this,enabled).toString();}catch(Exception e){return auditError(e);}}
-        @JavascriptInterface public String accessPolicy(){return AccessPolicy.CATALOG_JSON;}
-        @JavascriptInterface public String deviceIdentity(){return DeviceIdentity.describe().toString();}
-        @JavascriptInterface public String appIdentity(String pkg){try{return AppIdentity.forPackage(MainActivity.this,pkg).toString();}catch(Exception e){return auditError(e);}}
-        @JavascriptInterface public String controlAccess(){return EventStore.object("allowed",AccessPolicy.allows("shizuku.control",AccessPolicy.DISTRIBUTION_TIER),"tier",AccessPolicy.DISTRIBUTION_TIER,"profile","personal/public build; subscription not implemented").toString();}
-        @JavascriptInterface public String normalizationPreview(String pkg,String profile){try{return PermissionNorms.preview(MainActivity.this,pkg,profile).toString();}catch(Exception e){return auditError(e);}}
-        @JavascriptInterface public String normalizationApply(String pkg,String profile,String stamp){try{return ShizukuCleanup.normalize(MainActivity.this,pkg,profile,stamp).toString();}catch(Exception e){return auditError(e);}}
-        @JavascriptInterface public String defenseStatus(){try{return DefenseStore.get(MainActivity.this).status().put("file_status",fileStatus).put("inventory_busy",PermissionAudit.get(MainActivity.this).summary().optBoolean("busy")).toString();}catch(Exception e){return auditError(e);}}
-        @JavascriptInterface public String defensePage(String scope,int offset){try{return DefenseStore.get(MainActivity.this).page(scope,offset).toString();}catch(Exception e){return auditError(e);}}
-        @JavascriptInterface public String defenseDetail(String pkg,long before){try{return DefenseStore.get(MainActivity.this).detail(pkg,before).toString();}catch(Exception e){return auditError(e);}}
-        @JavascriptInterface public String defenseDecide(String pkg,String stamp,boolean keep){try{return DefenseStore.get(MainActivity.this).decide(pkg,stamp,keep).toString();}catch(Exception e){return auditError(e);}}
-        @JavascriptInterface public boolean defenseOpenRequested(){boolean open=getIntent().getBooleanExtra("open_defense",false);getIntent().removeExtra("open_defense");return open;}
-        @JavascriptInterface public void defenseAction(String pkg,String action,String stamp){if(!AccessPolicy.allows("shizuku.control",AccessPolicy.DISTRIBUTION_TIER))return;runOnUiThread(()->{try{DefenseActions.launch(MainActivity.this,pkg,action,stamp);}catch(Exception e){Toast.makeText(MainActivity.this,e.getMessage()==null?"Action Android indisponible":e.getMessage(),Toast.LENGTH_LONG).show();}refreshDefenseReader();});}
-        @JavascriptInterface public String defenseRecover(){try{DefenseActions.recover(MainActivity.this);return DefenseStore.get(MainActivity.this).status().toString();}catch(Exception e){return auditError(e);}}
-        @JavascriptInterface public int requestJournal(String args){
-            int ticket=journalRequestId.incrementAndGet();
-            journalReads.execute(()->{if(ticket!=journalRequestId.get())return;String result;
-                try{org.json.JSONArray a=new org.json.JSONArray(args);result=EventStore.get(MainActivity.this).pageSegment(a.getString(0),a.getString(1),a.getInt(2),a.getInt(3),a.getLong(4),a.getString(5),a.getString(6),a.getBoolean(7),a.getString(8),a.getString(9),a.optInt(10,0)).toString();}
-                catch(Exception e){result=auditError(e);}
-                if(ticket==journalRequestId.get()){journalReply=result;journalReplyId=ticket;}
-            });return ticket;
-        }
-        @JavascriptInterface public String journalResult(int ticket){return ticket==journalReplyId?journalReply:ticket<journalRequestId.get()?"{\"cancelled\":true}":"";}
 
-        @JavascriptInterface public long journalHead(){return EventStore.get(MainActivity.this).latestId();}
-        @JavascriptInterface public String uiState(){return getSharedPreferences("ui",MODE_PRIVATE).getString("reader_state","");}
-        @JavascriptInterface public boolean saveUiState(String value){if(value==null||value.length()>16384)return false;getSharedPreferences("ui",MODE_PRIVATE).edit().putString("reader_state",value).apply();return true;}
-        @JavascriptInterface public String continuousStatus(){return EventStore.object("enabled",Continuous.enabled(MainActivity.this),"collector",RecorderService.running,"vpn",NetworkCaptureService.running,"analysis",WatcherService.analysisActive,"vpn_error",NetworkCaptureService.lastError,"error",EventStore.lastError).toString();}
-        @JavascriptInterface public String startupStatus(){return EventStore.object("state",startupState,"ready",!startupResult.isEmpty(),"error",startupError).toString();}
-        @JavascriptInterface public void startupRetry(){if("Erreur".equals(startupState)){startupError="";startupState="Calcul en cours";prepareStartup();}}
-        @JavascriptInterface public String startupData(){return startupResult;}
-        @JavascriptInterface public String shizukuCleanupStatus(){return ShizukuCleanup.status();}
-        @JavascriptInterface public String shizukuCleanupState(){try{
-            org.json.JSONObject s=ShizukuCleanup.state(MainActivity.this);
-            s.put("auto_pending",false);
-            return s.toString();
-        }catch(Exception e){return auditError(e);}}
-        @JavascriptInterface public String shizukuCleanupRun(){try{
-            runShizukuCleanupNow();
-            org.json.JSONObject s=ShizukuCleanup.state(MainActivity.this);
-            s.put("auto_pending",false);
-            return s.toString();
-        }catch(Exception e){return auditError(e);}}
-        @JavascriptInterface public String shizukuCleanupRestore(){try{return ShizukuCleanup.restore(MainActivity.this).toString();}catch(Exception e){return auditError(e);}}
-
-        @JavascriptInterface public String aivSummary(){try{return AivStore.summary(MainActivity.this).put("file_status",fileStatus).toString();}catch(Exception e){return auditError(e);}}
-        @JavascriptInterface public String aivPage(String filter,long before){try{return AivStore.page(MainActivity.this,filter,before).toString();}catch(Exception e){return auditError(e);}}
-        @JavascriptInterface public String aivDetail(long eventId){try{return AivStore.detail(MainActivity.this,eventId).toString();}catch(Exception e){return auditError(e);}}
-        @JavascriptInterface public void aivConfigure(String value){runOnUiThread(()->new AlertDialog.Builder(MainActivity.this).setTitle("Enregistrer cette règle AIV ?").setMessage(value.length()>32768?"Configuration trop longue":value).setNegativeButton("Annuler",null).setPositiveButton("Enregistrer",(d,w)->new Thread(()->{try{MainEngine.configure(MainActivity.this,value);}catch(Exception e){AivStore.error="Règle refusée : "+e.getMessage();}},"aiv-policy").start()).show());}
-        @JavascriptInterface public void aivConfigureBatch(String value){runOnUiThread(()->{
-            try{
-                final org.json.JSONArray rules=new org.json.JSONArray(value);
-                if(rules.length()<1||rules.length()>6)throw new IllegalArgumentException("1 à 6 règles attendues");
-                new AlertDialog.Builder(MainActivity.this).setTitle("Appliquer les règles AIV ?").setMessage(rules.length()+" règle(s) seront versionnées dans le journal local.").setNegativeButton("Annuler",null).setPositiveButton("Appliquer",(d,w)->new Thread(()->{
-                    try{for(int i=0;i<rules.length();i++)MainEngine.configure(MainActivity.this,rules.getJSONObject(i).toString());}
-                    catch(Exception e){AivStore.error="Règles refusées : "+e.getMessage();}
-                },"aiv-policy-batch").start()).show();
-            }catch(Exception e){Toast.makeText(MainActivity.this,e.getMessage()==null?"Configuration invalide":e.getMessage(),Toast.LENGTH_LONG).show();}
-        });}
-
-        @JavascriptInterface public String coherenceRefresh(){try{return CoherenceRefresh.trigger(MainActivity.this).toString();}catch(Exception e){return auditError(e);}}
-        @JavascriptInterface public String coherenceStatus(){try{return CoherenceRefresh.status(MainActivity.this).toString();}catch(Exception e){return auditError(e);}}
-        @JavascriptInterface public void openAuditedApp(String pkg,boolean settings){runOnUiThread(()->{
-            try{
-                getPackageManager().getApplicationInfo(pkg,0);
-                Intent intent=settings?new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,android.net.Uri.parse("package:"+pkg)):getPackageManager().getLaunchIntentForPackage(pkg);
-                if(intent==null)throw new IllegalArgumentException("Cette application ne possède pas d’écran de lancement.");
-                startActivity(intent);
-            }catch(Exception e){Toast.makeText(MainActivity.this,e.getMessage()==null?"Ouverture indisponible":e.getMessage(),Toast.LENGTH_LONG).show();}
-        });}
-        @JavascriptInterface public String coherenceDetail(String pkg){try{return CoherenceRefresh.detail(MainActivity.this,pkg).toString();}catch(Exception e){return auditError(e);}}
-        @JavascriptInterface public String coherenceSummary(){try{return CoherenceRefresh.summary(MainActivity.this).toString();}catch(Exception e){return auditError(e);}}
-        @JavascriptInterface public String coherenceConfigureEndpoint(String value){try{return CoherenceRefresh.configureEndpoint(MainActivity.this,value).toString();}catch(Exception e){return auditError(e);}}
-
-        @JavascriptInterface public String penaltyData(){try{return PermissionAudit.get(MainActivity.this).penaltyData().toString();}catch(Exception e){return auditError(e);}}
-        @JavascriptInterface public String calculationLoad(String identity){try{return CalculationSnapshot.load(MainActivity.this,identity).toString();}catch(Exception e){return auditError(e);}}
-        @JavascriptInterface public String calculationSave(String identity,String result){try{return CalculationSnapshot.save(MainActivity.this,identity,result).toString();}catch(Exception e){return auditError(e);}}
-        @JavascriptInterface public String penaltyConfig(){try{return PermissionAudit.get(MainActivity.this).penaltyConfig().toString();}catch(Exception e){return auditError(e);}}
-        @JavascriptInterface public String penaltySave(String value){try{return PermissionAudit.get(MainActivity.this).savePenaltyConfig(value).toString();}catch(Exception e){return auditError(e);}}
-        @JavascriptInterface public String penaltyImported(){String value=penaltyImport;penaltyImport="";return value;}
-        @JavascriptInterface public String auditContext(String pkg){try{return PermissionAudit.get(MainActivity.this).colorContext(pkg).toString();}catch(Exception e){return auditError(e);}}
-        @JavascriptInterface public String trackerStatus(){try{return EventStore.object("catalog",ReferenceCatalog.get(MainActivity.this).summary(),"apk",ApkEvidence.get(MainActivity.this).status(),"index",TrackerIndex.get(MainActivity.this).status()).toString();}catch(Exception e){return auditError(e);}}
-        @JavascriptInterface public String trackerPage(String query,long before){try{return TrackerIndex.get(MainActivity.this).page(query,before).toString();}catch(Exception e){return auditError(e);}}
-        @JavascriptInterface public String trackerPageSized(String query,long before,int limit){try{return TrackerIndex.get(MainActivity.this).page(query,before,limit).toString();}catch(Exception e){return auditError(e);}}
-        @JavascriptInterface public String trackerGroups(String query,int offset,int limit){try{return TrackerIndex.get(MainActivity.this).groups(query,offset,limit).toString();}catch(Exception e){return auditError(e);}}
-        @JavascriptInterface public String trackerJourneys(String appKey,int trackerId,long before,int limit){try{return TrackerIndex.get(MainActivity.this).journeys(appKey,trackerId,before,limit).toString();}catch(Exception e){return auditError(e);}}
-        @JavascriptInterface public String trackerTrail(String correlation){try{return TrackerIndex.get(MainActivity.this).trail(correlation).toString();}catch(Exception e){return auditError(e);}}
-        @JavascriptInterface public String trackerMatch(String host,String kind){try{return ReferenceCatalog.get(MainActivity.this).network(host==null?"":host,kind==null?"JOURNAL":kind).toString();}catch(Exception e){return "[]";}}
-        @JavascriptInterface public void trackerResume(){Continuous.prefs(MainActivity.this).edit().putBoolean("enabled",true).putBoolean("analysis_enabled",true).apply();Continuous.start(MainActivity.this);TrackerIndex.get(MainActivity.this).request();ApkEvidence.get(MainActivity.this).request();}
-        @JavascriptInterface public String auditSummary(){try{return PermissionAudit.get(MainActivity.this).summary().put("file_status",fileStatus).toString();}catch(Exception e){return auditError(e);}}
-        @JavascriptInterface public String auditPage(String query,String scope,int offset){try{return PermissionAudit.get(MainActivity.this).page(query,scope,offset).toString();}catch(Exception e){return auditError(e);}}
-        @JavascriptInterface public String auditDetail(String pkg){try{return PermissionAudit.get(MainActivity.this).detail(pkg).toString();}catch(Exception e){return auditError(e);}}
-        @JavascriptInterface public String auditSave(String pkg,String value){try{return PermissionAudit.get(MainActivity.this).save(pkg,value).toString();}catch(Exception e){return auditError(e);}}
-        @JavascriptInterface public String pageFiltered(String query,String transport,int offset,int limit,long ceiling,String actor,String kind,boolean quiet,String scope,String pkg){try{if(query!=null&&query.length()>4096)throw new IllegalArgumentException("Recherche trop longue");return EventStore.get(MainActivity.this).pageFiltered(query,transport,offset,limit,ceiling,actor,kind,quiet,scope,pkg).toString();}catch(Exception e){return auditError(e);}}
-        private String auditError(Exception e){return EventStore.object("error",e instanceof IllegalArgumentException?e.getMessage():"Audit indisponible : "+e.getClass().getSimpleName()).toString();}
-
-        @JavascriptInterface public String status(){
-            boolean bluetoothAllowed=Build.VERSION.SDK_INT<31||checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)==PackageManager.PERMISSION_GRANTED;
-            return EventStore.object("running",RecorderService.running,"network",RecorderService.networkRegistered,"bluetooth",RecorderService.bluetoothRegistered,"bluetooth_enabled",getSharedPreferences("journal",MODE_PRIVATE).getBoolean("bluetooth",false),"bluetooth_permission",bluetoothAllowed,"last_alive_ms",RecorderService.lastAlive,"error",EventStore.lastError,"live_to_chatgpt",false,"capture",NetworkCaptureService.running,"capture_starting",NetworkCaptureService.starting,"capture_state",NetworkCaptureService.stateText,"capture_error",NetworkCaptureService.lastError).toString();
-        }
-        @JavascriptInterface public String page(String query,String transport,int offset,int limit,long ceiling,String actor,String kind,boolean quiet){
-            try{if(query!=null&&query.length()>4096)throw new IllegalArgumentException("Recherche trop longue");return EventStore.get(MainActivity.this).page(query,transport,offset,limit,ceiling,actor,kind,quiet).toString();}
-            catch(Exception e){return EventStore.object("error","Lecture impossible : "+e.getClass().getSimpleName()).toString();}
-        }
-        @JavascriptInterface public String flowPage(String query,long beforeId,int limit){try{if(query!=null&&query.length()>512)throw new IllegalArgumentException("Recherche de flux trop longue");return EventStore.get(MainActivity.this).flowPage(query,beforeId,limit).toString();}catch(Exception e){return EventStore.object("error","Flux indisponibles : "+e.getClass().getSimpleName()).toString();}}
-        @JavascriptInterface public String diagnosticSummary(){try{return DiagnosticStore.get(MainActivity.this).summary().put("file_status",fileStatus).put("recovery",getSharedPreferences("files",0).getString("recovery_report","")).toString();}catch(Exception e){return EventStore.object("error",e.getMessage()).toString();}}
-        @JavascriptInterface public String diagnosticConfigure(String value){try{return DiagnosticStore.get(MainActivity.this).configure(value).toString();}catch(Exception e){return EventStore.object("error",e.getMessage()).toString();}}
-        @JavascriptInterface public String correlate(long eventId){try{
-            org.json.JSONArray ids=new org.json.JSONArray();ids.put(eventId);org.json.JSONArray events=EventStore.get(MainActivity.this).evidence(ids);if(events.length()!=1)throw new IllegalArgumentException("Événement introuvable");
-            org.json.JSONObject event=events.getJSONObject(0),result=DiagnosticStore.get(MainActivity.this).compare(event);getSharedPreferences("files",0).edit().putString("cross_analysis",EventStore.object("schema","journal-cross-analysis/1","source_event",event,"cross_analysis",result).toString()).apply();return result.toString();
-        }catch(Exception e){return EventStore.object("error",e.getMessage()).toString();}}
-        @JavascriptInterface public void command(String command){runOnUiThread(()->handleCommand(command));}
-        @JavascriptInterface public String analysisSummary(){try{
-            org.json.JSONObject s=AnomalyMonitor.get(MainActivity.this).summary();
-            return s.toString();
-        }catch(Exception e){return EventStore.object("error","Lecture de l’analyse impossible : "+e.getClass().getSimpleName()).toString();}}
-        @JavascriptInterface public String analysisPage(String kind,boolean unread,int offset){try{return AnomalyMonitor.get(MainActivity.this).page(kind,unread,offset).toString();}catch(Exception e){return EventStore.object("error","Lecture des signalements impossible : "+e.getClass().getSimpleName()).toString();}}
-        @JavascriptInterface public String analysisPageSized(String kind,boolean unread,int offset,int limit,String search){try{if(search!=null&&search.length()>1024)throw new IllegalArgumentException("Recherche trop longue");return AnomalyMonitor.get(MainActivity.this).page(kind,unread,offset,limit,search).toString();}catch(Exception e){return EventStore.object("error","Lecture des signalements impossible : "+e.getClass().getSimpleName()).toString();}}
-        @JavascriptInterface public String analysisEvidence(long id){try{return AnomalyMonitor.get(MainActivity.this).evidence(id).toString();}catch(Exception e){return EventStore.object("error","Événements sources indisponibles : "+e.getClass().getSimpleName()).toString();}}
-        @JavascriptInterface public String analysisChange(String action,String value){try{return AnomalyMonitor.get(MainActivity.this).change(action,value).toString();}catch(Exception e){return EventStore.object("error",e instanceof IllegalArgumentException?e.getMessage():"Action d’analyse impossible : "+e.getClass().getSimpleName()).toString();}}
-    }
-    private void handleCommand(String command){
+    private void startCollection(){
         try{
-            if("aiv-start".equals(command)){Continuous.prefs(this).edit().putBoolean("analysis_enabled",true).apply();WatcherService.start(this);
-            }else if("aiv-stop".equals(command)){Continuous.prefs(this).edit().putBoolean("analysis_enabled",false).apply();WatcherService.stop(this);
-            }else if("aiv-verify".equals(command)){WatcherService.verify(this);
-            }else if("aiv-export".equals(command)){chooseExport(AIV_EXPORT_REQUEST,"journal-aiv-signe.jsonl","application/octet-stream");
-            }else if("aiv-reference".equals(command)){startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("application/json"),AIV_REFERENCE_REQUEST);
-            }else if("audit-scan".equals(command)){PermissionAudit.get(this).scan();
-            }else if("export-control".equals(command)){chooseExport(CONTROL_EXPORT_REQUEST,"aiv-rapport-controle.json","application/json");
-            }else if("export-defense".equals(command)){chooseExport(DEFENSE_EXPORT_REQUEST,"aiv-journal-menage-v23.json","application/json");
-            }else if("export-penalty".equals(command)){chooseExport(PENALTY_EXPORT_REQUEST,"aiv-bareme-observations.json","application/json");
-            }else if("import-penalty".equals(command)){startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("application/json"),PENALTY_IMPORT_REQUEST);
-            }else if("export-reference".equals(command)){chooseExport(REFERENCE_EXPORT_REQUEST,"aiv-reference-actuel.json","application/json");
-            }else if("export-trackers".equals(command)){chooseExport(TRACKER_EXPORT_REQUEST,"journal-exodus-v22.json","application/json");
-            }else if("export-audit-full".equals(command)){chooseExport(AUDIT_FULL_EXPORT_REQUEST,"journal-autorisations-historique.json","application/json");
-            }else if("export-audit".equals(command)){chooseExport(AUDIT_EXPORT_REQUEST,"journal-autorisations.json","application/json");
-            }else if("import-audit".equals(command)){startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("application/json"),AUDIT_IMPORT_REQUEST);
-            }else if("start".equals(command)){
-                Continuous.prefs(this).edit().putBoolean("enabled",true).apply();Continuous.start(this);EventStore.lastError="";
-                if(Build.VERSION.SDK_INT>=33&&checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},NOTIFICATION_REQUEST);
-                else startCollector();
-            }else if("stop".equals(command)){
-                Continuous.stop(this);
-            }else if("capture-on".equals(command)){
-                Continuous.prefs(this).edit().putBoolean("enabled",true).putBoolean("vpn_enabled",true).apply();Continuous.start(this);Intent consent=android.net.VpnService.prepare(this);
-                if(consent!=null)startActivityForResult(consent,VPN_REQUEST);else startNetworkCapture();
-            }else if("capture-off".equals(command)){Continuous.prefs(this).edit().putBoolean("vpn_enabled",false).apply();stopService(new Intent(this,NetworkCaptureService.class));
-            }else if("recover-file".equals(command)||"import-diagnostic".equals(command)){
-                Intent intent=new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*");startActivityForResult(intent,"recover-file".equals(command)?RECOVER_IMPORT_REQUEST:DIAGNOSTIC_IMPORT_REQUEST);
-            }else if("export-lines".equals(command)){chooseExport(LINES_EXPORT_REQUEST,"journal-cellulaire.jsonl","application/octet-stream");
-            }else if("save-recovered".equals(command)){if(savedFile("recovered")==null)throw new IOException("Récupère d’abord un export");chooseExport(RECOVER_EXPORT_REQUEST,"journal-recupere.json","application/json");
-            }else if("save-last-export".equals(command)){if(savedFile("last_export")==null)throw new IOException("Aucun instantané complet disponible");String ext=getSharedPreferences("files",0).getString("last_extension","json");chooseExport(LAST_EXPORT_REQUEST,"journal-copie."+ext,"application/octet-stream");
-            }else if("export-correlation".equals(command)){if(getSharedPreferences("files",0).getString("cross_analysis","").isEmpty())throw new IOException("Ouvre un flux et lance une comparaison");chooseExport(CORRELATION_EXPORT_REQUEST,"journal-correlation.json","application/json");
-            }else if("licenses".equals(command)){
-                try(InputStream input=getAssets().open("licenses.txt")){
-                    ByteArrayOutputStream bytes=new ByteArrayOutputStream();byte[] buffer=new byte[8192];int n;
-                    while((n=input.read(buffer))!=-1)bytes.write(buffer,0,n);
-                    new AlertDialog.Builder(this).setTitle("Sources et licences").setMessage(new String(bytes.toByteArray(),StandardCharsets.UTF_8)).setPositiveButton("Fermer",null).show();
-                }
-            }else if("bluetooth-on".equals(command)){
-                if(Build.VERSION.SDK_INT>=31&&checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)!=PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.BLUETOOTH_CONNECT},BLUETOOTH_REQUEST);
-                else setBluetooth(true);
-            }else if("bluetooth-off".equals(command)){setBluetooth(false);}
-            else if("export".equals(command)){
-                Intent intent=new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("application/json").putExtra(Intent.EXTRA_TITLE,"journal-cellulaire.json");startActivityForResult(intent,EXPORT_REQUEST);
-            }else if("export-analysis".equals(command)){
-                Intent intent=new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("application/json").putExtra(Intent.EXTRA_TITLE,"journal-analyse.json");startActivityForResult(intent,ANALYSIS_EXPORT_REQUEST);
-            }
-        }catch(Exception e){EventStore.lastError="Action impossible : "+e.getClass().getSimpleName();Toast.makeText(this,EventStore.lastError,Toast.LENGTH_LONG).show();}
+            Continuous.prefs(this).edit().putBoolean("enabled",true).putBoolean("analysis_enabled",true).putBoolean("vpn_enabled",true).apply();
+            Continuous.start(this);
+            if(Build.VERSION.SDK_INT>=33&&checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)
+                requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},NOTIFICATION_REQUEST);
+            Intent consent=VpnService.prepare(this);
+            if(consent!=null)startActivityForResult(consent,VPN_REQUEST);
+            else startForegroundService(new Intent(this,NetworkCaptureService.class));
+            toast("Collecte demandée");
+            main.postDelayed(this::renderPresentation,700);
+        }catch(Exception e){toast("Démarrage impossible : "+e.getClass().getSimpleName());}
     }
-    private void startNetworkCapture(){NetworkCaptureService.lastError="";startForegroundService(new Intent(this,NetworkCaptureService.class));}
-    private void startCollector(){startForegroundService(new Intent(this,RecorderService.class));}
-    private void setBluetooth(boolean enabled){
-        getSharedPreferences("journal",MODE_PRIVATE).edit().putBoolean("bluetooth",enabled).apply();
-        EventStore.get(this).add("collecteur","Utilisateur",enabled?"Suivi Bluetooth demandé":"Suivi Bluetooth désactivé","Configuration du collecteur","Interne","Commande locale explicite",EventStore.object("enabled",enabled));
-        if(RecorderService.running)startService(new Intent(this,RecorderService.class).setAction(RecorderService.REFRESH));
-    }
-    @Override public void onRequestPermissionsResult(int request,String[] permissions,int[] grants){
-        super.onRequestPermissionsResult(request,permissions,grants);
-        if(request==NOTIFICATION_REQUEST){try{startCollector();}catch(Exception e){EventStore.lastError="Démarrage impossible : "+e.getClass().getSimpleName();}}
-        if(request==BLUETOOTH_REQUEST){boolean granted=grants.length>0&&grants[0]==PackageManager.PERMISSION_GRANTED;setBluetooth(granted);if(!granted)Toast.makeText(this,"Suivi Bluetooth non activé.",Toast.LENGTH_LONG).show();}
-    }
-    @Override protected void onActivityResult(int request,int result,Intent data){
-        super.onActivityResult(request,result,data);
-        if(request==DefenseActions.UNINSTALL_REQUEST||request==DefenseActions.SETTINGS_REQUEST){try{DefenseActions.returned(this,request,result);defenseResultHandled=true;}catch(Exception e){DefenseStore.get(this).failed(e);}refreshDefenseReader();return;}
-        if(request==VPN_REQUEST){
-            if(result==RESULT_OK){try{startNetworkCapture();}catch(Exception e){NetworkCaptureService.lastError="Démarrage impossible : "+e.getClass().getSimpleName();}}
-            else NetworkCaptureService.lastError="Capture non activée : autorisation VPN non accordée.";
-            return;
-        }
-        if(result!=RESULT_OK||data==null||data.getData()==null)return;final Uri uri=data.getData();
-        if(request==AIV_REFERENCE_REQUEST){new Thread(()->{try{fileStatus=ReferenceSync.importSnapshot(this,uri).toString();}catch(Exception e){fileStatus="Import refusé : "+e.getMessage();}},"aiv-reference").start();return;}
-        if(request==AIV_EXPORT_REQUEST){new Thread(()->{android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND);try{File ready=ExportSigner.prepare(this);getSharedPreferences("files",0).edit().putString("last_export",ready.getAbsolutePath()).putString("last_extension","jsonl").apply();fileStatus=ExportFiles.copy(this,ready,uri);}catch(Exception e){fileStatus="Export AIV interrompu : "+e.getMessage();}runOnUiThread(()->Toast.makeText(this,fileStatus,Toast.LENGTH_LONG).show());},"aiv-export").start();return;}
-        if(request==PENALTY_IMPORT_REQUEST){
-            new Thread(()->{try(InputStream in=getContentResolver().openInputStream(uri);ByteArrayOutputStream out=new ByteArrayOutputStream()){
-                if(in==null)throw new IOException("Fichier inaccessible");byte[] b=new byte[8192];int n;while((n=in.read(b))!=-1){if(out.size()+n>4*1024*1024)throw new IOException("Réglages limités à 4 Mio");out.write(b,0,n);}
-                penaltyImport=new String(out.toByteArray(),StandardCharsets.UTF_8);fileStatus="Import prêt à vérifier dans Barème AIV";
-            }catch(Exception e){fileStatus="Import interrompu : "+e.getMessage();}runOnUiThread(()->Toast.makeText(this,fileStatus,Toast.LENGTH_LONG).show());},"penalty-import").start();return;
-        }
-        if(request==AUDIT_IMPORT_REQUEST){
-            new Thread(()->{try{fileStatus=PermissionAudit.get(this).importReport(uri).optString("message");}catch(Exception e){fileStatus="Import interrompu : "+e.getMessage();}runOnUiThread(()->Toast.makeText(this,fileStatus,Toast.LENGTH_LONG).show());},"journal-audit-import").start();return;
-        }
-        if(request==RECOVER_IMPORT_REQUEST||request==DIAGNOSTIC_IMPORT_REQUEST){
-            fileStatus=request==RECOVER_IMPORT_REQUEST?"Récupération en cours…":"Lecture du diagnostic…";
-            new Thread(()->{
-                try{
-                    if(request==DIAGNOSTIC_IMPORT_REQUEST){DiagnosticStore.get(this).ingest(uri);fileStatus=DiagnosticStore.activity;}
-                    else{org.json.JSONObject[] report={null};File ready=ExportFiles.recover(this,uri,report);getSharedPreferences("files",0).edit().putString("recovered",ready.getAbsolutePath()).putString("recovery_report",report[0].toString()).apply();fileStatus=report[0].optLong("recovered_events")+" événements récupérés. Original conservé; copie séparée.";runOnUiThread(()->chooseExport(RECOVER_EXPORT_REQUEST,"journal-recupere.json","application/json"));}
-                    runOnUiThread(()->Toast.makeText(this,fileStatus,Toast.LENGTH_LONG).show());
-                }catch(Exception e){fileStatus="Lecture interrompue : "+e.getMessage();runOnUiThread(()->Toast.makeText(this,fileStatus,Toast.LENGTH_LONG).show());}
-            },"journal-import").start();return;
-        }
-        if(request==CONTROL_EXPORT_REQUEST||request==DEFENSE_EXPORT_REQUEST||request==TRACKER_EXPORT_REQUEST||request==REFERENCE_EXPORT_REQUEST||request==AUDIT_FULL_EXPORT_REQUEST||request==PENALTY_EXPORT_REQUEST||request==AUDIT_EXPORT_REQUEST||request==EXPORT_REQUEST||request==ANALYSIS_EXPORT_REQUEST||request==LINES_EXPORT_REQUEST||request==RECOVER_EXPORT_REQUEST||request==CORRELATION_EXPORT_REQUEST||request==LAST_EXPORT_REQUEST){
-            fileStatus="Préparation d’un instantané complet…";
-            new Thread(()->{try{
-                File ready;if(request==LAST_EXPORT_REQUEST)ready=savedFile("last_export");else if(request==RECOVER_EXPORT_REQUEST)ready=savedFile("recovered");
-                else ready=ExportFiles.stage(this,writer->{if(request==CONTROL_EXPORT_REQUEST)DeveloperControl.export(this,writer);else if(request==DEFENSE_EXPORT_REQUEST)DefenseStore.get(this).export(writer);else if(request==TRACKER_EXPORT_REQUEST)TrackerIndex.get(this).export(writer);else if(request==REFERENCE_EXPORT_REQUEST)PermissionAudit.get(this).exportReference(writer);else if(request==AUDIT_FULL_EXPORT_REQUEST)PermissionAudit.get(this).export(writer,true);else if(request==PENALTY_EXPORT_REQUEST)writer.write(PermissionAudit.get(this).penaltyConfig().toString(2));else if(request==AUDIT_EXPORT_REQUEST)PermissionAudit.get(this).export(writer);else if(request==ANALYSIS_EXPORT_REQUEST)AnomalyMonitor.get(this).export(writer);else if(request==CORRELATION_EXPORT_REQUEST){String cross=getSharedPreferences("files",0).getString("cross_analysis","");if(cross.isEmpty())throw new IOException("Comparaison indisponible");writer.write(cross);}else EventStore.get(this).export(writer,request==LINES_EXPORT_REQUEST);});
-                if(ready==null)throw new IOException("Instantané expiré; recommencer la préparation");
-                if(request!=LAST_EXPORT_REQUEST)getSharedPreferences("files",0).edit().putString("last_export",ready.getAbsolutePath()).putString("last_extension",request==LINES_EXPORT_REQUEST?"jsonl":"json").apply();
-                fileStatus=ExportFiles.copy(this,ready,uri);runOnUiThread(()->Toast.makeText(this,fileStatus,Toast.LENGTH_LONG).show());
-            }catch(Exception e){fileStatus="Export incomplet : "+e.getMessage()+". Si disponible, réenregistre le dernier instantané depuis Diagnostic.";runOnUiThread(()->Toast.makeText(this,fileStatus,Toast.LENGTH_LONG).show());}},"journal-export").start();
-        }
-    }
-    private void chooseExport(int request,String name,String mime){try{startActivityForResult(new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(mime).putExtra(Intent.EXTRA_TITLE,name),request);}catch(Exception e){fileStatus="Sélection du fichier impossible : "+e.getClass().getSimpleName();Toast.makeText(this,fileStatus,Toast.LENGTH_LONG).show();}}
-    private File savedFile(String key)throws IOException{String value=getSharedPreferences("files",0).getString(key,"");if(value.isEmpty())return null;File f=new File(value);File dir=new File(getCacheDir(),AivConfig.PATHS_EXPORTS_CACHE);if(!f.getCanonicalPath().startsWith(dir.getCanonicalPath()+File.separator)||!f.isFile())return null;return f;}
-    private boolean launchRulesApplied;
-    @Override protected void onResume(){super.onResume();if(reader!=null)reader.onResume();if(defenseResumed&&!defenseResultHandled)PermissionAudit.get(this).scan();defenseResultHandled=false;defenseResumed=true;refreshDefenseReader();if(!launchRulesApplied){launchRulesApplied=true;Continuous.start(this);if(Continuous.enabled(this)&&Continuous.prefs(this).getBoolean("vpn_enabled",true)&&!Continuous.prefs(this).getBoolean("vpn_prompted",false)){Intent consent=android.net.VpnService.prepare(this);if(consent!=null){Continuous.prefs(this).edit().putBoolean("vpn_prompted",true).apply();startActivityForResult(consent,VPN_REQUEST);}}}}
-    private void refreshDefenseReader(){if(reader!=null)reader.evaluateJavascript("window.AivDefenseRefresh && window.AivDefenseRefresh()",null);}
 
-    private long lastBackPressMs;
-    @Override public void onBackPressed(){
-        long now=android.os.SystemClock.elapsedRealtime();
-        if(reader!=null)reader.evaluateJavascript("window.AivPersistUi&&window.AivPersistUi()",null);
-        if(now-lastBackPressMs<1800){super.onBackPressed();return;}
-        lastBackPressMs=now;
-        Toast.makeText(this,"Appuie encore pour fermer · ta position est conservée",Toast.LENGTH_SHORT).show();
+    @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){
+        super.onActivityResult(requestCode,resultCode,data);
+        if(requestCode==VPN_REQUEST&&resultCode==RESULT_OK){
+            try{NetworkCaptureService.lastError="";startForegroundService(new Intent(this,NetworkCaptureService.class));}
+            catch(Exception e){toast("VPN : "+e.getClass().getSimpleName());}
+        }
     }
-    @Override protected void onPause(){if(reader!=null){reader.evaluateJavascript("window.AivPersistUi&&window.AivPersistUi()",null);reader.onPause();}super.onPause();}
-    @Override protected void onDestroy(){try{ShizukuCleanup.detach();}catch(Throwable ignored){}try{DefenseMonitor.stop(this);}catch(Throwable ignored){}journalReads.shutdownNow();if(reader!=null){reader.removeJavascriptInterface("JournalAndroid");reader.destroy();}super.onDestroy();}
+
+    @Override public void onResume(){super.onResume();if(page!=null&&"presentation".equals(currentPage))main.postDelayed(this::renderPresentation,250);}
+    @Override public void onDestroy(){generation.incrementAndGet();try{ShizukuCleanup.detach();}catch(Throwable ignored){}super.onDestroy();}
+
+    private void openSetting(String action){try{startActivity(new Intent(action));}catch(Exception e){toast("Réglage Android indisponible");}}
+    private void openPackage(String pkg){
+        try{Intent i=getPackageManager().getLaunchIntentForPackage(pkg);if(i==null)throw new IllegalStateException();startActivity(i);}
+        catch(Exception e){toast("Application non installée ou non visible");}
+    }
+    private void openAppSettings(String pkg){
+        try{startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:"+pkg)));}
+        catch(Exception e){toast("Réglages indisponibles");}
+    }
+
+    private TextView sectionTitle(String value){TextView v=text(value,28,TEXT,true);v.setPadding(dp(4),dp(6),dp(4),dp(10));return v;}
+    private TextView note(String value){
+        TextView v=text(value,14,MUTED,false);v.setPadding(dp(14),dp(12),dp(14),dp(12));v.setBackground(panelDrawable(PANEL,BORDER,16));LinearLayout.LayoutParams lp=blockParams();v.setLayoutParams(lp);return v;
+    }
+    private LinearLayout card(String title,String body){
+        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(16),dp(14),dp(16),dp(14));box.setBackground(panelDrawable(PANEL_2,BORDER,18));box.setLayoutParams(blockParams());
+        box.addView(text(title,18,TEXT,true));TextView b=text(body,14,MUTED,false);b.setPadding(0,dp(7),0,0);box.addView(b);return box;
+    }
+    private EditText searchBox(String hint,String value){
+        EditText e=new EditText(this);e.setHint(hint);e.setHintTextColor(0xff6f879c);e.setTextColor(TEXT);e.setText(value==null?"":value);e.setSingleLine(true);e.setTextSize(16);e.setPadding(dp(14),0,dp(14),0);e.setBackground(panelDrawable(PANEL,BORDER,14));e.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,dp(54)));return e;
+    }
+    private Button button(String label){
+        Button b=new Button(this);b.setText(label);b.setTextSize(14);b.setAllCaps(false);b.setTypeface(Typeface.DEFAULT,Typeface.BOLD);b.setPadding(dp(14),0,dp(14),0);styleTab(b,false);return b;
+    }
+    private Button action(String label,View.OnClickListener listener){
+        Button b=button(label);b.setTextColor(TEXT);b.setBackground(panelDrawable(0xff0a2437,0xff386782,14));b.setOnClickListener(listener);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,dp(50));lp.setMargins(0,dp(7),0,0);b.setLayoutParams(lp);return b;
+    }
+    private void styleTab(Button b,boolean selected){b.setTextColor(selected?0xff06101a:0xffc3d2df);b.setBackground(panelDrawable(selected?BLUE:0xff091925,selected?0xff72ccff:0xff2b5674,999));}
+    private TextView text(String value,int sp,int color,boolean bold){TextView v=new TextView(this);v.setText(value);v.setTextSize(sp);v.setTextColor(color);v.setGravity(Gravity.START|Gravity.CENTER_VERTICAL);if(bold)v.setTypeface(Typeface.DEFAULT,Typeface.BOLD);return v;}
+    private GradientDrawable panelDrawable(int fill,int stroke,int radiusDp){GradientDrawable g=new GradientDrawable();g.setColor(fill);g.setCornerRadius(dp(radiusDp));g.setStroke(dp(1),stroke);return g;}
+    private LinearLayout.LayoutParams blockParams(){LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT);lp.setMargins(0,0,0,dp(10));return lp;}
+    private int dp(int value){return Math.round(value*getResources().getDisplayMetrics().density);}
+    private String yesNo(boolean value){return value?"OUI":"NON";}
+    private void toast(String value){Toast.makeText(this,value,Toast.LENGTH_SHORT).show();}
 }
