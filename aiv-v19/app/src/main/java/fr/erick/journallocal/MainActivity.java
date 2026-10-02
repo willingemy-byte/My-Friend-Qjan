@@ -20,7 +20,7 @@ public final class MainActivity extends Activity {
     private static volatile String fileStatus="";
     private static final int AUDIT_EXPORT_REQUEST=21,AUDIT_IMPORT_REQUEST=22,AIV_EXPORT_REQUEST=23,AIV_REFERENCE_REQUEST=24,PENALTY_EXPORT_REQUEST=25,PENALTY_IMPORT_REQUEST=26,REFERENCE_EXPORT_REQUEST=27,AUDIT_FULL_EXPORT_REQUEST=28,TRACKER_EXPORT_REQUEST=29;
     private volatile String penaltyImport="";
-    private static final int DEFENSE_EXPORT_REQUEST=30;
+    private static final int DEFENSE_EXPORT_REQUEST=30,CONTROL_EXPORT_REQUEST=31;
     private boolean defenseResumed,defenseResultHandled;
     @Override public void onCreate(Bundle state){
         super.onCreate(state);
@@ -79,6 +79,13 @@ public final class MainActivity extends Activity {
     private volatile String journalReply="";
     private volatile int journalReplyId=0;
     public final class Bridge {
+        @JavascriptInterface public String developerControlTargets(){try{return DeveloperControl.targets(MainActivity.this).toString();}catch(Exception e){return auditError(e);}}
+        @JavascriptInterface public String developerControlState(){try{return DeveloperControl.state(MainActivity.this).toString();}catch(Exception e){return auditError(e);}}
+        @JavascriptInterface public String developerControlPreview(String packages,String action){try{return DeveloperControl.preview(MainActivity.this,packages,action).toString();}catch(Exception e){return auditError(e);}}
+        @JavascriptInterface public String developerControlApply(String stamp,boolean watch){try{return DeveloperControl.apply(MainActivity.this,stamp,watch).toString();}catch(Exception e){return auditError(e);}}
+        @JavascriptInterface public String developerControlReport(){try{return DeveloperControl.report(MainActivity.this).toString();}catch(Exception e){return auditError(e);}}
+        @JavascriptInterface public String developerControlRestore(){try{return DeveloperControl.restore(MainActivity.this).toString();}catch(Exception e){return auditError(e);}}
+        @JavascriptInterface public String developerControlMonitoring(boolean enabled){try{return DeveloperControl.monitoring(MainActivity.this,enabled).toString();}catch(Exception e){return auditError(e);}}
         @JavascriptInterface public String accessPolicy(){return AccessPolicy.CATALOG_JSON;}
         @JavascriptInterface public String deviceIdentity(){return DeviceIdentity.describe().toString();}
         @JavascriptInterface public String appIdentity(String pkg){try{return AppIdentity.forPackage(MainActivity.this,pkg).toString();}catch(Exception e){return auditError(e);}}
@@ -207,6 +214,7 @@ public final class MainActivity extends Activity {
             }else if("aiv-export".equals(command)){chooseExport(AIV_EXPORT_REQUEST,"journal-aiv-signe.jsonl","application/octet-stream");
             }else if("aiv-reference".equals(command)){startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("application/json"),AIV_REFERENCE_REQUEST);
             }else if("audit-scan".equals(command)){PermissionAudit.get(this).scan();
+            }else if("export-control".equals(command)){chooseExport(CONTROL_EXPORT_REQUEST,"aiv-rapport-controle.json","application/json");
             }else if("export-defense".equals(command)){chooseExport(DEFENSE_EXPORT_REQUEST,"aiv-journal-menage-v23.json","application/json");
             }else if("export-penalty".equals(command)){chooseExport(PENALTY_EXPORT_REQUEST,"aiv-bareme-observations.json","application/json");
             }else if("import-penalty".equals(command)){startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("application/json"),PENALTY_IMPORT_REQUEST);
@@ -290,11 +298,11 @@ public final class MainActivity extends Activity {
                 }catch(Exception e){fileStatus="Lecture interrompue : "+e.getMessage();runOnUiThread(()->Toast.makeText(this,fileStatus,Toast.LENGTH_LONG).show());}
             },"journal-import").start();return;
         }
-        if(request==DEFENSE_EXPORT_REQUEST||request==TRACKER_EXPORT_REQUEST||request==REFERENCE_EXPORT_REQUEST||request==AUDIT_FULL_EXPORT_REQUEST||request==PENALTY_EXPORT_REQUEST||request==AUDIT_EXPORT_REQUEST||request==EXPORT_REQUEST||request==ANALYSIS_EXPORT_REQUEST||request==LINES_EXPORT_REQUEST||request==RECOVER_EXPORT_REQUEST||request==CORRELATION_EXPORT_REQUEST||request==LAST_EXPORT_REQUEST){
+        if(request==CONTROL_EXPORT_REQUEST||request==DEFENSE_EXPORT_REQUEST||request==TRACKER_EXPORT_REQUEST||request==REFERENCE_EXPORT_REQUEST||request==AUDIT_FULL_EXPORT_REQUEST||request==PENALTY_EXPORT_REQUEST||request==AUDIT_EXPORT_REQUEST||request==EXPORT_REQUEST||request==ANALYSIS_EXPORT_REQUEST||request==LINES_EXPORT_REQUEST||request==RECOVER_EXPORT_REQUEST||request==CORRELATION_EXPORT_REQUEST||request==LAST_EXPORT_REQUEST){
             fileStatus="Préparation d’un instantané complet…";
             new Thread(()->{try{
                 File ready;if(request==LAST_EXPORT_REQUEST)ready=savedFile("last_export");else if(request==RECOVER_EXPORT_REQUEST)ready=savedFile("recovered");
-                else ready=ExportFiles.stage(this,writer->{if(request==DEFENSE_EXPORT_REQUEST)DefenseStore.get(this).export(writer);else if(request==TRACKER_EXPORT_REQUEST)TrackerIndex.get(this).export(writer);else if(request==REFERENCE_EXPORT_REQUEST)PermissionAudit.get(this).exportReference(writer);else if(request==AUDIT_FULL_EXPORT_REQUEST)PermissionAudit.get(this).export(writer,true);else if(request==PENALTY_EXPORT_REQUEST)writer.write(PermissionAudit.get(this).penaltyConfig().toString(2));else if(request==AUDIT_EXPORT_REQUEST)PermissionAudit.get(this).export(writer);else if(request==ANALYSIS_EXPORT_REQUEST)AnomalyMonitor.get(this).export(writer);else if(request==CORRELATION_EXPORT_REQUEST){String cross=getSharedPreferences("files",0).getString("cross_analysis","");if(cross.isEmpty())throw new IOException("Comparaison indisponible");writer.write(cross);}else EventStore.get(this).export(writer,request==LINES_EXPORT_REQUEST);});
+                else ready=ExportFiles.stage(this,writer->{if(request==CONTROL_EXPORT_REQUEST)DeveloperControl.export(this,writer);else if(request==DEFENSE_EXPORT_REQUEST)DefenseStore.get(this).export(writer);else if(request==TRACKER_EXPORT_REQUEST)TrackerIndex.get(this).export(writer);else if(request==REFERENCE_EXPORT_REQUEST)PermissionAudit.get(this).exportReference(writer);else if(request==AUDIT_FULL_EXPORT_REQUEST)PermissionAudit.get(this).export(writer,true);else if(request==PENALTY_EXPORT_REQUEST)writer.write(PermissionAudit.get(this).penaltyConfig().toString(2));else if(request==AUDIT_EXPORT_REQUEST)PermissionAudit.get(this).export(writer);else if(request==ANALYSIS_EXPORT_REQUEST)AnomalyMonitor.get(this).export(writer);else if(request==CORRELATION_EXPORT_REQUEST){String cross=getSharedPreferences("files",0).getString("cross_analysis","");if(cross.isEmpty())throw new IOException("Comparaison indisponible");writer.write(cross);}else EventStore.get(this).export(writer,request==LINES_EXPORT_REQUEST);});
                 if(ready==null)throw new IOException("Instantané expiré; recommencer la préparation");
                 if(request!=LAST_EXPORT_REQUEST)getSharedPreferences("files",0).edit().putString("last_export",ready.getAbsolutePath()).putString("last_extension",request==LINES_EXPORT_REQUEST?"jsonl":"json").apply();
                 fileStatus=ExportFiles.copy(this,ready,uri);runOnUiThread(()->Toast.makeText(this,fileStatus,Toast.LENGTH_LONG).show());

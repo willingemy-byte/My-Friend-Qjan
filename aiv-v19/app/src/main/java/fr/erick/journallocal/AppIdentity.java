@@ -49,7 +49,7 @@ final class AppIdentity {
             "identity_source","PackageManager signing certificates",
             "identity_scope","Empreinte locale du paquet et de ses signataires; elle change si le signataire courant change. Ce n'est pas une preuve d'identité civile de l'éditeur.");
         String[] peers=context.getPackageManager().getPackagesForUid(uid);
-        out.put("uid_package_count",peers==null?0:peers.length());
+        out.put("uid_package_count",peers==null?0:peers.length);
         out.put("network_attribution_unique",uid%100000>=10000&&peers!=null&&peers.length==1);
         return out;
     }

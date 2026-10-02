@@ -1,0 +1,9 @@
+{
+  "schema": "aiv-config-index/1",
+  "sources": {
+    "DEFAULTS_CONFIG": "aiv-v19/config/defaults.json",
+    "ACCESS_POLICY_CONFIG": "aiv-v19/config/access-policy.json",
+    "PERMISSION_BASELINES_CONFIG": "aiv-v19/app/src/main/assets/permission-baselines.json"
+  },
+  "notes": "Chemins relatifs au dépôt. Aucune identité personnelle, clé privée ni adresse de téléphone. Les noms de stockage Android sont résolus dans les dossiers privés fournis par Android."
+}

@@ -3,7 +3,10 @@
 import argparse
 import json
 import re
+import sys
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from public_config import config_source
 ROOT = Path(__file__).resolve().parents[1]
 
 def validate(data):
@@ -37,7 +40,7 @@ def render(data):
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('--check', action='store_true');args=parser.parse_args()
-    content=render(json.loads((ROOT/'config/access-policy.json').read_text()))
+    content=render(json.loads(config_source('ACCESS_POLICY_CONFIG').read_text()))
     target=ROOT/'app/src/main/java/fr/erick/journallocal/AccessPolicy.java'
     if args.check:
         if not target.is_file() or target.read_text()!=content: raise SystemExit('AccessPolicy.java is stale')
