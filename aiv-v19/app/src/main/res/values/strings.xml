@@ -1,0 +1,3 @@
+<resources>
+    <string name="aiv_screen_integrity_description">All In Visible observe la couche sémantique exposée à Android afin de préparer la détection locale d'anomalies d'affichage. Aucune action automatique sur les autres applications n'est exécutée.</string>
+</resources>
