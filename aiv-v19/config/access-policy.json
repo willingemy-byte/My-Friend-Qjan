@@ -20,12 +20,7 @@
     "fleet.view": 3,
     "fleet.enroll": 3,
     "fleet.policy": 3,
-    "fleet.report": 3,
-    "screen.integrity": 1,
-    "screen.integrity.overlay": 1,
-    "upgrade.checkout": 1,
-    "vpn.identity.sign": 2,
-    "vpn.identity.verify": 2
+    "fleet.report": 3
   },
   "distribution_profile": "personal"
 }
