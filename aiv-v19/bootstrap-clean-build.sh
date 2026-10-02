@@ -132,9 +132,7 @@ printf '%s\n' "$BADGING" | head -n 8
 printf '%s\n' "$BADGING" | grep -q "package: name='com.allinvisible.aiv'"
 printf '%s\n' "$BADGING" | grep -q "versionName='$VERSION'"
 printf '%s\n' "$BADGING" | grep -q "application-label:'All In Visible'"
-if unzip -Z1 "$FINAL" | grep -E '^assets/.*\.html
-echo "FINAL_APK=$FINAL"
- >/dev/null; then
+if unzip -Z1 "$FINAL" | grep -E '^assets/.*\.html$' >/dev/null; then
   echo "Legacy HTML asset unexpectedly packaged in native AIV APK" >&2
   exit 6
 fi
