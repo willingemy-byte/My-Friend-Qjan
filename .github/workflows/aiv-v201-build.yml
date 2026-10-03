@@ -10,7 +10,7 @@ on:
       - ".github/workflows/aiv-v201-build.yml"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -66,3 +66,13 @@ jobs:
             aiv-v19/.toolchain/sdk/build-tools/35.0.0/lib/apksigner.jar
           retention-days: 14
           include-hidden-files: true
+
+      - name: Publish test prerelease
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="aiv-2.0.1-test"
+          gh release delete "$TAG" --yes --cleanup-tag >/dev/null 2>&1 || true
+          gh release create "$TAG"             aiv-v19/build/AIV-2.0.1-unsigned.apk             aiv-v19/build/AIV-2.0.1-unsigned.apk.sha256             aiv-v19/.toolchain/sdk/build-tools/35.0.0/lib/apksigner.jar             --prerelease             --title "AIV 2.0.1 test build"             --notes "Automated unsigned native test build from $GITHUB_SHA."
