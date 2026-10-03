@@ -37,8 +37,10 @@ jobs:
         env:
           AIV_BUILD_MODE: unsigned
         run: |
+          mkdir -p ../build-status
           chmod +x bootstrap-clean-build.sh
-          ./bootstrap-clean-build.sh
+          set -o pipefail
+          ./bootstrap-clean-build.sh 2>&1 | tee ../build-status/aiv-2.0.1-build.log
 
       - name: Native 2.0.1 regression checks
         shell: bash
@@ -76,3 +78,26 @@ jobs:
           TAG="aiv-2.0.1-test"
           gh release delete "$TAG" --yes --cleanup-tag >/dev/null 2>&1 || true
           gh release create "$TAG"             aiv-v19/build/AIV-2.0.1-unsigned.apk             aiv-v19/build/AIV-2.0.1-unsigned.apk.sha256             aiv-v19/.toolchain/sdk/build-tools/35.0.0/lib/apksigner.jar             --prerelease             --title "AIV 2.0.1 test build"             --notes "Automated unsigned native test build from $GITHUB_SHA."
+
+      - name: Commit build status
+        if: always()
+        shell: bash
+        env:
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -e
+          mkdir -p build-status
+          {
+            echo "status=$JOB_STATUS"
+            echo "commit=$GITHUB_SHA"
+            echo "workflow=$GITHUB_WORKFLOW"
+            echo "run_id=$GITHUB_RUN_ID"
+            date -u +"finished_at=%Y-%m-%dT%H:%M:%SZ"
+          } > build-status/aiv-2.0.1-result.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add build-status/aiv-2.0.1-result.txt build-status/aiv-2.0.1-build.log || true
+          if ! git diff --cached --quiet; then
+            git commit -m "Record AIV 2.0.1 build status"
+            git push origin HEAD:fix/aiv-2.0.0-special-access-securityexception
+          fi
