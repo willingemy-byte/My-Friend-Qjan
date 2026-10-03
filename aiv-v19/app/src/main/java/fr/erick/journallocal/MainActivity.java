@@ -58,6 +58,7 @@ public final class MainActivity extends Activity {
     private LinearLayout page;
     private LinearLayout nav;
     private LinearLayout tierFooter;
+    private LinearLayout statusRow;
     private static final int TIER_FREE=1;
     private static final int TIER_PAID=2;
     private static final int TIER_IT=3;
@@ -121,15 +122,10 @@ public final class MainActivity extends Activity {
 
         HorizontalScrollView statusScroll=new HorizontalScrollView(this);
         statusScroll.setHorizontalScrollBarEnabled(false);
-        LinearLayout statusRow=new LinearLayout(this);
+        statusRow=new LinearLayout(this);
         statusRow.setOrientation(LinearLayout.HORIZONTAL);
         statusRow.setPadding(0,dp(9),0,0);
-        statusRow.addView(statusChip("Collecte",RecorderService.running));
-        statusRow.addView(statusChip("Corrélation",NetworkCaptureService.running));
-        boolean shizukuOk=false;
-        try{JSONObject ss=ShizukuCleanup.state(this);shizukuOk=ss.optBoolean("binder")&&ss.optBoolean("authorized");}catch(Throwable ignored){}
-        statusRow.addView(statusChip("Shizuku",shizukuOk));
-        statusRow.addView(statusChip("VPN",NetworkCaptureService.running));
+        refreshHeaderStatus();
         statusScroll.addView(statusRow);
         head.addView(statusScroll);
         root.addView(head,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -466,9 +462,10 @@ public final class MainActivity extends Activity {
                     for(int i=0;i<shown;i++){
                         JSONObject a=matches.optJSONObject(i);if(a==null)continue;
                         JSONArray perms=a.optJSONArray("permissions");
-                        String body=a.optString("package")+"\nUID "+a.optInt("uid",-1)+" · "+(a.optBoolean("system_app")?"Système":"Utilisateur")+" · "+(perms==null?0:perms.length())+" permission(s) déclarée(s)";
-                        LinearLayout c=card(a.optString("label",a.optString("package")),body);
                         String pkg=a.optString("package");
+                        int level=levelForPackage(pkg);
+                        String body=pkg+"\nUID "+a.optInt("uid",-1)+" · "+(a.optBoolean("system_app")?"Système":"Utilisateur")+" · "+(perms==null?0:perms.length())+" permission(s) déclarée(s)";
+                        LinearLayout c=levelCard(levelPrefix(level)+a.optString("label",pkg),body,level);
                         c.setOnClickListener(v->openAppSettings(pkg));
                         page.addView(c);
                     }
@@ -504,9 +501,13 @@ public final class MainActivity extends Activity {
                         int uid=f.optInt("uid",-1);
                         String dest=f.optString("tls_sni");
                         if(dest.isEmpty())dest=f.optString("destination");
-                        String body=(uid>=0?"UID "+uid:"UID non attribué")+" · "+f.optString("protocol")+"\n"+dest+
-                            "\n↑ "+f.optLong("tx_bytes")+" o · ↓ "+f.optLong("rx_bytes")+" o · "+f.optString("attribution_status");
-                        page.addView(card(actor,body));
+                        String pkg=f.optJSONArray("packages")!=null&&f.optJSONArray("packages").length()==1?f.optJSONArray("packages").optString(0):"";
+                        int level=levelForPackage(pkg);
+                        JSONArray trackers=f.optJSONArray("tracker_matches");
+                        String tracker=(trackers!=null&&trackers.length()>0)?trackers.optJSONObject(0).optString("name","tracker"):"—";
+                        String body=shortTime(Math.max(f.optLong("first_outbound_ms"),f.optLong("first_inbound_ms")))+" · "+(uid>=0?"UID "+uid:"UID non attribué")+" · "+f.optString("protocol")+"\n"+
+                            "Endpoint : "+dest+"\nTracker : "+tracker+"\n↑ "+formatBytes(f.optLong("tx_bytes"))+" · ↓ "+formatBytes(f.optLong("rx_bytes"))+" · "+f.optString("attribution_status");
+                        page.addView(levelCard(levelPrefix(level)+actor,body,level));
                     }
                 });
             }catch(Exception e){
@@ -594,6 +595,7 @@ public final class MainActivity extends Activity {
                 startForegroundService(new Intent(this,NetworkCaptureService.class));
             }
             toast("Collecte demandée");
+            refreshHeaderStatus();
             main.postDelayed(this::renderPresentation,700);
         }catch(Exception e){toast("Démarrage impossible : "+e.getClass().getSimpleName());}
     }
@@ -606,7 +608,7 @@ public final class MainActivity extends Activity {
         }
     }
 
-    @Override public void onResume(){super.onResume();if(page!=null&&"presentation".equals(currentPage))main.postDelayed(this::renderPresentation,250);}
+    @Override public void onResume(){super.onResume();if(statusRow!=null)refreshHeaderStatus();if(page!=null&&"presentation".equals(currentPage))main.postDelayed(this::renderPresentation,250);}
     @Override public void onDestroy(){generation.incrementAndGet();try{ShizukuCleanup.detach();}catch(Throwable ignored){}super.onDestroy();}
 
     private void openSetting(String action){try{startActivity(new Intent(action));}catch(Exception e){toast("Réglage Android indisponible");}}
@@ -617,6 +619,19 @@ public final class MainActivity extends Activity {
     private void openAppSettings(String pkg){
         try{startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:"+pkg)));}
         catch(Exception e){toast("Réglages indisponibles");}
+    }
+
+    private void refreshHeaderStatus(){
+        if(statusRow==null)return;
+        statusRow.removeAllViews();
+        statusRow.addView(statusChip("Collecte",RecorderService.running));
+        statusRow.addView(statusChip("Corrélation",NetworkCaptureService.running));
+        boolean shizukuOk=false;
+        try{JSONObject ss=ShizukuCleanup.state(this);shizukuOk=ss.optBoolean("binder")&&ss.optBoolean("authorized");}catch(Throwable ignored){}
+        statusRow.addView(statusChip("Shizuku",shizukuOk));
+        statusRow.addView(statusChip("VPN",NetworkCaptureService.running));
+        JSONObject integrity=ScreenIntegrityService.state();
+        statusRow.addView(statusChip("Affichage",integrity.optBoolean("connected")));
     }
 
     private TextView statusChip(String label,boolean active){
