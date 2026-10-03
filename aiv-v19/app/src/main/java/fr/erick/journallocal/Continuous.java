@@ -5,7 +5,7 @@ import android.net.VpnService;
 /** Persist user intent separately from process liveness. Never clears a database. */
 public final class Continuous {
     static android.content.SharedPreferences prefs(Context c){return c.getSharedPreferences("continuous",0);}
-    public static void initialize(Context c){if(!prefs(c).contains("enabled"))prefs(c).edit().putBoolean("enabled",true).putBoolean("vpn_enabled",true).putBoolean("analysis_enabled",true).apply();}
+    public static void initialize(Context c){if(!prefs(c).contains("enabled"))prefs(c).edit().putBoolean("enabled",true).putBoolean("vpn_enabled",false).putBoolean("analysis_enabled",true).apply();}
     public static boolean enabled(Context c){return prefs(c).getBoolean("enabled",false);}
     public static void start(Context c){
         if(!enabled(c))return;
