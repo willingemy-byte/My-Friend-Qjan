@@ -2,11 +2,13 @@ package fr.erick.journallocal;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.ColorDrawable;
 import android.net.Uri;
 import android.net.VpnService;
 import android.os.Build;
@@ -24,6 +26,8 @@ import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
+import android.widget.TableLayout;
+import android.widget.TableRow;
 import android.widget.TextView;
 import android.widget.Toast;
 import org.json.JSONArray;
@@ -285,36 +289,68 @@ public final class MainActivity extends Activity {
     private void renderSpecialAccess(){
         page.removeAllViews();
         page.addView(sectionTitle("Accès spéciaux"));
-        page.addView(note("AIV demande seulement les accès qui servent à observer ou protéger l'appareil. Cette page distingue visibilité, contrôle Shizuku et accès spéciaux Android; elle ne transforme pas AIV en application système."));
+        page.addView(note("AIV demande seulement les accès qui servent à observer ou protéger l'appareil. Les états sont présentés en tableau; Ouvrir donne le détail et, lorsqu'il existe, le raccourci Android correspondant."));
         try{
             JSONObject s=SpecialAccess.status(this);
-            page.addView(card("Visibilité des applications",
-                "QUERY_ALL_PACKAGES : "+yesNo(s.optBoolean("query_all_packages"))+
-                "\nApplications visibles : "+s.optInt("visible_packages",-1)+
-                "\nAIV visible dans son propre inventaire : "+yesNo(s.optBoolean("self_visible"))+
-                "\nBut : lire package, version, UID, certificat et permissions déclarées/accordées."));
-            page.addView(card("Accès d'utilisation",
-                "Usage Access : "+yesNo(s.optBoolean("usage_access"))+
-                "\nBut : contexte d'utilisation et statistiques Android. L'utilisateur garde le contrôle du commutateur système."));
-            page.addView(card("VPN et Shizuku",
-                "Autorisation VPN AIV : "+yesNo(s.optBoolean("vpn_prepared"))+
-                "\nShizuku connecté : "+yesNo(s.optBoolean("shizuku_binder"))+
-                "\nShizuku autorisé : "+yesNo(s.optBoolean("shizuku_authorized"))+
-                "\nCes deux accès sont distincts : le VPN observe les flux; Shizuku exécute les actions de contrôle validées."));
-            page.addView(card("Fichiers",
-                "Accès à tous les fichiers : "+(s.optBoolean("all_files_declared")?(s.optBoolean("all_files_granted")?"ACTIF":"DÉCLARÉ, NON ACTIF"):"NON DEMANDÉ")+
-                "\nAIV 2.0.0 ne le demande pas par défaut : cet accès couvre surtout le stockage partagé et ne donne pas accès aux données privées /data/data des autres applications."));
-            page.addView(card("Autres accès",
-                "Superposition : "+yesNo(s.optBoolean("overlay"))+
-                "\nModifier les réglages système : "+yesNo(s.optBoolean("write_settings"))+
-                "\nInstaller des applis inconnues : "+yesNo(s.optBoolean("can_request_package_installs"))+
-                "\nExemption optimisation batterie : "+yesNo(s.optBoolean("ignore_battery_optimizations"))+
-                "\nAIV ne demande pas ces accès juste parce qu’ils existent; ils restent optionnels tant qu’une fonction précise ne les exige pas."));
+            String[] headers={"Accès","État","Détail","Ouvrir"};
+            int[] widths={230,170,430,100};
+            TableLayout table=dataTable(headers,widths);
+
+            String visibility=yesNo(s.optBoolean("query_all_packages"));
+            addTableRow(table,new String[]{"Visibilité des applications",visibility,
+                s.optInt("visible_packages",-1)+" applications visibles · AIV visible : "+yesNo(s.optBoolean("self_visible"))},
+                null,widths,0,null,null,v->showDetail("Visibilité des applications",
+                    "QUERY_ALL_PACKAGES : "+visibility+"\nApplications visibles : "+s.optInt("visible_packages",-1)+"\nAIV visible : "+yesNo(s.optBoolean("self_visible"))+
+                    "\nBut : lire package, version, UID, certificat et permissions déclarées/accordées.",
+                    "Réglages AIV",()->openAppSettings(getPackageName())));
+
+            String usage=yesNo(s.optBoolean("usage_access"));
+            addTableRow(table,new String[]{"Accès d'utilisation",usage,"Contexte d'utilisation et statistiques Android."},
+                null,widths,0,null,null,v->showDetail("Accès d'utilisation",
+                    "Usage Access : "+usage+"\nL'utilisateur garde le contrôle du commutateur système.",
+                    "Réglages Android",()->openSetting(Settings.ACTION_USAGE_ACCESS_SETTINGS)));
+
+            String vpn=yesNo(s.optBoolean("vpn_prepared"));
+            addTableRow(table,new String[]{"VPN AIV",vpn,"Observation locale des flux réseau; distincte de Shizuku."},
+                null,widths,0,null,null,v->showDetail("VPN AIV",
+                    "Autorisation VPN AIV : "+vpn+"\nLe VPN observe les métadonnées des flux sans déchiffrer TLS.",
+                    "Réglages VPN",()->openSetting(Settings.ACTION_VPN_SETTINGS)));
+
+            String shizuku=s.optBoolean("shizuku_authorized")?"AUTORISÉ":(s.optBoolean("shizuku_binder")?"CONNECTÉ, NON AUTORISÉ":"INACTIF");
+            addTableRow(table,new String[]{"Shizuku",shizuku,"Contrôle validé distinct du VPN."},
+                null,widths,0,null,null,v->showDetail("Shizuku",
+                    "Binder : "+yesNo(s.optBoolean("shizuku_binder"))+"\nAutorisé : "+yesNo(s.optBoolean("shizuku_authorized")),
+                    "Ouvrir Shizuku",()->openPackage("moe.shizuku.privileged.api")));
+
+            String files=s.optBoolean("all_files_declared")?(s.optBoolean("all_files_granted")?"ACTIF":"DÉCLARÉ, NON ACTIF"):"NON DEMANDÉ";
+            addTableRow(table,new String[]{"Tous les fichiers",files,"Stockage partagé seulement; pas /data/data des autres applications."},
+                null,widths,0,null,null,v->showDetail("Tous les fichiers",
+                    "État : "+files+"\nAIV 2.0.0 ne demande pas cet accès par défaut.",
+                    "Accès spéciaux Android",()->openSetting("android.settings.MANAGE_SPECIAL_APP_ACCESSES")));
+
+            String overlay=yesNo(s.optBoolean("overlay"));
+            addTableRow(table,new String[]{"Superposition",overlay,"Dessiner par-dessus d'autres applications."},
+                null,widths,0,null,null,v->showDetail("Superposition","État : "+overlay,null,null));
+
+            String writeSettings=yesNo(s.optBoolean("write_settings"));
+            addTableRow(table,new String[]{"Modifier réglages système",writeSettings,"Accès spécial Android; non requis par défaut."},
+                null,widths,0,null,null,v->showDetail("Modifier les réglages système","État : "+writeSettings,
+                    "Accès spéciaux Android",()->openSetting("android.settings.MANAGE_SPECIAL_APP_ACCESSES")));
+
+            boolean installDeclared=s.optBoolean("request_install_packages_declared");
+            String install=installDeclared?(s.optBoolean("can_request_package_installs")?"ACTIF":"DÉCLARÉ, NON ACTIF"):"NON DEMANDÉ";
+            addTableRow(table,new String[]{"Installer applis inconnues",install,"AIV ne déclare pas REQUEST_INSTALL_PACKAGES dans cette version."},
+                null,widths,0,null,null,v->showDetail("Installer des applis inconnues",
+                    "REQUEST_INSTALL_PACKAGES déclaré : "+yesNo(installDeclared)+"\nCapacité active : "+yesNo(s.optBoolean("can_request_package_installs")),
+                    "Accès spéciaux Android",()->openSetting("android.settings.MANAGE_SPECIAL_APP_ACCESSES")));
+
+            String battery=yesNo(s.optBoolean("ignore_battery_optimizations"));
+            addTableRow(table,new String[]{"Optimisation batterie",battery,"Exemption d'optimisation Android."},
+                null,widths,0,null,null,v->showDetail("Optimisation batterie","Exemption active : "+battery,
+                    "Réglages Android",()->openSetting(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)));
+
+            page.addView(tableScroller(table));
         }catch(Exception e){page.addView(card("Accès spéciaux","Lecture impossible : "+e.getClass().getSimpleName()));}
-        page.addView(action("Ouvrir Accès d'utilisation",v->openSetting(Settings.ACTION_USAGE_ACCESS_SETTINGS)));
-        page.addView(action("Ouvrir Accès spéciaux Android",v->openSetting("android.settings.MANAGE_SPECIAL_APP_ACCESSES")));
-        page.addView(action("Ouvrir les réglages VPN",v->openSetting(Settings.ACTION_VPN_SETTINGS)));
-        page.addView(action("Ouvrir les options développeur",v->openSetting(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)));
     }
 
     private void renderJournal(String query){
@@ -325,6 +361,7 @@ public final class MainActivity extends Activity {
         EditText search=searchBox("Application, domaine, action, UID ou ID",query);
         page.addView(search);
         page.addView(action("Rechercher / actualiser",v->renderJournal(search.getText().toString())));
+        page.addView(note("Double-tape une valeur du tableau pour la placer dans la recherche. Le bouton Ouvrir affiche le détail complet de la ligne."));
         TextView loading=text("Lecture du journal…",14,MUTED,false);page.addView(loading);
         new Thread(()->{
             try{
@@ -335,17 +372,25 @@ public final class MainActivity extends Activity {
                     page.removeView(loading);
                     page.addView(text(data.optLong("matched")+" résultat(s) · "+data.optLong("total")+" événement(s)",14,MUTED,true));
                     if(rows==null)return;
+                    String[] headers={"Niv.","Heure","Application","UID","Action","Destination","Détail"};
+                    int[] widths={64,120,190,90,220,280,100};
+                    TableLayout table=dataTable(headers,widths);
                     for(int i=0;i<rows.length();i++){
                         JSONObject e=rows.optJSONObject(i);if(e==null)continue;
                         JSONObject d=e.optJSONObject("details");
                         int uid=d==null?-1:d.optInt("uid",-1);
                         String pkg=uniquePackage(d);
                         int level=levelForPackage(pkg);
-                        String title=levelPrefix(level)+e.optString("app","Android");
-                        String body=shortTime(e.optLong("timestamp_ms"))+" · UID "+(uid<0?"—":uid)+"\n"+
-                            e.optString("action")+"\n"+e.optString("destination");
-                        page.addView(levelCard(title,body,level));
+                        String app=e.optString("app","Android");
+                        String action=e.optString("action","—");
+                        String destination=e.optString("destination","—");
+                        String uidText=uid<0?"—":String.valueOf(uid);
+                        String[] values={levelShort(level),shortTime(e.optLong("timestamp_ms")),app,uidText,action,destination};
+                        String[] filters={null,null,app,uid<0?null:uidText,action,destination};
+                        addTableRow(table,values,filters,widths,level,search,()->renderJournal(search.getText().toString()),
+                            v->showJsonDetail("Journal · "+app,e,pkg));
                     }
+                    page.addView(tableScroller(table));
                 });
             }catch(Exception e){main.post(()->{if(ticket==generation.get()){page.removeView(loading);page.addView(card("Erreur journal",e.getClass().getSimpleName()));}});}
         },"aiv-native-journal").start();
@@ -359,6 +404,7 @@ public final class MainActivity extends Activity {
         EditText search=searchBox("Application, tracker ou destination",query);
         page.addView(search);
         page.addView(action("Actualiser",v->{TrackerIndex.get(this).request();renderTrackers(search.getText().toString());}));
+        page.addView(note("Double-tape une application, un package ou un tracker pour filtrer. Ouvrir affiche le groupe complet."));
         TextView loading=text("Indexation des traqueurs…",14,MUTED,false);page.addView(loading);
         new Thread(()->{
             try{
@@ -369,17 +415,24 @@ public final class MainActivity extends Activity {
                     if(ticket!=generation.get()||!"trackers".equals(currentPage))return;
                     page.removeView(loading);
                     page.addView(text((rows==null?0:rows.length())+" groupe(s) affiché(s) · "+data.optLong("total")+" total",14,MUTED,true));
-                    if(status!=null)page.addView(card("Index Exodus","Événements moulinés : "+status.optLong("checkpoint")+" / "+status.optLong("latest_event")+"\nGroupes : "+status.optLong("tracker_groups")+" · étapes : "+status.optLong("trail_steps")));
+                    if(status!=null)page.addView(note("Index Exodus : "+status.optLong("checkpoint")+" / "+status.optLong("latest_event")+" événements · "+status.optLong("tracker_groups")+" groupes · "+status.optLong("trail_steps")+" étapes."));
                     if(rows==null)return;
+                    String[] headers={"Niv.","Application","Tracker","Package","Trajets","Dest.","↑","↓","Dernier","Détail"};
+                    int[] widths={64,190,200,250,90,90,100,100,130,100};
+                    TableLayout table=dataTable(headers,widths);
                     for(int i=0;i<rows.length();i++){
                         JSONObject x=rows.optJSONObject(i);if(x==null)continue;
                         String pkg=x.optString("package_name");
                         int level=levelForPackage(pkg);
-                        String body=(pkg.isEmpty()?"Paquet non attribué":pkg)+"\n"+
-                            x.optLong("journeys")+" trajet(s) · "+x.optLong("destinations_count")+" destination(s) · ↑ "+formatBytes(x.optLong("tx_bytes"))+" · ↓ "+formatBytes(x.optLong("rx_bytes"))+
-                            "\nDernier : "+shortTime(x.optLong("last_ms"));
-                        page.addView(levelCard(levelPrefix(level)+x.optString("app")+" → "+x.optString("tracker_name"),body,level));
+                        String app=x.optString("app","—");
+                        String tracker=x.optString("tracker_name","—");
+                        String pkgText=pkg.isEmpty()?"—":pkg;
+                        String[] values={levelShort(level),app,tracker,pkgText,String.valueOf(x.optLong("journeys")),String.valueOf(x.optLong("destinations_count")),formatBytes(x.optLong("tx_bytes")),formatBytes(x.optLong("rx_bytes")),shortTime(x.optLong("last_ms"))};
+                        String[] filters={null,app,tracker,pkg.isEmpty()?null:pkg,null,null,null,null,null};
+                        addTableRow(table,values,filters,widths,level,search,()->renderTrackers(search.getText().toString()),
+                            v->showJsonDetail("Traqueur · "+app+" → "+tracker,x,pkg));
                     }
+                    page.addView(tableScroller(table));
                 });
             }catch(Exception e){main.post(()->{if(ticket==generation.get()){page.removeView(loading);page.addView(card("Erreur traqueurs",e.getClass().getSimpleName()+": "+String.valueOf(e.getMessage())));}});}
         },"aiv-native-trackers").start();
@@ -393,6 +446,7 @@ public final class MainActivity extends Activity {
         EditText search=searchBox("Application, signal ou contexte",query);
         page.addView(search);
         page.addView(action("Actualiser",v->{AnomalyMonitor.request(this);renderAnomalies(search.getText().toString());}));
+        page.addView(note("Double-tape une valeur utile pour filtrer. Ouvrir affiche le détail complet de l'anomalie."));
         TextView loading=text("Lecture de l'analyse…",14,MUTED,false);page.addView(loading);
         new Thread(()->{
             try{
@@ -403,6 +457,9 @@ public final class MainActivity extends Activity {
                     page.removeView(loading);
                     page.addView(text(data.optLong("total")+" groupe(s)",14,MUTED,true));
                     if(rows==null)return;
+                    String[] headers={"Niv.","Heure","Application","Signal","Sévérité","Occ.","Explication","Détail"};
+                    int[] widths={64,120,190,220,110,80,360,100};
+                    TableLayout table=dataTable(headers,widths);
                     for(int i=0;i<rows.length();i++){
                         JSONObject x=rows.optJSONObject(i);if(x==null)continue;
                         JSONObject identity=x.optJSONObject("identity"),details=identity==null?null:identity.optJSONObject("details");
@@ -410,9 +467,16 @@ public final class MainActivity extends Activity {
                         int level=levelForPackage(pkg);
                         if(level==0&&"attention".equals(x.optString("severity")))level=4;
                         String actor=x.optString("actor",identity==null?"—":identity.optString("app","—"));
-                        String body=shortTime(x.optLong("last_ms"))+" · "+x.optString("severity")+" · "+x.optLong("occurrences",1)+" occurrence(s)\n"+x.optString("explanation");
-                        page.addView(levelCard(levelPrefix(level)+actor+" · "+x.optString("title"),body,level));
+                        String title=x.optString("title","—");
+                        String severity=x.optString("severity","—");
+                        String explanation=x.optString("explanation","—");
+                        String[] values={levelShort(level),shortTime(x.optLong("last_ms")),actor,title,severity,String.valueOf(x.optLong("occurrences",1)),explanation};
+                        String[] filters={null,null,actor,title,severity,null,explanation};
+                        final int rowLevel=level;
+                        addTableRow(table,values,filters,widths,rowLevel,search,()->renderAnomalies(search.getText().toString()),
+                            v->showJsonDetail("Anomalie · "+actor+" · "+title,x,pkg));
                     }
+                    page.addView(tableScroller(table));
                 });
             }catch(Exception e){main.post(()->{if(ticket==generation.get()){page.removeView(loading);page.addView(card("Erreur anomalies",e.getClass().getSimpleName()+": "+String.valueOf(e.getMessage())));}});}
         },"aiv-native-anomalies").start();
@@ -422,14 +486,21 @@ public final class MainActivity extends Activity {
         page.removeAllViews();
         page.addView(sectionTitle("Intégrité d'affichage"));
         JSONObject s=ScreenIntegrityService.state();
-        page.addView(card("Surveillance AIV",
-            "Service : "+(s.optBoolean("connected")?"ACTIF":"INACTIF")+"\n"+
-            "État : "+s.optString("status")+"\n"+
-            "Application observée : "+s.optString("observed_package","—")+"\n"+
-            "Nœuds : "+s.optInt("node_count")+" · texte : "+s.optInt("text_node_count")+"\n"+
-            "Comparaison : "+s.optString("comparison_status")));
-        page.addView(note("AIV observe la couche sémantique Android lorsque l'utilisateur active volontairement le service d'accessibilité. Les divergences visuelles ne sont signalées que lorsqu'une seconde preuve permet une comparaison; l'absence de preuve reste 'indéterminée'."));
-        page.addView(action("Activer / régler l'accessibilité AIV",v->openSetting(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
+        page.addView(note("AIV observe la couche sémantique Android lorsque l'utilisateur active volontairement le service d'accessibilité. L'absence de seconde preuve reste indéterminée."));
+        String[] headers={"Élément","État","Détail","Ouvrir"};
+        int[] widths={220,170,430,100};
+        TableLayout table=dataTable(headers,widths);
+        String service=s.optBoolean("connected")?"ACTIF":"INACTIF";
+        addTableRow(table,new String[]{"Service d'intégrité",service,s.optString("status","—")},null,widths,0,null,null,
+            v->showDetail("Service d'intégrité","Service : "+service+"\nÉtat : "+s.optString("status","—"),
+                "Réglages accessibilité",()->openSetting(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
+        addTableRow(table,new String[]{"Application observée",s.optString("observed_package","—"),"Package actuellement exposé par le service."},null,widths,0,null,null,
+            v->showJsonDetail("Intégrité · état complet",s,null));
+        addTableRow(table,new String[]{"Arbre sémantique",s.optInt("node_count")+" nœuds",s.optInt("text_node_count")+" nœuds texte"},null,widths,0,null,null,
+            v->showJsonDetail("Intégrité · arbre sémantique",s,null));
+        addTableRow(table,new String[]{"Comparaison",s.optString("comparison_status","—"),"Une divergence n'est signalée que si une seconde preuve est disponible."},null,widths,0,null,null,
+            v->showJsonDetail("Intégrité · comparaison",s,null));
+        page.addView(tableScroller(table));
         page.addView(action("Actualiser l'état",v->renderIntegrity()));
     }
 
@@ -442,6 +513,7 @@ public final class MainActivity extends Activity {
         Button go=action("Rechercher",v->renderApplications(search.getText().toString()));
         page.addView(search);
         page.addView(go);
+        page.addView(note("Double-tape le nom ou le package pour filtrer. Ouvrir affiche tout le dossier; Réglages Android reste disponible depuis le détail."));
         TextView loading=text("Lecture de l'inventaire…",14,MUTED,false);page.addView(loading);
         new Thread(()->{
             try{
@@ -459,16 +531,24 @@ public final class MainActivity extends Activity {
                     page.removeView(loading);
                     page.addView(text(matches.length()+" résultat(s)",14,MUTED,true));
                     int shown=Math.min(matches.length(),120);
+                    String[] headers={"Niv.","Application","Package","UID","Type","Permissions","Détail"};
+                    int[] widths={64,200,280,95,120,120,100};
+                    TableLayout table=dataTable(headers,widths);
                     for(int i=0;i<shown;i++){
                         JSONObject a=matches.optJSONObject(i);if(a==null)continue;
                         JSONArray perms=a.optJSONArray("permissions");
                         String pkg=a.optString("package");
+                        String label=a.optString("label",pkg);
                         int level=levelForPackage(pkg);
-                        String body=pkg+"\nUID "+a.optInt("uid",-1)+" · "+(a.optBoolean("system_app")?"Système":"Utilisateur")+" · "+(perms==null?0:perms.length())+" permission(s) déclarée(s)";
-                        LinearLayout c=levelCard(levelPrefix(level)+a.optString("label",pkg),body,level);
-                        c.setOnClickListener(v->openAppSettings(pkg));
-                        page.addView(c);
+                        String uid=String.valueOf(a.optInt("uid",-1));
+                        String type=a.optBoolean("system_app")?"Système":"Utilisateur";
+                        String count=String.valueOf(perms==null?0:perms.length());
+                        String[] values={levelShort(level),label,pkg,uid,type,count};
+                        String[] filters={null,label,pkg,null,null,null};
+                        addTableRow(table,values,filters,widths,level,search,()->renderApplications(search.getText().toString()),
+                            v->showJsonDetail("Application · "+label,a,pkg));
                     }
+                    page.addView(tableScroller(table));
                     if(matches.length()>shown)page.addView(note((matches.length()-shown)+" autre(s) résultat(s) non affiché(s) dans cette vue bornée."));
                 });
             }catch(Exception e){
@@ -485,6 +565,7 @@ public final class MainActivity extends Activity {
         EditText search=searchBox("Application, UID, IP, domaine ou ID",query);
         page.addView(search);
         page.addView(action("Actualiser",v->renderFlows(search.getText().toString())));
+        page.addView(note("Double-tape une valeur du tableau pour la placer dans la recherche. Ouvrir montre la ligne complète et les preuves conservées."));
         TextView loading=text("Lecture des flux…",14,MUTED,false);page.addView(loading);
         new Thread(()->{
             try{
@@ -495,20 +576,28 @@ public final class MainActivity extends Activity {
                     page.removeView(loading);
                     page.addView(text((flows==null?0:flows.length())+" flux · "+data.optInt("scanned_events")+" événements examinés",14,MUTED,true));
                     if(flows==null)return;
+                    String[] headers={"Niv.","Heure","Application","UID","Proto","Destination","Tracker","↑","↓","Détail"};
+                    int[] widths={64,120,190,90,90,260,190,100,100,100};
+                    TableLayout table=dataTable(headers,widths);
                     for(int i=0;i<flows.length();i++){
                         JSONObject f=flows.optJSONObject(i);if(f==null)continue;
                         String actor=f.optString("actor","Application non identifiée");
                         int uid=f.optInt("uid",-1);
                         String dest=f.optString("tls_sni");
-                        if(dest.isEmpty())dest=f.optString("destination");
-                        String pkg=f.optJSONArray("packages")!=null&&f.optJSONArray("packages").length()==1?f.optJSONArray("packages").optString(0):"";
+                        if(dest.isEmpty())dest=f.optString("destination","—");
+                        JSONArray packages=f.optJSONArray("packages");
+                        String pkg=packages!=null&&packages.length()==1?packages.optString(0):"";
                         int level=levelForPackage(pkg);
                         JSONArray trackers=f.optJSONArray("tracker_matches");
-                        String tracker=(trackers!=null&&trackers.length()>0)?trackers.optJSONObject(0).optString("name","tracker"):"—";
-                        String body=shortTime(Math.max(f.optLong("first_outbound_ms"),f.optLong("first_inbound_ms")))+" · "+(uid>=0?"UID "+uid:"UID non attribué")+" · "+f.optString("protocol")+"\n"+
-                            "Endpoint : "+dest+"\nTracker : "+tracker+"\n↑ "+formatBytes(f.optLong("tx_bytes"))+" · ↓ "+formatBytes(f.optLong("rx_bytes"))+" · "+f.optString("attribution_status");
-                        page.addView(levelCard(levelPrefix(level)+actor,body,level));
+                        String tracker=(trackers!=null&&trackers.length()>0&&trackers.optJSONObject(0)!=null)?trackers.optJSONObject(0).optString("name","tracker"):"—";
+                        String uidText=uid<0?"—":String.valueOf(uid);
+                        String protocol=f.optString("protocol","—");
+                        String[] values={levelShort(level),shortTime(Math.max(f.optLong("first_outbound_ms"),f.optLong("first_inbound_ms"))),actor,uidText,protocol,dest,tracker,formatBytes(f.optLong("tx_bytes")),formatBytes(f.optLong("rx_bytes"))};
+                        String[] filters={null,null,actor,uid<0?null:uidText,protocol,dest,"—".equals(tracker)?null:tracker,null,null};
+                        addTableRow(table,values,filters,widths,level,search,()->renderFlows(search.getText().toString()),
+                            v->showJsonDetail("Flux · "+actor,f,pkg));
                     }
+                    page.addView(tableScroller(table));
                 });
             }catch(Exception e){
                 main.post(()->{if(ticket==generation.get()){page.removeView(loading);page.addView(card("Erreur flux",e.getClass().getSimpleName()+": "+String.valueOf(e.getMessage())));}});
@@ -519,17 +608,27 @@ public final class MainActivity extends Activity {
     private void renderShizuku(){
         page.removeAllViews();
         page.addView(sectionTitle("Shizuku"));
-        page.addView(note("User Paid · aperçu du contrôle. Cette page montre l'état réel de Shizuku. Les opérations de contrôle devront être liées à un droit Paid vérifié avant commercialisation."));
-        page.addView(card("Accès commercial","Aperçu User Paid actif pour la présentation. Le paiement et l'entitlement vérifié ne sont pas encore connectés; aucune fonction payante ne doit dépendre uniquement de ce sélecteur visuel."));
+        page.addView(note("User Paid · aperçu du contrôle. L'état réel est affiché en tableau; les opérations de contrôle devront rester liées à un droit Paid vérifié avant commercialisation."));
         try{
             JSONObject s=ShizukuCleanup.state(this);
-            page.addView(card("État Shizuku",
-                "Binder : "+yesNo(s.optBoolean("binder"))+"\nAutorisé : "+yesNo(s.optBoolean("authorized"))+"\nUID serveur : "+s.optInt("server_uid",-1)+"\nCandidats actuels : "+s.optInt("candidates",-1)+"\n"+s.optString("status")));
+            String[] headers={"Élément","État","Détail","Ouvrir"};
+            int[] widths={220,170,430,100};
+            TableLayout table=dataTable(headers,widths);
+            addTableRow(table,new String[]{"Accès commercial","APERÇU","Le paiement et l'entitlement vérifié ne sont pas encore connectés."},null,widths,0,null,null,
+                v->showDetail("Accès commercial","Aperçu User Paid actif pour la présentation. Aucune fonction payante ne doit dépendre uniquement de ce sélecteur visuel.",null,null));
+            addTableRow(table,new String[]{"Binder",yesNo(s.optBoolean("binder")),"Connexion au service Shizuku."},null,widths,0,null,null,
+                v->showJsonDetail("Shizuku · état complet",s,null));
+            addTableRow(table,new String[]{"Autorisation",yesNo(s.optBoolean("authorized")),"Autorisation accordée à AIV via Shizuku."},null,widths,0,null,null,
+                v->showJsonDetail("Shizuku · autorisation",s,null));
+            addTableRow(table,new String[]{"UID serveur",String.valueOf(s.optInt("server_uid",-1)),"UID rapporté par le serveur Shizuku."},null,widths,0,null,null,
+                v->showJsonDetail("Shizuku · serveur",s,null));
+            addTableRow(table,new String[]{"Candidats actuels",String.valueOf(s.optInt("candidates",-1)),"Applications actuellement candidates aux actions contrôlées."},null,widths,0,null,null,
+                v->showJsonDetail("Shizuku · candidats",s,null));
+            addTableRow(table,new String[]{"Statut",s.optString("status","—"),"État brut du module Shizuku."},null,widths,0,null,null,
+                v->showDetail("Shizuku",s.optString("status","—"),"Ouvrir Shizuku",()->openPackage("moe.shizuku.privileged.api")));
+            page.addView(tableScroller(table));
         }catch(Exception e){page.addView(card("État Shizuku","Indisponible : "+e.getClass().getSimpleName()));}
         page.addView(action("Actualiser",v->renderShizuku()));
-        page.addView(action("Ouvrir Shizuku",v->openPackage("moe.shizuku.privileged.api")));
-        page.addView(action("Ouvrir les options développeur",v->openSetting(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)));
-        page.addView(action("Ouvrir les réglages VPN",v->openSetting(Settings.ACTION_VPN_SETTINGS)));
     }
 
     private void renderUpgradeGate(){
@@ -667,6 +766,96 @@ public final class MainActivity extends Activity {
     private TextView note(String value){
         TextView v=text(value,14,MUTED,false);v.setPadding(dp(14),dp(12),dp(14),dp(12));v.setBackground(panelDrawable(PANEL,BORDER,16));LinearLayout.LayoutParams lp=blockParams();v.setLayoutParams(lp);return v;
     }
+    private HorizontalScrollView tableScroller(TableLayout table){
+        HorizontalScrollView scroll=new HorizontalScrollView(this);
+        scroll.setHorizontalScrollBarEnabled(true);
+        scroll.setFillViewport(false);
+        scroll.addView(table,new HorizontalScrollView.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,ViewGroup.LayoutParams.WRAP_CONTENT));
+        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.setMargins(0,dp(8),0,dp(10));
+        scroll.setLayoutParams(lp);
+        return scroll;
+    }
+
+    private TableLayout dataTable(String[] headers,int[] widthsDp){
+        TableLayout table=new TableLayout(this);
+        table.setStretchAllColumns(false);
+        table.setShrinkAllColumns(false);
+        table.setBackground(panelDrawable(PANEL,BORDER,12));
+        table.setShowDividers(LinearLayout.SHOW_DIVIDER_MIDDLE);
+        table.setDividerDrawable(new ColorDrawable(BORDER));
+        int min=0;for(int w:widthsDp)min+=w;
+        table.setMinimumWidth(dp(min));
+        TableRow header=new TableRow(this);
+        header.setBackgroundColor(0xff0b2b40);
+        for(int i=0;i<headers.length;i++)header.addView(tableCell(headers[i],widthsDp[i],true,TEXT));
+        table.addView(header);
+        return table;
+    }
+
+    private TextView tableCell(String value,int widthDp,boolean header,int color){
+        TextView cell=text(value==null?"—":value,header?13:14,color,header);
+        cell.setGravity(Gravity.START|Gravity.CENTER_VERTICAL);
+        cell.setPadding(dp(10),dp(header?10:9),dp(10),dp(header?10:9));
+        cell.setMaxLines(header?2:5);
+        TableRow.LayoutParams lp=new TableRow.LayoutParams(dp(widthDp),ViewGroup.LayoutParams.WRAP_CONTENT);
+        cell.setLayoutParams(lp);
+        return cell;
+    }
+
+    private void addTableRow(TableLayout table,String[] values,String[] filters,int[] widthsDp,int level,EditText search,Runnable refresh,View.OnClickListener openListener){
+        TableRow row=new TableRow(this);
+        row.setBackgroundColor(((table.getChildCount()-1)&1)==0?PANEL_2:PANEL);
+        for(int i=0;i<values.length;i++){
+            int color=(i==0&&level>0)?levelColor(level):TEXT;
+            TextView cell=tableCell(values[i],widthsDp[i],false,color);
+            if(filters!=null&&i<filters.length&&filters[i]!=null&&search!=null&&refresh!=null)bindDoubleTapFilter(cell,search,filters[i],refresh);
+            row.addView(cell);
+        }
+        Button open=button("Ouvrir");
+        open.setTextSize(13);
+        open.setTextColor(TEXT);
+        open.setBackground(panelDrawable(0xff0a2437,0xff386782,10));
+        open.setOnClickListener(openListener);
+        int openWidth=widthsDp.length>values.length?widthsDp[values.length]:100;
+        TableRow.LayoutParams op=new TableRow.LayoutParams(dp(openWidth),dp(42));
+        op.setMargins(dp(5),dp(5),dp(5),dp(5));
+        row.addView(open,op);
+        table.addView(row);
+    }
+
+    private void bindDoubleTapFilter(TextView cell,EditText search,String filter,Runnable refresh){
+        final long[] lastTap={0L};
+        cell.setOnClickListener(v->{
+            long now=android.os.SystemClock.elapsedRealtime();
+            if(now-lastTap[0]<=450L){
+                lastTap[0]=0L;
+                search.setText(filter);
+                search.setSelection(search.length());
+                refresh.run();
+            }else lastTap[0]=now;
+        });
+    }
+
+    private String levelShort(int level){return level>=1&&level<=5?"A"+level:"—";}
+
+    private void showJsonDetail(String title,JSONObject data,String pkg){
+        String body;
+        try{body=data==null?"Aucun détail disponible.":data.toString(2);}
+        catch(Exception e){body=String.valueOf(data);}
+        if(pkg!=null&&!pkg.isEmpty())showDetail(title,body,"Réglages Android",()->openAppSettings(pkg));
+        else showDetail(title,body,null,null);
+    }
+
+    private void showDetail(String title,String body,String secondaryLabel,Runnable secondary){
+        AlertDialog.Builder dialog=new AlertDialog.Builder(this)
+            .setTitle(title)
+            .setMessage(body==null?"—":body)
+            .setPositiveButton("Fermer",null);
+        if(secondary!=null&&secondaryLabel!=null)dialog.setNeutralButton(secondaryLabel,(d,w)->secondary.run());
+        dialog.show();
+    }
+
     private LinearLayout card(String title,String body){
         LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(16),dp(14),dp(16),dp(14));box.setBackground(panelDrawable(PANEL_2,BORDER,18));box.setLayoutParams(blockParams());
         box.addView(text(title,18,TEXT,true));TextView b=text(body,14,MUTED,false);b.setPadding(0,dp(7),0,0);box.addView(b);return box;
