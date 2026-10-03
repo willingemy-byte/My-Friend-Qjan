@@ -1,0 +1,68 @@
+name: AIV 2.0.1 native build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - fix/aiv-2.0.0-special-access-securityexception
+    paths:
+      - "aiv-v19/**"
+      - ".github/workflows/aiv-v201-build.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Cache Android toolchain
+        uses: actions/cache@v4
+        with:
+          path: aiv-v19/.toolchain
+          key: aiv-2.0.1-android35-ndk27d-shizuku-13.1.5
+
+      - name: Build AIV 2.0.1 unsigned
+        working-directory: aiv-v19
+        env:
+          AIV_BUILD_MODE: unsigned
+        run: |
+          chmod +x bootstrap-clean-build.sh
+          ./bootstrap-clean-build.sh
+
+      - name: Native 2.0.1 regression checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s aiv-v19/build/AIV-2.0.1-unsigned.apk
+          test -s aiv-v19/build/AIV-2.0.1-unsigned.apk.sha256
+          grep -q 'android:versionCode="201"' aiv-v19/app/src/main/AndroidManifest.xml
+          grep -q 'android:versionName="2.0.1"' aiv-v19/app/src/main/AndroidManifest.xml
+          grep -q 'class ArchiveSync' aiv-v19/app/src/main/java/fr/erick/journallocal/ArchiveSync.java
+          grep -q 'request_install_packages_declared' aiv-v19/app/src/main/java/fr/erick/journallocal/SpecialAccess.java
+          grep -q 'comparison_mode","ONE_PASS' aiv-v19/app/src/main/java/fr/erick/journallocal/ScreenIntegrityService.java
+          grep -q 'core_active' aiv-v19/app/src/main/java/fr/erick/journallocal/ScreenIntegrityService.java
+          grep -q 'addTierButton("Free",TIER_FREE)' aiv-v19/app/src/main/java/fr/erick/journallocal/MainActivity.java
+          ! grep -q 'android.permission.REQUEST_INSTALL_PACKAGES' aiv-v19/app/src/main/AndroidManifest.xml
+          sha256sum -c aiv-v19/build/AIV-2.0.1-unsigned.apk.sha256
+
+      - name: Upload AIV 2.0.1 unsigned APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: AIV-2.0.1-unsigned-build
+          path: |
+            aiv-v19/build/AIV-2.0.1-unsigned.apk
+            aiv-v19/build/AIV-2.0.1-unsigned.apk.sha256
+            aiv-v19/.toolchain/sdk/build-tools/35.0.0/lib/apksigner.jar
+          retention-days: 14
+          include-hidden-files: true
