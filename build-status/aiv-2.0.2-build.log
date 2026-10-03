@@ -1,0 +1,57 @@
+[download] platform-35_r02.zip
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0  0 61.2M    0  502k    0     0  2216k      0  0:00:28 --:--:--  0:00:28 2213k100 61.2M  100 61.2M    0     0  90.1M      0 --:--:-- --:--:-- --:--:-- 90.1M
+/home/runner/work/My-Friend-Qjan/My-Friend-Qjan/aiv-v19/.toolchain/downloads/platform-35_r02.zip: OK
+[download] build-tools_r35_linux.zip
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0100 59.0M  100 59.0M    0     0   122M      0 --:--:-- --:--:-- --:--:--  122M
+/home/runner/work/My-Friend-Qjan/My-Friend-Qjan/aiv-v19/.toolchain/downloads/build-tools_r35_linux.zip: OK
+[download] android-ndk-r27d-linux.zip
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0 30  633M   30  195M    0     0   200M      0  0:00:03 --:--:--  0:00:03  200M 74  633M   74  471M    0     0   237M      0  0:00:02  0:00:01  0:00:01  237M100  633M  100  633M    0     0   247M      0  0:00:02  0:00:02 --:--:--  247M
+/home/runner/work/My-Friend-Qjan/My-Friend-Qjan/aiv-v19/.toolchain/downloads/android-ndk-r27d-linux.zip: OK
+[download] shizuku-api-13.1.5.aar
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0 31 24652   31  7727    0     0  79264      0 --:--:-- --:--:-- --:--:-- 78846100 24652  100 24652    0     0   245k      0 --:--:-- --:--:-- --:--:--  245k
+/home/runner/work/My-Friend-Qjan/My-Friend-Qjan/aiv-v19/.toolchain/downloads/shizuku-api-13.1.5.aar: OK
+[download] shizuku-provider-13.1.5.aar
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0100  7056  100  7056    0     0   115k      0 --:--:-- --:--:-- --:--:--  116k
+/home/runner/work/My-Friend-Qjan/My-Friend-Qjan/aiv-v19/.toolchain/downloads/shizuku-provider-13.1.5.aar: OK
+[download] shizuku-aidl-13.1.5.aar
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0100 23673  100 23673    0     0   367k      0 --:--:-- --:--:-- --:--:--  372k
+/home/runner/work/My-Friend-Qjan/My-Friend-Qjan/aiv-v19/.toolchain/downloads/shizuku-aidl-13.1.5.aar: OK
+[download] shizuku-shared-13.1.5.aar
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0100  2614  100  2614    0     0  42587      0 --:--:-- --:--:-- --:--:-- 42852
+/home/runner/work/My-Friend-Qjan/My-Friend-Qjan/aiv-v19/.toolchain/downloads/shizuku-shared-13.1.5.aar: OK
+[download] androidx-annotation-1.3.0.jar
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0100 31705  100 31705    0     0   277k      0 --:--:-- --:--:-- --:--:--  278k
+/home/runner/work/My-Friend-Qjan/My-Friend-Qjan/aiv-v19/.toolchain/downloads/androidx-annotation-1.3.0.jar: OK
+[preflight] V2.0.2
+[preflight] native UI only
+[build] native + Java + APK
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+UNSIGNED_APK: /home/runner/work/My-Friend-Qjan/My-Friend-Qjan/aiv-v19/build/all-in-visible-aligned.apk
+[verify] package/native shell
+package: name='com.allinvisible.aiv' versionCode='202' versionName='2.0.2' platformBuildVersionName='15' platformBuildVersionCode='35' compileSdkVersion='35' compileSdkVersionCodename='15'
+minSdkVersion:'26'
+targetSdkVersion:'35'
+uses-permission: name='android.permission.QUERY_ALL_PACKAGES'
+uses-permission: name='android.permission.REQUEST_DELETE_PACKAGES'
+uses-permission: name='android.permission.RECEIVE_BOOT_COMPLETED'
+uses-permission: name='android.permission.INTERNET'
+uses-permission: name='android.permission.ACCESS_NETWORK_STATE'
+539d2db2820a97602540035eecd6833312667e3b9a1f0d88fe4b92b0a933d999  /home/runner/work/My-Friend-Qjan/My-Friend-Qjan/aiv-v19/build/AIV-2.0.2-unsigned.apk
+FINAL_APK=/home/runner/work/My-Friend-Qjan/My-Friend-Qjan/aiv-v19/build/AIV-2.0.2-unsigned.apk
