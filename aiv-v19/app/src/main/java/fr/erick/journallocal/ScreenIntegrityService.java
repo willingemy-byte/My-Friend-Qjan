@@ -131,7 +131,7 @@ public final class ScreenIntegrityService extends AccessibilityService {
         statusWorker.execute(()->{
             try{
                 collectorActive=RecorderService.running;
-                correlationActive=WatcherService.running&&WatcherService.analysisActive;
+                correlationActive=WatcherService.running;
                 vpnExpected=Continuous.prefs(this).getBoolean("vpn_enabled",false);
                 vpnActive=NetworkCaptureService.running;
 
