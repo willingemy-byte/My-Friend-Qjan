@@ -238,51 +238,84 @@ public final class MainActivity extends Activity {
     private void renderPresentation(){
         page.removeAllViews();
         page.addView(sectionTitle("Présentation"));
-        page.addView(note("Cette vue est rendue par des composants Android natifs. Aucun HTML, JavaScript ou WebView n'intervient dans ce que tu vois ici."));
-        page.addView(card("User Free · inclus",
-            "Journal local · Inventaire des applications · Permissions · Flux VPN · Traqueurs · Anomalies · Intégrité d'affichage (opt-in) · Exports locaux"));
-        page.addView(card("User Paid · contrôle",
-            "Tout User Free + Shizuku · retrait contrôlé des permissions · restauration · surveillance persistante · identité cryptographique VPN signée par Android Keystore"));
-        page.addView(card("TI · parc",
-            "Tout User Paid + vue parc · enrôlement · politiques · rapports. Présentation seulement dans cette version."));
-        page.addView(card("Identité de l'application","Nom : All In Visible\nPackage Android : "+getPackageName()+"\nInterface : NATIVE\nWebView : AUCUN"));
+        page.addView(note("Interface Android native. Les informations de synthèse sont aussi présentées en tableau; Ouvrir affiche le détail complet."));
+        String[] headers={"Section","État","Résumé","Ouvrir"};
+        int[] widths={220,170,480,100};
+        TableLayout table=dataTable(headers,widths);
+
+        addTableRow(table,new String[]{"User Free","INCLUS","Journal local · Inventaire · Permissions · Flux VPN · Traqueurs · Anomalies · Intégrité · Exports"},
+            null,widths,0,null,null,v->showDetail("User Free · inclus",
+                "Journal local\nInventaire des applications\nPermissions\nFlux VPN\nTraqueurs\nAnomalies\nIntégrité d'affichage opt-in\nExports locaux",null,null));
+
+        addTableRow(table,new String[]{"User Paid","APERÇU","Tout User Free + Shizuku · retrait contrôlé · restauration · surveillance persistante · identité VPN"},
+            null,widths,0,null,null,v->showDetail("User Paid · contrôle",
+                "Tout User Free + Shizuku + retrait contrôlé des permissions + restauration + surveillance persistante + identité cryptographique VPN signée par Android Keystore.",null,null));
+
+        addTableRow(table,new String[]{"TI","APERÇU","Tout User Paid + vue parc · enrôlement · politiques · rapports"},
+            null,widths,0,null,null,v->showDetail("TI · parc",
+                "Tout User Paid + vue parc + enrôlement + politiques + rapports. Présentation seulement dans cette version.",null,null));
+
+        addTableRow(table,new String[]{"Application","NATIVE","All In Visible · "+getPackageName()+" · WebView absent"},
+            null,widths,0,null,null,v->showDetail("Identité de l'application",
+                "Nom : All In Visible\nPackage Android : "+getPackageName()+"\nInterface : NATIVE\nWebView : AUCUN",
+                "Réglages Android",()->openAppSettings(getPackageName())));
+
         try{
             JSONObject audit=PermissionAudit.get(this).summary();
             long total=audit.optLong("total"),system=audit.optLong("system");
-            page.addView(card("Inventaire Android",
-                "Scan : "+audit.optLong("scan_id")+"\nApplications : "+total+"\nSystème : "+system+"\nUtilisateur : "+Math.max(0,total-system)+"\nÉtat : "+(audit.optBoolean("busy")?"calcul en cours":"prêt")));
-        }catch(Exception e){page.addView(card("Inventaire Android","Indisponible : "+e.getClass().getSimpleName()));}
+            String status=audit.optBoolean("busy")?"CALCUL EN COURS":"PRÊT";
+            addTableRow(table,new String[]{"Inventaire Android",status,total+" applications · "+system+" système · "+Math.max(0,total-system)+" utilisateur"},
+                null,widths,0,null,null,v->showJsonDetail("Inventaire Android",audit,null));
+        }catch(Exception e){
+            addTableRow(table,new String[]{"Inventaire Android","INDISPONIBLE",e.getClass().getSimpleName()},
+                null,widths,0,null,null,v->showDetail("Inventaire Android","Indisponible : "+e.getClass().getSimpleName(),null,null));
+        }
 
         try{
             long events=EventStore.get(this).latestId();
             String vpn=NetworkCaptureService.running?NetworkCaptureService.stateText:(NetworkCaptureService.starting?"Démarrage":NetworkCaptureService.stateText);
-            page.addView(card("Journal et réseau",
-                "Événements : "+events+"\nCollecteur : "+yesNo(RecorderService.running)+"\nAnalyse : "+yesNo(WatcherService.analysisActive)+"\nVPN AIV : "+vpn+
-                (NetworkCaptureService.lastError.isEmpty()?"":"\nErreur VPN : "+NetworkCaptureService.lastError)));
-        }catch(Exception e){page.addView(card("Journal et réseau","Indisponible : "+e.getClass().getSimpleName()));}
+            String summary=events+" événements · Collecte "+yesNo(RecorderService.running)+" · Analyse "+yesNo(WatcherService.analysisActive)+" · VPN "+vpn;
+            addTableRow(table,new String[]{"Journal et réseau",NetworkCaptureService.running?"ACTIF":"ÉTAT",summary},
+                null,widths,0,null,null,v->showDetail("Journal et réseau",
+                    "Événements : "+events+"\nCollecteur : "+yesNo(RecorderService.running)+"\nAnalyse : "+yesNo(WatcherService.analysisActive)+"\nVPN AIV : "+vpn+
+                    (NetworkCaptureService.lastError.isEmpty()?"":"\nErreur VPN : "+NetworkCaptureService.lastError),
+                    "Réglages VPN",()->openSetting(Settings.ACTION_VPN_SETTINGS)));
+        }catch(Exception e){
+            addTableRow(table,new String[]{"Journal et réseau","INDISPONIBLE",e.getClass().getSimpleName()},
+                null,widths,0,null,null,v->showDetail("Journal et réseau","Indisponible : "+e.getClass().getSimpleName(),null,null));
+        }
 
         try{
             JSONObject s=ShizukuCleanup.state(this);
-            page.addView(card("Shizuku",
-                "Binder : "+yesNo(s.optBoolean("binder"))+"\nAutorisé : "+yesNo(s.optBoolean("authorized"))+"\nCandidats automatiques actuels : "+s.optInt("candidates",-1)+"\nÉtat : "+s.optString("status")));
-        }catch(Exception e){page.addView(card("Shizuku","Indisponible : "+e.getClass().getSimpleName()));}
+            String status=s.optBoolean("authorized")?"AUTORISÉ":(s.optBoolean("binder")?"CONNECTÉ":"INACTIF");
+            addTableRow(table,new String[]{"Shizuku",status,"UID serveur "+s.optInt("server_uid",-1)+" · "+s.optInt("candidates",-1)+" candidat(s)"},
+                null,widths,0,null,null,v->showJsonDetail("Shizuku",s,null));
+        }catch(Exception e){
+            addTableRow(table,new String[]{"Shizuku","INDISPONIBLE",e.getClass().getSimpleName()},
+                null,widths,0,null,null,v->showDetail("Shizuku","Indisponible : "+e.getClass().getSimpleName(),null,null));
+        }
 
         try{
             JSONObject app=AppIdentity.forPackage(this,getPackageName());
-            String id=app.optString("app_identity_id");
-            if(id.length()>24)id=id.substring(0,24)+"…";
             PinVault vault=new PinVault();
-            String key=vault.keyId();if(key.length()>24)key=key.substring(0,24)+"…";
-            page.addView(card("Identité cryptographique AIV",
-                "App ID : "+id+"\nClé appareil : "+key+"\nNiveau clé : "+vault.securityLevel+"\nSource app : certificats PackageManager"));
-        }catch(Exception e){page.addView(card("Identité cryptographique AIV","Initialisation : "+e.getClass().getSimpleName()));}
+            String id=app.optString("app_identity_id");
+            String key=vault.keyId();
+            String shortId=id.length()>24?id.substring(0,24)+"…":id;
+            String shortKey=key.length()>24?key.substring(0,24)+"…":key;
+            addTableRow(table,new String[]{"Identité cryptographique","ACTIVE","App ID "+shortId+" · clé "+shortKey+" · niveau "+vault.securityLevel},
+                null,widths,0,null,null,v->showDetail("Identité cryptographique AIV",
+                    "App ID : "+id+"\nClé appareil : "+key+"\nNiveau clé : "+vault.securityLevel+"\nSource app : certificats PackageManager",null,null));
+        }catch(Exception e){
+            addTableRow(table,new String[]{"Identité cryptographique","INITIALISATION",e.getClass().getSimpleName()},
+                null,widths,0,null,null,v->showDetail("Identité cryptographique AIV","Initialisation : "+e.getClass().getSimpleName(),null,null));
+        }
+
+        page.addView(tableScroller(table));
 
         LinearLayout actions=new LinearLayout(this);actions.setOrientation(LinearLayout.VERTICAL);
         actions.addView(action("Actualiser l'inventaire",v->{PermissionAudit.get(this).scan();toast("Inventaire lancé");main.postDelayed(this::renderPresentation,900);}));
         actions.addView(action("Démarrer la collecte AIV",v->startCollection()));
         actions.addView(action("Arrêter la collecte AIV",v->{Continuous.stop(this);toast("Collecte arrêtée");main.postDelayed(this::renderPresentation,400);}));
-        actions.addView(action("Ouvrir les réglages VPN",v->openSetting(Settings.ACTION_VPN_SETTINGS)));
-        actions.addView(action("Ouvrir les options développeur",v->openSetting(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)));
         page.addView(actions);
     }
 
@@ -661,10 +694,17 @@ public final class MainActivity extends Activity {
         }
         page.removeAllViews();
         page.addView(sectionTitle("TI · parc"));
-        page.addView(note("Aperçu investisseur. La gestion de parc n'est pas finalisée dans cette version."));
-        page.addView(card("Vue parc",
-            "Appareils enrôlés · état de conformité · anomalies · politiques · rapports · bascule entre vue appareil et vue parc"));
-        page.addView(card("Statut","Architecture prévue · fonctions de parc non activées dans AIV 2.0.0."));
+        page.addView(note("Aperçu investisseur. La gestion de parc n'est pas finalisée dans cette version; même cette vue reste structurée en tableau."));
+        String[] headers={"Module","État","Résumé","Ouvrir"};
+        int[] widths={220,170,480,100};
+        TableLayout table=dataTable(headers,widths);
+        addTableRow(table,new String[]{"Vue parc","PRÉVUE","Appareils enrôlés · conformité · anomalies · politiques · rapports · bascule appareil/parc"},
+            null,widths,0,null,null,v->showDetail("TI · Vue parc",
+                "Appareils enrôlés\nÉtat de conformité\nAnomalies\nPolitiques\nRapports\nBascule entre vue appareil et vue parc",null,null));
+        addTableRow(table,new String[]{"Fonctions de parc","NON ACTIVÉES","Architecture prévue dans AIV 2.0.0; pas encore fonctionnelle."},
+            null,widths,0,null,null,v->showDetail("TI · Statut",
+                "Architecture prévue. Les fonctions de parc ne sont pas activées dans AIV 2.0.0.",null,null));
+        page.addView(tableScroller(table));
     }
 
     private void prepareLocalData(){
