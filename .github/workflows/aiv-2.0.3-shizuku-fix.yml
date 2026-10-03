@@ -1,0 +1,63 @@
+name: AIV 2.0.3 Shizuku fix build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [aiv-2.0.3-shizuku-fix]
+    paths:
+      - "aiv-v19/**"
+      - ".github/workflows/aiv-2.0.3-shizuku-fix.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Cache Android toolchain
+        uses: actions/cache@v4
+        with:
+          path: aiv-v19/.toolchain
+          key: aiv-2.0.3-android35-ndk27d-shizuku-13.1.5
+
+      - name: Build AIV 2.0.3 unsigned
+        working-directory: aiv-v19
+        env:
+          AIV_BUILD_MODE: unsigned
+        run: |
+          chmod +x bootstrap-clean-build.sh
+          ./bootstrap-clean-build.sh
+
+      - name: Regression tests
+        run: bash aiv-v19/tests/run-v23.sh
+
+      - name: Verify Shizuku process-wait fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'android:versionName="2.0.3"' aiv-v19/app/src/main/AndroidManifest.xml
+          grep -q 'aiv-control-waiter' aiv-v19/app/src/main/java/fr/erick/journallocal/ControlShell.java
+          grep -q 'process.waitFor()' aiv-v19/app/src/main/java/fr/erick/journallocal/ControlShell.java
+          ! grep -q 'process.exitValue()' aiv-v19/app/src/main/java/fr/erick/journallocal/ControlShell.java
+          test -s aiv-v19/build/AIV-2.0.3-unsigned.apk
+          sha256sum -c aiv-v19/build/AIV-2.0.3-unsigned.apk.sha256
+
+      - name: Upload AIV 2.0.3 unsigned
+        uses: actions/upload-artifact@v4
+        with:
+          name: AIV-2.0.3-unsigned
+          path: |
+            aiv-v19/build/AIV-2.0.3-unsigned.apk
+            aiv-v19/build/AIV-2.0.3-unsigned.apk.sha256
+          retention-days: 14
