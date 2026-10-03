@@ -44,6 +44,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public final class MainActivity extends Activity {
     private static final int VPN_REQUEST=1201;
     private static final int NOTIFICATION_REQUEST=1202;
+    private static final int EXPORT_REQUEST=1203;
     private static final int BG=0xff04102f;
     private static final int PANEL=0xff081827;
     private static final int PANEL_2=0xff0c2233;
@@ -79,7 +80,11 @@ public final class MainActivity extends Activity {
             getWindow().setStatusBarColor(BG);
             getWindow().setNavigationBarColor(BG);
         }
-        try{Continuous.initialize(this);}catch(Throwable ignored){}
+        try{
+            Continuous.initialize(this);
+            Continuous.prefs(this).edit().putBoolean("vpn_enabled",false).apply();
+            stopService(new Intent(this,NetworkCaptureService.class));
+        }catch(Throwable ignored){}
         try{DefenseMonitor.start(this);}catch(Throwable ignored){}
         try{ShizukuCleanup.attach(this);}catch(Throwable ignored){}
         previewTier=ProductAccess.demoTier(this);
@@ -121,7 +126,7 @@ public final class MainActivity extends Activity {
         brandText.setOrientation(LinearLayout.VERTICAL);
         TextView title=text("ALL IN VISIBLE",24,TEXT,true);
         title.setLetterSpacing(.09f);
-        TextView sub=text("AIV 2.0.1 · interface Android native",13,MUTED,false);
+        TextView sub=text("AIV 2.0.2 · interface Android native",13,MUTED,false);
         TextView nativeTag=text("●  NATIF · WebView absent",13,GREEN,true);
         nativeTag.setPadding(0,dp(4),0,0);
         brandText.addView(title);brandText.addView(sub);brandText.addView(nativeTag);
@@ -180,11 +185,11 @@ public final class MainActivity extends Activity {
     }
 
     private void selectPreviewTier(int tier){
-        previewTier=tier;
-        ProductAccess.setDemoTier(this,tier);
+        previewTier=ProductAccess.ownerBuild()?TIER_IT:tier;
+        ProductAccess.setDemoTier(this,previewTier);
         refreshTierFooter();
-        if(tier==TIER_FREE)showPage("presentation");
-        else if(tier==TIER_PAID)showPage("shizuku");
+        if(previewTier==TIER_FREE)showPage("presentation");
+        else if(previewTier==TIER_PAID)showPage("shizuku");
         else renderTiPreview();
     }
 
@@ -233,7 +238,7 @@ public final class MainActivity extends Activity {
     private void renderPresentation(){
         page.removeAllViews();
         page.addView(sectionTitle("Présentation"));
-        page.addView(note("Interface Android native. Les informations de synthèse sont aussi présentées en tableau; Ouvrir affiche le détail complet."));
+        page.addView(note("Interface Android native. Build propriétaire 2.0.2 : niveau TI local déverrouillé, VPN AIV désactivé par défaut pendant le diagnostic, journal et export locaux disponibles sans VPN."));
 
         page.addView(sectionTitle("Mode d’utilisation"));
         tierFooter=new LinearLayout(this);
@@ -366,7 +371,9 @@ public final class MainActivity extends Activity {
 
         LinearLayout actions=new LinearLayout(this);actions.setOrientation(LinearLayout.VERTICAL);
         actions.addView(action("Actualiser l'inventaire",v->{PermissionAudit.get(this).scan();toast("Inventaire lancé");main.postDelayed(this::renderPresentation,900);}));
-        actions.addView(action("Démarrer la collecte AIV",v->startCollection()));
+        actions.addView(action("Démarrer la collecte locale (sans VPN)",v->startCollection()));
+        actions.addView(action("Exporter le journal local",v->beginJournalExport()));
+        actions.addView(action("Synchroniser l'archive Supabase",v->{ArchiveSync.request(this);toast("Synchronisation Supabase demandée");main.postDelayed(this::renderPresentation,1200);}));
         actions.addView(action("Arrêter la collecte AIV",v->{Continuous.stop(this);toast("Collecte arrêtée");main.postDelayed(this::renderPresentation,400);}));
         page.addView(actions);
     }
@@ -446,6 +453,7 @@ public final class MainActivity extends Activity {
         EditText search=searchBox("Application, domaine, action, UID ou ID",query);
         page.addView(search);
         page.addView(action("Rechercher / actualiser",v->renderJournal(search.getText().toString())));
+        page.addView(action("Exporter le journal",v->beginJournalExport()));
         page.addView(note("Double-tape une valeur du tableau pour la placer dans la recherche. Le bouton Ouvrir affiche le détail complet de la ligne."));
         TextView loading=text("Lecture du journal…",14,MUTED,false);page.addView(loading);
         new Thread(()->{
@@ -704,7 +712,7 @@ public final class MainActivity extends Activity {
     private void renderShizuku(){
         page.removeAllViews();
         page.addView(sectionTitle("Shizuku"));
-        page.addView(note("User Paid · aperçu du contrôle. L'état réel est affiché en tableau; les opérations de contrôle devront rester liées à un droit Paid vérifié avant commercialisation."));
+        page.addView(note("Build propriétaire 2.0.2 · contrôle local déverrouillé au niveau TI. L'état réel de Shizuku est affiché ici. Les futures éditions commerciales conserveront un entitlement vérifié séparé."));
         try{
             JSONObject s=ShizukuCleanup.state(this);
             String[] headers={"Élément","État","Détail","Ouvrir"};
@@ -779,6 +787,7 @@ public final class MainActivity extends Activity {
                 AnomalyMonitor.request(this);
                 TrackerIndex.get(this).request();
                 ApkEvidence.get(this).request();
+                ArchiveSync.request(this);
             }catch(Throwable ignored){}
             main.postDelayed(()->{if("presentation".equals(currentPage))renderPresentation();},800);
         },"aiv-native-init").start();
@@ -786,20 +795,37 @@ public final class MainActivity extends Activity {
 
     private void startCollection(){
         try{
-            Continuous.prefs(this).edit().putBoolean("enabled",true).putBoolean("analysis_enabled",true).putBoolean("vpn_enabled",true).apply();
+            Continuous.prefs(this).edit().putBoolean("enabled",true).putBoolean("analysis_enabled",true).putBoolean("vpn_enabled",false).apply();
+            stopService(new Intent(this,NetworkCaptureService.class));
             Continuous.start(this);
             if(Build.VERSION.SDK_INT>=33&&checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)
                 requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},NOTIFICATION_REQUEST);
-            Intent consent=VpnService.prepare(this);
-            if(consent!=null)startActivityForResult(consent,VPN_REQUEST);
-            else{
-                NetworkCaptureService.lastError="";
-                startForegroundService(new Intent(this,NetworkCaptureService.class));
-            }
-            toast("Collecte demandée");
+            toast("Collecte locale démarrée sans VPN");
             refreshHeaderStatus();
             main.postDelayed(this::renderPresentation,700);
         }catch(Exception e){toast("Démarrage impossible : "+e.getClass().getSimpleName());}
+    }
+
+    private void beginJournalExport(){
+        try{
+            Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);
+            i.addCategory(Intent.CATEGORY_OPENABLE);
+            i.setType("application/json");
+            i.putExtra(Intent.EXTRA_TITLE,"AIV-journal-"+System.currentTimeMillis()+".json");
+            startActivityForResult(i,EXPORT_REQUEST);
+        }catch(Exception e){toast("Export indisponible : "+e.getClass().getSimpleName());}
+    }
+
+    private void exportJournalTo(Uri destination){
+        new Thread(()->{
+            try{
+                java.io.File ready=ExportFiles.stage(this,writer->EventStore.get(this).export(writer,false));
+                String result=ExportFiles.copy(this,ready,destination);
+                main.post(()->toast(result));
+            }catch(Exception e){
+                main.post(()->showDetail("Export du journal","Échec : "+e.getClass().getSimpleName()+" · "+String.valueOf(e.getMessage()),null,null));
+            }
+        },"aiv-journal-export").start();
     }
 
     @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){
@@ -807,6 +833,8 @@ public final class MainActivity extends Activity {
         if(requestCode==VPN_REQUEST&&resultCode==RESULT_OK){
             try{NetworkCaptureService.lastError="";startForegroundService(new Intent(this,NetworkCaptureService.class));}
             catch(Exception e){toast("VPN : "+e.getClass().getSimpleName());}
+        }else if(requestCode==EXPORT_REQUEST&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){
+            exportJournalTo(data.getData());
         }
     }
 
