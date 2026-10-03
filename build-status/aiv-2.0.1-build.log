@@ -21,5 +21,5 @@ uses-permission: name='android.permission.REQUEST_DELETE_PACKAGES'
 uses-permission: name='android.permission.RECEIVE_BOOT_COMPLETED'
 uses-permission: name='android.permission.INTERNET'
 uses-permission: name='android.permission.ACCESS_NETWORK_STATE'
-2c41ca37032a29d9b43d6688588aa3e8fe5ef50b0713426e68ff04a97e30ed7e  /home/runner/work/My-Friend-Qjan/My-Friend-Qjan/aiv-v19/build/AIV-2.0.1-unsigned.apk
+8f1e8566470ca42fe2f82c5796c1670103a4051556f2e7f795ec0298386cf9f4  /home/runner/work/My-Friend-Qjan/My-Friend-Qjan/aiv-v19/build/AIV-2.0.1-unsigned.apk
 FINAL_APK=/home/runner/work/My-Friend-Qjan/My-Friend-Qjan/aiv-v19/build/AIV-2.0.1-unsigned.apk
