@@ -2,6 +2,14 @@ package fr.erick.journallocal;
 
 import android.accessibilityservice.AccessibilityService;
 import android.graphics.Rect;
+import android.graphics.Color;
+import android.graphics.PixelFormat;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
+import android.view.Gravity;
+import android.view.WindowManager;
+import android.widget.TextView;
+import android.content.Intent;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 import org.json.JSONObject;
@@ -22,10 +30,14 @@ public final class ScreenIntegrityService extends AccessibilityService {
     private static volatile int textNodeCount;
     private static volatile String semanticHash="";
     private static volatile String status="Service non activé";
+    private static volatile boolean overlayVisible;
+    private WindowManager windowManager;
+    private TextView badge;
 
     @Override protected void onServiceConnected(){
         connected=true;
         status="Observation sémantique active";
+        showBadge();
     }
 
     @Override public void onAccessibilityEvent(AccessibilityEvent event){
@@ -54,10 +66,62 @@ public final class ScreenIntegrityService extends AccessibilityService {
 
     @Override public void onInterrupt(){status="Service interrompu";}
 
+    private void showBadge(){
+        try{
+            if(badge!=null)return;
+            windowManager=(WindowManager)getSystemService(WINDOW_SERVICE);
+            badge=new TextView(this);
+            badge.setText("AIV");
+            badge.setTextColor(Color.WHITE);
+            badge.setTextSize(13);
+            badge.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
+            badge.setGravity(Gravity.CENTER);
+            int pad=(int)(8*getResources().getDisplayMetrics().density);
+            badge.setPadding(pad,pad/2,pad,pad/2);
+            GradientDrawable bg=new GradientDrawable();
+            bg.setColor(0xff071827);
+            bg.setStroke(Math.max(1,(int)(2*getResources().getDisplayMetrics().density)),0xff58b8ff);
+            bg.setCornerRadius(999f);
+            badge.setBackground(bg);
+            badge.setContentDescription("All In Visible - intégrité d'affichage active");
+            badge.setOnClickListener(v->{
+                try{
+                    Intent i=new Intent(this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                    startActivity(i);
+                }catch(Throwable ignored){}
+            });
+            WindowManager.LayoutParams lp=new WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                PixelFormat.TRANSLUCENT);
+            lp.gravity=Gravity.TOP|Gravity.END;
+            lp.x=12;lp.y=96;
+            windowManager.addView(badge,lp);
+            overlayVisible=true;
+        }catch(Throwable t){
+            overlayVisible=false;
+            status="Observation active; badge indisponible : "+t.getClass().getSimpleName();
+        }
+    }
+
+    private void removeBadge(){
+        try{if(windowManager!=null&&badge!=null)windowManager.removeView(badge);}catch(Throwable ignored){}
+        badge=null;overlayVisible=false;
+    }
+
     @Override public boolean onUnbind(android.content.Intent intent){
         connected=false;
+        removeBadge();
         status="Service désactivé";
         return super.onUnbind(intent);
+    }
+
+    @Override public void onDestroy(){
+        removeBadge();
+        connected=false;
+        super.onDestroy();
     }
 
     public static JSONObject state(){
@@ -71,6 +135,7 @@ public final class ScreenIntegrityService extends AccessibilityService {
             "node_count",nodeCount,
             "text_node_count",textNodeCount,
             "semantic_hash",semanticHash,
+            "overlay_visible",overlayVisible,
             "comparison_status","WAITING_SECOND_SIGNAL",
             "scope","Arbre d'accessibilité Android seulement; aucun DOM brut de navigateur n'est revendiqué et aucune anomalie d'affichage n'est déclarée sans seconde preuve."
         );
