@@ -136,8 +136,11 @@ public final class ScreenIntegrityService extends AccessibilityService {
             "text_node_count",textNodeCount,
             "semantic_hash",semanticHash,
             "overlay_visible",overlayVisible,
-            "comparison_status","WAITING_SECOND_SIGNAL",
-            "scope","Arbre d'accessibilité Android seulement; aucun DOM brut de navigateur n'est revendiqué et aucune anomalie d'affichage n'est déclarée sans seconde preuve."
+            "comparison_status","SEMANTIC_ONLY",
+            "comparison_mode","ONE_PASS",
+            "free_tier",true,
+            "visual_signal_available",false,
+            "scope","Une seule observation suffit; aucune seconde visite n'est requise. Le service actuel fournit l'arbre d'accessibilité Android. Tant qu'un canal visuel indépendant n'est pas comparé au même moment, AIV ne doit pas affirmer qu'un affichage diffère de sa sémantique."
         );
     }
 
