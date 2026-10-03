@@ -68,6 +68,10 @@ public final class MainActivity extends Activity {
     private static final int TIER_IT=3;
     private int previewTier=TIER_FREE;
     private String currentPage="presentation";
+    private final Runnable headerStatusPulse=new Runnable(){@Override public void run(){
+        if(statusRow!=null)refreshHeaderStatus();
+        main.postDelayed(this,2000);
+    }};
 
     @Override public void onCreate(Bundle state){
         super.onCreate(state);
@@ -117,7 +121,7 @@ public final class MainActivity extends Activity {
         brandText.setOrientation(LinearLayout.VERTICAL);
         TextView title=text("ALL IN VISIBLE",24,TEXT,true);
         title.setLetterSpacing(.09f);
-        TextView sub=text("AIV 2.0.0 · interface Android native",13,MUTED,false);
+        TextView sub=text("AIV 2.0.1 · interface Android native",13,MUTED,false);
         TextView nativeTag=text("●  NATIF · WebView absent",13,GREEN,true);
         nativeTag.setPadding(0,dp(4),0,0);
         brandText.addView(title);brandText.addView(sub);brandText.addView(nativeTag);
@@ -406,7 +410,7 @@ public final class MainActivity extends Activity {
             String files=s.optBoolean("all_files_declared")?(s.optBoolean("all_files_granted")?"ACTIF":"DÉCLARÉ, NON ACTIF"):"NON DEMANDÉ";
             addTableRow(table,new String[]{"Tous les fichiers",files,"Stockage partagé seulement; pas /data/data des autres applications."},
                 null,widths,0,null,null,v->showDetail("Tous les fichiers",
-                    "État : "+files+"\nAIV 2.0.0 ne demande pas cet accès par défaut.",
+                    "État : "+files+"\nAIV 2.0.1 ne demande pas cet accès par défaut.",
                     "Accès spéciaux Android",()->openSetting("android.settings.MANAGE_SPECIAL_APP_ACCESSES")));
 
             String overlay=yesNo(s.optBoolean("overlay"));
@@ -760,9 +764,9 @@ public final class MainActivity extends Activity {
         addTableRow(table,new String[]{"Vue parc","PRÉVUE","Appareils enrôlés · conformité · anomalies · politiques · rapports · bascule appareil/parc"},
             null,widths,0,null,null,v->showDetail("TI · Vue parc",
                 "Appareils enrôlés\nÉtat de conformité\nAnomalies\nPolitiques\nRapports\nBascule entre vue appareil et vue parc",null,null));
-        addTableRow(table,new String[]{"Fonctions de parc","NON ACTIVÉES","Architecture prévue dans AIV 2.0.0; pas encore fonctionnelle."},
+        addTableRow(table,new String[]{"Fonctions de parc","NON ACTIVÉES","Architecture prévue dans AIV 2.0.1; pas encore fonctionnelle."},
             null,widths,0,null,null,v->showDetail("TI · Statut",
-                "Architecture prévue. Les fonctions de parc ne sont pas activées dans AIV 2.0.0.",null,null));
+                "Architecture prévue. Les fonctions de parc ne sont pas activées dans AIV 2.0.1.",null,null));
         page.addView(tableScroller(table));
     }
 
@@ -806,7 +810,16 @@ public final class MainActivity extends Activity {
         }
     }
 
-    @Override public void onResume(){super.onResume();if(statusRow!=null)refreshHeaderStatus();if(page!=null&&"presentation".equals(currentPage))main.postDelayed(this::renderPresentation,250);}
+    @Override public void onResume(){
+        super.onResume();
+        main.removeCallbacks(headerStatusPulse);
+        main.post(headerStatusPulse);
+        if(page!=null&&"presentation".equals(currentPage))main.postDelayed(this::renderPresentation,250);
+    }
+    @Override public void onPause(){
+        main.removeCallbacks(headerStatusPulse);
+        super.onPause();
+    }
     @Override public void onDestroy(){generation.incrementAndGet();try{ShizukuCleanup.detach();}catch(Throwable ignored){}super.onDestroy();}
 
     private void openSetting(String action){try{startActivity(new Intent(action));}catch(Exception e){toast("Réglage Android indisponible");}}
@@ -823,7 +836,7 @@ public final class MainActivity extends Activity {
         if(statusRow==null)return;
         statusRow.removeAllViews();
         statusRow.addView(statusChip("Collecte",RecorderService.running));
-        statusRow.addView(statusChip("Corrélation",NetworkCaptureService.running));
+        statusRow.addView(statusChip("Corrélation",WatcherService.running));
         boolean shizukuOk=false;
         try{JSONObject ss=ShizukuCleanup.state(this);shizukuOk=ss.optBoolean("binder")&&ss.optBoolean("authorized");}catch(Throwable ignored){}
         statusRow.addView(statusChip("Shizuku",shizukuOk));
