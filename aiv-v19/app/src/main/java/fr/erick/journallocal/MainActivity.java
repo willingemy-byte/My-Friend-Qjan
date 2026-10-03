@@ -102,7 +102,8 @@ public final class MainActivity extends Activity {
         brand.setOrientation(LinearLayout.HORIZONTAL);
         brand.setGravity(Gravity.CENTER_VERTICAL);
         ImageView logo=new ImageView(this);
-        logo.setImageResource(fr.erick.journallocal.R.drawable.aiv_logo);
+        int logoId=getResources().getIdentifier("aiv_logo","drawable",getPackageName());
+        if(logoId!=0)logo.setImageResource(logoId);
         logo.setScaleType(ImageView.ScaleType.CENTER_CROP);
         LinearLayout.LayoutParams logoLp=new LinearLayout.LayoutParams(dp(52),dp(52));
         logoLp.setMargins(0,0,dp(12),0);
