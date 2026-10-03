@@ -126,7 +126,7 @@ public final class MainActivity extends Activity {
         brandText.setOrientation(LinearLayout.VERTICAL);
         TextView title=text("ALL IN VISIBLE",24,TEXT,true);
         title.setLetterSpacing(.09f);
-        TextView sub=text("AIV 2.0.2 · interface Android native",13,MUTED,false);
+        TextView sub=text("AIV 2.0.3 · interface Android native",13,MUTED,false);
         TextView nativeTag=text("●  NATIF · WebView absent",13,GREEN,true);
         nativeTag.setPadding(0,dp(4),0,0);
         brandText.addView(title);brandText.addView(sub);brandText.addView(nativeTag);
@@ -238,7 +238,7 @@ public final class MainActivity extends Activity {
     private void renderPresentation(){
         page.removeAllViews();
         page.addView(sectionTitle("Présentation"));
-        page.addView(note("Interface Android native. Build propriétaire 2.0.2 : niveau TI local déverrouillé, VPN AIV désactivé par défaut pendant le diagnostic, journal et export locaux disponibles sans VPN."));
+        page.addView(note("Interface Android native. Build propriétaire 2.0.3 : niveau TI local déverrouillé, VPN AIV désactivé par défaut pendant le diagnostic, journal et export locaux disponibles sans VPN."));
 
         page.addView(sectionTitle("Mode d’utilisation"));
         tierFooter=new LinearLayout(this);
@@ -712,7 +712,7 @@ public final class MainActivity extends Activity {
     private void renderShizuku(){
         page.removeAllViews();
         page.addView(sectionTitle("Shizuku"));
-        page.addView(note("Build propriétaire 2.0.2 · contrôle local déverrouillé au niveau TI. L'état réel de Shizuku est affiché ici. Les futures éditions commerciales conserveront un entitlement vérifié séparé."));
+        page.addView(note("Build propriétaire 2.0.3 · contrôle local déverrouillé au niveau TI. L'état réel de Shizuku est affiché ici. Les futures éditions commerciales conserveront un entitlement vérifié séparé."));
         try{
             JSONObject s=ShizukuCleanup.state(this);
             String[] headers={"Élément","État","Détail","Ouvrir"};
