@@ -12,10 +12,18 @@ import android.widget.TextView;
 import android.content.Intent;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
+import android.os.Handler;
+import android.os.Looper;
+import android.text.Spannable;
+import android.text.SpannableString;
+import android.text.style.ForegroundColorSpan;
 import org.json.JSONObject;
 import java.security.MessageDigest;
 import java.util.ArrayDeque;
 import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Read-only semantic observation channel for AIV display integrity.
@@ -31,13 +39,31 @@ public final class ScreenIntegrityService extends AccessibilityService {
     private static volatile String semanticHash="";
     private static volatile String status="Service non activé";
     private static volatile boolean overlayVisible;
+    private static volatile boolean coreActive;
+    private static volatile boolean anomalyActive;
+    private static volatile long unreadAnomalies;
+    private static volatile boolean collectorActive;
+    private static volatile boolean correlationActive;
+    private static volatile boolean vpnExpected;
+    private static volatile boolean vpnActive;
+    private static volatile boolean shizukuExpected;
+    private static volatile boolean shizukuActive;
     private WindowManager windowManager;
     private TextView badge;
+    private final Handler main=new Handler(Looper.getMainLooper());
+    private final ExecutorService statusWorker=Executors.newSingleThreadExecutor();
+    private final AtomicBoolean statusRefreshBusy=new AtomicBoolean();
+    private final Runnable statusPulse=new Runnable(){@Override public void run(){
+        refreshBadgeStateAsync();
+        main.postDelayed(this,3000);
+    }};
 
     @Override protected void onServiceConnected(){
         connected=true;
         status="Observation sémantique active";
         showBadge();
+        main.removeCallbacks(statusPulse);
+        main.post(statusPulse);
     }
 
     @Override public void onAccessibilityEvent(AccessibilityEvent event){
@@ -71,19 +97,13 @@ public final class ScreenIntegrityService extends AccessibilityService {
             if(badge!=null)return;
             windowManager=(WindowManager)getSystemService(WINDOW_SERVICE);
             badge=new TextView(this);
-            badge.setText("AIV");
             badge.setTextColor(Color.WHITE);
             badge.setTextSize(13);
             badge.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
             badge.setGravity(Gravity.CENTER);
             int pad=(int)(8*getResources().getDisplayMetrics().density);
             badge.setPadding(pad,pad/2,pad,pad/2);
-            GradientDrawable bg=new GradientDrawable();
-            bg.setColor(0xff071827);
-            bg.setStroke(Math.max(1,(int)(2*getResources().getDisplayMetrics().density)),0xff58b8ff);
-            bg.setCornerRadius(999f);
-            badge.setBackground(bg);
-            badge.setContentDescription("All In Visible - intégrité d'affichage active");
+            applyBadgeVisual();
             badge.setOnClickListener(v->{
                 try{
                     Intent i=new Intent(this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_SINGLE_TOP);
@@ -106,7 +126,62 @@ public final class ScreenIntegrityService extends AccessibilityService {
         }
     }
 
+    private void refreshBadgeStateAsync(){
+        if(!statusRefreshBusy.compareAndSet(false,true))return;
+        statusWorker.execute(()->{
+            try{
+                collectorActive=RecorderService.running;
+                correlationActive=WatcherService.running&&WatcherService.analysisActive;
+                vpnExpected=Continuous.prefs(this).getBoolean("vpn_enabled",false);
+                vpnActive=NetworkCaptureService.running;
+
+                shizukuExpected=ProductAccess.demoTier(this)>=ProductAccess.PAID;
+                shizukuActive=false;
+                try{
+                    JSONObject shizuku=ShizukuCleanup.state(this);
+                    shizukuActive=shizuku.optBoolean("binder")&&shizuku.optBoolean("authorized");
+                }catch(Throwable ignored){}
+
+                unreadAnomalies=0;
+                try{
+                    JSONObject summary=AnomalyMonitor.get(this).summary();
+                    unreadAnomalies=summary.optLong("unread",0);
+                }catch(Throwable ignored){}
+                anomalyActive=unreadAnomalies>0;
+
+                coreActive=connected
+                    && collectorActive
+                    && correlationActive
+                    && (!vpnExpected||vpnActive)
+                    && (!shizukuExpected||shizukuActive);
+            }finally{
+                statusRefreshBusy.set(false);
+                main.post(this::applyBadgeVisual);
+            }
+        });
+    }
+
+    private void applyBadgeVisual(){
+        if(badge==null)return;
+        SpannableString label=new SpannableString("● AIV");
+        label.setSpan(new ForegroundColorSpan(coreActive?0xff65df70:0xff8b98a5),0,1,Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+        badge.setText(label);
+
+        GradientDrawable bg=new GradientDrawable();
+        bg.setColor(0xff071827);
+        int ring=anomalyActive?0xffff9a3c:0xff58b8ff;
+        bg.setStroke(Math.max(1,(int)(2*getResources().getDisplayMetrics().density)),ring);
+        bg.setCornerRadius(999f);
+        badge.setBackground(bg);
+
+        StringBuilder desc=new StringBuilder("All In Visible. ");
+        desc.append(coreActive?"Surveillance attendue active. ":"Un ou plusieurs modules attendus sont inactifs. ");
+        desc.append(anomalyActive?unreadAnomalies+" anomalie(s) à examiner.":"Aucune anomalie non lue.");
+        badge.setContentDescription(desc.toString());
+    }
+
     private void removeBadge(){
+        main.removeCallbacks(statusPulse);
         try{if(windowManager!=null&&badge!=null)windowManager.removeView(badge);}catch(Throwable ignored){}
         badge=null;overlayVisible=false;
     }
@@ -121,6 +196,7 @@ public final class ScreenIntegrityService extends AccessibilityService {
     @Override public void onDestroy(){
         removeBadge();
         connected=false;
+        statusWorker.shutdownNow();
         super.onDestroy();
     }
 
@@ -136,6 +212,15 @@ public final class ScreenIntegrityService extends AccessibilityService {
             "text_node_count",textNodeCount,
             "semantic_hash",semanticHash,
             "overlay_visible",overlayVisible,
+            "core_active",coreActive,
+            "collector_active",collectorActive,
+            "correlation_active",correlationActive,
+            "vpn_expected",vpnExpected,
+            "vpn_active",vpnActive,
+            "shizuku_expected",shizukuExpected,
+            "shizuku_active",shizukuActive,
+            "anomaly_active",anomalyActive,
+            "unread_anomalies",unreadAnomalies,
             "comparison_status","SEMANTIC_ONLY",
             "comparison_mode","ONE_PASS",
             "free_tier",true,
