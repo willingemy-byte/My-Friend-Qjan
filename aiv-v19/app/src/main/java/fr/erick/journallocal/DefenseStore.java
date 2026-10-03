@@ -145,6 +145,13 @@ public final class DefenseStore extends SQLiteOpenHelper {
             log(pkg,"ARCHIVED".equals(state)?"ARCHIVAL_OBSERVED":"REMOVAL_OBSERVED",EventStore.object("source","Diffusion système Android","scope","ARCHIVED".equals(state)?"Archivage Android observé; application non désinstallée.":"Retrait sans remplacement ni archivage observé dans le profil courant; initiateur non déduit."));
         }
     }
+    public int levelFor(String pkg) {
+        if(pkg==null||pkg.isEmpty())return 0;
+        try(Cursor c=getReadableDatabase().rawQuery("SELECT level FROM apps WHERE pkg=? LIMIT 1",new String[]{pkg})){
+            return c.moveToFirst()?c.getInt(0):0;
+        }catch(Exception e){return 0;}
+    }
+
     public JSONObject status() throws Exception {
         JSONObject counts=new JSONObject();try(Cursor c=getReadableDatabase().rawQuery("SELECT state,COUNT(*) FROM apps GROUP BY state",null)){while(c.moveToNext())counts.put(c.getString(0),c.getLong(1));}
         long head=0;try(Cursor c=getReadableDatabase().rawQuery("SELECT COALESCE(MAX(id),0) FROM journal",null)){c.moveToFirst();head=c.getLong(0);}
