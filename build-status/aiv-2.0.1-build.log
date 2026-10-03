@@ -1,0 +1,25 @@
+[cache] platform-35_r02.zip
+[cache] build-tools_r35_linux.zip
+[cache] android-ndk-r27d-linux.zip
+[cache] shizuku-api-13.1.5.aar
+[cache] shizuku-provider-13.1.5.aar
+[cache] shizuku-aidl-13.1.5.aar
+[cache] shizuku-shared-13.1.5.aar
+[cache] androidx-annotation-1.3.0.jar
+[preflight] V2.0.1
+[preflight] native UI only
+[build] native + Java + APK
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+UNSIGNED_APK: /home/runner/work/My-Friend-Qjan/My-Friend-Qjan/aiv-v19/build/all-in-visible-aligned.apk
+[verify] package/native shell
+package: name='com.allinvisible.aiv' versionCode='201' versionName='2.0.1' platformBuildVersionName='15' platformBuildVersionCode='35' compileSdkVersion='35' compileSdkVersionCodename='15'
+minSdkVersion:'26'
+targetSdkVersion:'35'
+uses-permission: name='android.permission.QUERY_ALL_PACKAGES'
+uses-permission: name='android.permission.REQUEST_DELETE_PACKAGES'
+uses-permission: name='android.permission.RECEIVE_BOOT_COMPLETED'
+uses-permission: name='android.permission.INTERNET'
+uses-permission: name='android.permission.ACCESS_NETWORK_STATE'
+2c41ca37032a29d9b43d6688588aa3e8fe5ef50b0713426e68ff04a97e30ed7e  /home/runner/work/My-Friend-Qjan/My-Friend-Qjan/aiv-v19/build/AIV-2.0.1-unsigned.apk
+FINAL_APK=/home/runner/work/My-Friend-Qjan/My-Friend-Qjan/aiv-v19/build/AIV-2.0.1-unsigned.apk
