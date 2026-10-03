@@ -286,6 +286,17 @@ public final class MainActivity extends Activity {
         }
 
         try{
+            JSONObject archive=ArchiveSync.state(this);
+            String archiveState=archive.optString("last_error","").isEmpty()?(archive.optBoolean("running")?"SYNCHRO":"PRÊT"):"ERREUR";
+            addTableRow(table,new String[]{"Archive Supabase",archiveState,
+                archive.optLong("verified_segments")+" segment(s) vérifié(s) · "+archive.optInt("segment_size",50000)+" événements/segment"},
+                null,widths,0,null,null,v->showJsonDetail("Archive Supabase",archive,null));
+        }catch(Exception e){
+            addTableRow(table,new String[]{"Archive Supabase","INDISPONIBLE",e.getClass().getSimpleName()},
+                null,widths,0,null,null,v->showDetail("Archive Supabase","Indisponible : "+e.getClass().getSimpleName(),null,null));
+        }
+
+        try{
             JSONObject s=ShizukuCleanup.state(this);
             String status=s.optBoolean("authorized")?"AUTORISÉ":(s.optBoolean("binder")?"CONNECTÉ":"INACTIF");
             addTableRow(table,new String[]{"Shizuku",status,"UID serveur "+s.optInt("server_uid",-1)+" · "+s.optInt("candidates",-1)+" candidat(s)"},
