@@ -18,6 +18,7 @@ public final class JournalSegments {
         db.execSQL("CREATE TABLE IF NOT EXISTS journal_segment_state(id INTEGER PRIMARY KEY CHECK(id=1),checkpoint INTEGER NOT NULL DEFAULT 0,total INTEGER NOT NULL DEFAULT 0,active INTEGER NOT NULL DEFAULT 1,network INTEGER NOT NULL DEFAULT 0,unresolved INTEGER NOT NULL DEFAULT 0)");
         db.execSQL("CREATE TABLE IF NOT EXISTS journal_segments(segment INTEGER PRIMARY KEY,first_id INTEGER NOT NULL DEFAULT 0,last_id INTEGER NOT NULL DEFAULT 0,event_count INTEGER NOT NULL DEFAULT 0,sealed INTEGER NOT NULL DEFAULT 0,network INTEGER NOT NULL DEFAULT 0,unresolved INTEGER NOT NULL DEFAULT 0)");
         db.execSQL("CREATE TABLE IF NOT EXISTS journal_segment_actors(segment INTEGER NOT NULL,app TEXT NOT NULL,PRIMARY KEY(segment,app))");
+        db.execSQL("CREATE TABLE IF NOT EXISTS journal_archive_state(segment INTEGER PRIMARY KEY,remote_state TEXT NOT NULL DEFAULT 'PENDING',client_sha256 TEXT,uploaded_through_id INTEGER NOT NULL DEFAULT 0,verified_at_ms INTEGER NOT NULL DEFAULT 0,error TEXT)");
         db.execSQL("INSERT OR IGNORE INTO journal_segment_state(id) VALUES(1)");
         db.execSQL("INSERT OR IGNORE INTO journal_segments(segment) VALUES(1)");
     }
@@ -50,7 +51,7 @@ public final class JournalSegments {
                 more=read==500;db.setTransactionSuccessful();
             }finally{db.endTransaction();}error="";
         }catch(Exception e){error="Index des segments : "+e.getClass().getSimpleName();}
-        finally{scheduled.set(false);if(more&&error.isEmpty())worker.postDelayed(()->request(context),250);}
+        finally{scheduled.set(false);if(error.isEmpty())ArchiveSync.request(context);if(more&&error.isEmpty())worker.postDelayed(()->request(context),250);}
     }
     public static JSONObject window(Context context,int requested)throws Exception{
         request(context);SQLiteDatabase db=EventStore.get(context).getReadableDatabase();long active=1,checkpoint=0,total=0,latest=EventStore.get(context).latestId();
