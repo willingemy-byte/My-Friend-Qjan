@@ -1,4 +1,4 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.allinvisible.aiv" android:versionCode="120" android:versionName="1.2.0">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.allinvisible.aiv" android:versionCode="200" android:versionName="2.0.0">
     <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="35" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
@@ -31,6 +31,15 @@
         </service>
         <service android:name="fr.erick.journallocal.RecorderService" android:exported="false" android:foregroundServiceType="specialUse">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User-started local All In Visible event journal: network state, battery, power, screen, USB host and optional Bluetooth connection events. Visible persistent notification with stop action. No Internet transmission or media recording." />
+        </service>
+        <service android:name="fr.erick.journallocal.ScreenIntegrityService"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:exported="false"
+            android:label="AIV · Intégrité d’affichage">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data android:name="android.accessibilityservice" android:resource="@xml/aiv_screen_integrity" />
         </service>
         <service android:name="fr.erick.journallocal.NetworkCaptureService" android:exported="true" android:permission="android.permission.BIND_VPN_SERVICE" android:foregroundServiceType="specialUse">
             <intent-filter><action android:name="android.net.VpnService" /></intent-filter>
