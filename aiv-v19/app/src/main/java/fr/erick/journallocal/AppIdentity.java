@@ -57,16 +57,22 @@ final class AppIdentity {
     static JSONObject forUid(Context context,int uid,String[] packages){
         try{
             int profile=uid/100000;
+            String actorCanonical="aiv-network-actor/1\nprofile="+profile+"\nuid="+uid;
+            String networkActorId=sha256(actorCanonical);
             if(packages==null||packages.length==0)return EventStore.object(
-                "schema","aiv-app-identity/1","type","uid_only","uid",uid,"profile_id",profile,
+                "schema","aiv-app-identity/2","type","uid_only","uid",uid,"profile_id",profile,
+                "network_actor_identity_id",networkActorId,
+                "uid_identity_id",networkActorId,
                 "status","PACKAGE_LIST_UNAVAILABLE",
-                "identity_scope","UID observé sans paquet visible; aucune identité d'application n'est affirmée");
+                "network_attribution","UID_ONLY",
+                "identity_scope","Identité AIV stable du propriétaire réseau Android (profil + UID). Elle ne prétend pas identifier une application précise derrière un service intermédiaire.");
             List<String> names=new ArrayList<>();
             Collections.addAll(names,packages);
             Collections.sort(names);
             if(uid%100000>=10000&&names.size()==1){
                 JSONObject one=forPackage(context,names.get(0));
                 one.put("network_attribution","UNIQUE_UID_PACKAGE");
+                one.put("network_actor_identity_id",networkActorId);
                 return one;
             }
             JSONArray members=new JSONArray();
@@ -85,16 +91,18 @@ final class AppIdentity {
                 }
             }
             String type=uid%100000<10000?"android_uid_group":"shared_uid_group";
-            String canonical="aiv-uid-identity/1\ntype="+type+"\nprofile="+profile+"\nuid="+uid+"\nmembers="+join(memberIds);
+            String memberCanonical="aiv-uid-members/1\ntype="+type+"\nprofile="+profile+"\nuid="+uid+"\nmembers="+join(memberIds);
             return EventStore.object(
-                "schema","aiv-app-identity/1",
+                "schema","aiv-app-identity/2",
                 "type",type,
                 "uid",uid,
                 "profile_id",profile,
-                "uid_identity_id",sha256(canonical),
+                "network_actor_identity_id",networkActorId,
+                "uid_identity_id",networkActorId,
+                "member_set_fingerprint",sha256(memberCanonical),
                 "members",members,
                 "network_attribution","NON_UNIQUE",
-                "identity_scope","Identité cryptographique du groupe candidat seulement; AIV ne choisit pas arbitrairement un paquet derrière un UID partagé ou réservé");
+                "identity_scope","Identité AIV stable du propriétaire réseau Android (profil + UID). Les paquets membres restent des candidats; AIV peut enrichir la provenance plus tard sans réécrire l'observation originale.");
         }catch(Exception e){
             return EventStore.object("schema","aiv-app-identity/1","type","unavailable","uid",uid,"status","UNAVAILABLE","error",e.getClass().getSimpleName());
         }
