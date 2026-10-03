@@ -160,16 +160,7 @@ public final class MainActivity extends Activity {
         scroll.addView(page,new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT));
         root.addView(scroll,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,0,1f));
 
-        tierFooter=new LinearLayout(this);
-        tierFooter.setOrientation(LinearLayout.HORIZONTAL);
-        tierFooter.setGravity(Gravity.CENTER);
-        tierFooter.setPadding(dp(8),dp(7),dp(8),dp(7));
-        tierFooter.setBackgroundColor(0xff050b12);
-        addTierButton("User Free",TIER_FREE);
-        addTierButton("User Paid",TIER_PAID);
-        addTierButton("TI",TIER_IT);
-        root.addView(tierFooter,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,dp(58)));
-        refreshTierFooter();
+        tierFooter=null;
 
         setContentView(root);
         root.requestApplyInsets();
@@ -239,6 +230,17 @@ public final class MainActivity extends Activity {
         page.removeAllViews();
         page.addView(sectionTitle("Présentation"));
         page.addView(note("Interface Android native. Les informations de synthèse sont aussi présentées en tableau; Ouvrir affiche le détail complet."));
+
+        page.addView(sectionTitle("Mode d’utilisation"));
+        tierFooter=new LinearLayout(this);
+        tierFooter.setOrientation(LinearLayout.HORIZONTAL);
+        tierFooter.setGravity(Gravity.CENTER);
+        tierFooter.setPadding(dp(4),dp(4),dp(4),dp(10));
+        addTierButton("Free",TIER_FREE);
+        addTierButton("Paid",TIER_PAID);
+        addTierButton("TI",TIER_IT);
+        page.addView(tierFooter,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,dp(62)));
+        refreshTierFooter();
         page.addView(sectionTitle("Niveaux d’autorisation"));
         String[] levelHeaders={"Niveau","Définition","Détail"};
         int[] levelWidths={90,520,100};
@@ -565,7 +567,7 @@ public final class MainActivity extends Activity {
         page.removeAllViews();
         page.addView(sectionTitle("Intégrité d'affichage"));
         JSONObject s=ScreenIntegrityService.state();
-        page.addView(note("AIV observe la couche sémantique Android lorsque l'utilisateur active volontairement le service d'accessibilité. L'absence de seconde preuve reste indéterminée."));
+        page.addView(note("Fonction gratuite. AIV observe la couche sémantique Android quand le service d’accessibilité est activé. Le mode visé est une passe : aucune seconde visite de la page n’est requise. Pour déclarer « affichage ≠ sémantique », AIV doit toutefois comparer la sémantique avec une observation visuelle indépendante prise au même moment."));
         String[] headers={"Élément","État","Détail","Ouvrir"};
         int[] widths={220,170,430,100};
         TableLayout table=dataTable(headers,widths);
@@ -575,11 +577,13 @@ public final class MainActivity extends Activity {
                 "Réglages accessibilité",()->openSetting(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
         addTableRow(table,new String[]{"Badge AIV",s.optBoolean("overlay_visible")?"ACTIF":"INACTIF","Le badge en haut à droite confirme que le service d’accessibilité AIV est connecté."},null,widths,0,null,null,
             v->showJsonDetail("Intégrité · badge AIV",s,null));
+        addTableRow(table,new String[]{"Disponibilité","FREE","Détection d’intégrité d’affichage incluse pour tous les utilisateurs."},null,widths,0,null,null,
+            v->showDetail("Intégrité d’affichage · Free","Cette fonction reste disponible dans le niveau Free. Aucune fonction de contrôle Shizuku n’est requise pour l’observation.",null,null));
         addTableRow(table,new String[]{"Application observée",s.optString("observed_package","—"),"Package actuellement exposé par le service."},null,widths,0,null,null,
             v->showJsonDetail("Intégrité · état complet",s,null));
         addTableRow(table,new String[]{"Arbre sémantique",s.optInt("node_count")+" nœuds",s.optInt("text_node_count")+" nœuds texte"},null,widths,0,null,null,
             v->showJsonDetail("Intégrité · arbre sémantique",s,null));
-        addTableRow(table,new String[]{"Comparaison",s.optString("comparison_status","—"),"La couche sémantique est observée; la validation d’une anomalie visuelle attend encore une seconde preuve indépendante."},null,widths,0,null,null,
+        addTableRow(table,new String[]{"Comparaison",s.optString("comparison_status","—"),"Une seule occurrence suffit. État actuel : la couche sémantique est active; le canal visuel simultané reste à brancher pour confirmer un écart affichage/sémantique."},null,widths,0,null,null,
             v->showJsonDetail("Intégrité · comparaison",s,null));
         page.addView(tableScroller(table));
         page.addView(action("Actualiser l'état",v->renderIntegrity()));
