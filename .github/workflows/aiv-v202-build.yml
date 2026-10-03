@@ -1,0 +1,107 @@
+name: AIV 2.0.2 owner-control build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - aiv-2.0.2-owner-control
+    paths:
+      - "aiv-v19/**"
+      - ".github/workflows/aiv-v202-build.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Cache Android toolchain
+        uses: actions/cache@v4
+        with:
+          path: aiv-v19/.toolchain
+          key: aiv-2.0.2-android35-ndk27d-shizuku-13.1.5
+
+      - name: Build AIV 2.0.2 unsigned
+        working-directory: aiv-v19
+        env:
+          AIV_BUILD_MODE: unsigned
+        run: |
+          mkdir -p ../build-status
+          chmod +x bootstrap-clean-build.sh
+          set -o pipefail
+          ./bootstrap-clean-build.sh 2>&1 | tee ../build-status/aiv-2.0.2-build.log
+
+      - name: Native 2.0.2 regression checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s aiv-v19/build/AIV-2.0.2-unsigned.apk
+          test -s aiv-v19/build/AIV-2.0.2-unsigned.apk.sha256
+          grep -q 'android:versionCode="202"' aiv-v19/app/src/main/AndroidManifest.xml
+          grep -q 'android:versionName="2.0.2"' aiv-v19/app/src/main/AndroidManifest.xml
+          grep -q 'OWNER_BUILD=true' aiv-v19/app/src/main/java/fr/erick/journallocal/ProductAccess.java
+          grep -q 'putBoolean("vpn_enabled",false)' aiv-v19/app/src/main/java/fr/erick/journallocal/MainActivity.java
+          grep -q 'Exporter le journal' aiv-v19/app/src/main/java/fr/erick/journallocal/MainActivity.java
+          grep -q 'ArchiveSync.request(this)' aiv-v19/app/src/main/java/fr/erick/journallocal/MainActivity.java
+          sha256sum -c aiv-v19/build/AIV-2.0.2-unsigned.apk.sha256
+
+      - name: Upload AIV 2.0.2 unsigned APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: AIV-2.0.2-unsigned-build
+          path: |
+            aiv-v19/build/AIV-2.0.2-unsigned.apk
+            aiv-v19/build/AIV-2.0.2-unsigned.apk.sha256
+            aiv-v19/.toolchain/sdk/build-tools/35.0.0/lib/apksigner.jar
+          retention-days: 14
+          include-hidden-files: true
+
+      - name: Publish test prerelease
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="aiv-2.0.2-owner-test"
+          gh release delete "$TAG" --yes --cleanup-tag >/dev/null 2>&1 || true
+          gh release create "$TAG" \
+            aiv-v19/build/AIV-2.0.2-unsigned.apk \
+            aiv-v19/build/AIV-2.0.2-unsigned.apk.sha256 \
+            aiv-v19/.toolchain/sdk/build-tools/35.0.0/lib/apksigner.jar \
+            --prerelease \
+            --title "AIV 2.0.2 owner-control test build" \
+            --notes "Owner/development build from $GITHUB_SHA. TI unlocked, VPN off by default, journal export enabled, Supabase archive sync requested."
+
+      - name: Commit build status
+        if: always()
+        shell: bash
+        env:
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -e
+          mkdir -p build-status
+          {
+            echo "status=$JOB_STATUS"
+            echo "commit=$GITHUB_SHA"
+            echo "workflow=$GITHUB_WORKFLOW"
+            echo "run_id=$GITHUB_RUN_ID"
+            date -u +"finished_at=%Y-%m-%dT%H:%M:%SZ"
+          } > build-status/aiv-2.0.2-result.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add build-status/aiv-2.0.2-result.txt build-status/aiv-2.0.2-build.log || true
+          if ! git diff --cached --quiet; then
+            git commit -m "Record AIV 2.0.2 build status"
+            git push origin HEAD:aiv-2.0.2-owner-control
+          fi
