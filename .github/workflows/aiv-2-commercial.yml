@@ -1,0 +1,67 @@
+name: AIV 2.0 commercial candidate
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [aiv-2.0.0-commercial]
+    paths:
+      - "aiv-v19/**"
+      - ".github/workflows/aiv-2-commercial.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Cache Android toolchain
+        uses: actions/cache@v4
+        with:
+          path: aiv-v19/.toolchain
+          key: aiv-2-android35-ndk27d-shizuku-13.1.5
+
+      - name: Build AIV 2.0.0 unsigned
+        working-directory: aiv-v19
+        env:
+          AIV_BUILD_MODE: unsigned
+        run: |
+          chmod +x bootstrap-clean-build.sh
+          ./bootstrap-clean-build.sh
+
+      - name: Verify commercial candidate invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'android:versionName="2.0.0"' aiv-v19/app/src/main/AndroidManifest.xml
+          grep -q 'package="com.allinvisible.aiv"' aiv-v19/app/src/main/AndroidManifest.xml
+          grep -q 'ScreenIntegrityService' aiv-v19/app/src/main/AndroidManifest.xml
+          grep -q 'BIND_ACCESSIBILITY_SERVICE' aiv-v19/app/src/main/AndroidManifest.xml
+          grep -q 'TYPE_ACCESSIBILITY_OVERLAY' aiv-v19/app/src/main/java/fr/erick/journallocal/ScreenIntegrityService.java
+          grep -q 'network_actor_identity_id' aiv-v19/app/src/main/java/fr/erick/journallocal/AppIdentity.java
+          grep -q 'network_actor_identity_id' aiv-v19/app/src/main/java/fr/erick/journallocal/NetworkCaptureService.java
+          grep -q 'addTab("Traqueurs","trackers")' aiv-v19/app/src/main/java/fr/erick/journallocal/MainActivity.java
+          grep -q 'addTab("Anomalies","anomalies")' aiv-v19/app/src/main/java/fr/erick/journallocal/MainActivity.java
+          grep -q 'addTab("Intégrité","integrity")' aiv-v19/app/src/main/java/fr/erick/journallocal/MainActivity.java
+          test -s aiv-v19/build/AIV-2.0.0-unsigned.apk
+          sha256sum -c aiv-v19/build/AIV-2.0.0-unsigned.apk.sha256
+
+      - name: Upload AIV 2.0.0 unsigned APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: AIV-2.0.0-unsigned
+          path: |
+            aiv-v19/build/AIV-2.0.0-unsigned.apk
+            aiv-v19/build/AIV-2.0.0-unsigned.apk.sha256
+            aiv-v19/.toolchain/sdk/build-tools/35.0.0/lib/apksigner.jar
+          retention-days: 14
