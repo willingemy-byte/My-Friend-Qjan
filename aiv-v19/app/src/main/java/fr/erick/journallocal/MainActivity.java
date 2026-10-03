@@ -239,6 +239,41 @@ public final class MainActivity extends Activity {
         page.removeAllViews();
         page.addView(sectionTitle("Présentation"));
         page.addView(note("Interface Android native. Les informations de synthèse sont aussi présentées en tableau; Ouvrir affiche le détail complet."));
+        page.addView(sectionTitle("Niveaux d’autorisation"));
+        String[] levelHeaders={"Niveau","Définition","Détail"};
+        int[] levelWidths={90,520,100};
+        TableLayout levels=dataTable(levelHeaders,levelWidths);
+        String[][] levelDefs={
+            {"A1","Visible dans les autorisations"},
+            {"A2","Visible dans Toutes les autorisations"},
+            {"A3","Action possible sans intervention immédiate"},
+            {"A4","Avertissement de vigilance Android / AOSP"},
+            {"A5","Portée système ou inter-applications"}
+        };
+        for(int i=0;i<levelDefs.length;i++){
+            final int level=i+1;
+            final String code=levelDefs[i][0],definition=levelDefs[i][1];
+            addTableRow(levels,new String[]{code,definition},null,levelWidths,level,null,null,
+                v->showDetail(code+" · niveau d’autorisation",definition,null,null));
+        }
+        page.addView(tableScroller(levels));
+
+        page.addView(sectionTitle("Catégories d’applications"));
+        String[] groupHeaders={"Catégorie","Définition","Détail"};
+        int[] groupWidths={160,450,100};
+        TableLayout groups=dataTable(groupHeaders,groupWidths);
+        addTableRow(groups,new String[]{"Android","UID réservé/partagé ou attribution non unique dans le journal."},
+            null,groupWidths,0,null,null,v->showDetail("Android",
+                "Événements Android dont AIV ne peut pas attribuer proprement l’auteur à un seul package : UID réservé, partagé ou plusieurs candidats.",null,null));
+        addTableRow(groups,new String[]{"Système","Application préinstallée identifiée avec un package unique."},
+            null,groupWidths,0,null,null,v->showDetail("Système",
+                "Application préinstallée/système pour laquelle Android permet une attribution unique au package.",null,null));
+        addTableRow(groups,new String[]{"Utilisateur","Application installée par l’utilisateur avec un package unique."},
+            null,groupWidths,0,null,null,v->showDetail("Utilisateur",
+                "Application non système installée dans le profil utilisateur et attribuable à un package unique.",null,null));
+        page.addView(tableScroller(groups));
+
+        page.addView(sectionTitle("État AIV"));
         String[] headers={"Section","État","Résumé","Ouvrir"};
         int[] widths={220,170,480,100};
         TableLayout table=dataTable(headers,widths);
@@ -432,7 +467,7 @@ public final class MainActivity extends Activity {
                         String[] values={levelShort(level),shortTime(e.optLong("timestamp_ms")),app,uidText,action,destination};
                         String[] filters={null,null,app,uid<0?null:uidText,action,destination};
                         addTableRow(table,values,filters,widths,level,search,()->renderJournal(search.getText().toString()),
-                            v->showJsonDetail("Journal · "+app,e,pkg));
+                            v->showEventPedigree("Journal · "+app,e,pkg));
                     }
                     page.addView(tableScroller(table));
                 });
@@ -474,7 +509,7 @@ public final class MainActivity extends Activity {
                         String[] values={levelShort(level),app,tracker,pkgText,String.valueOf(x.optLong("journeys")),String.valueOf(x.optLong("destinations_count")),formatBytes(x.optLong("tx_bytes")),formatBytes(x.optLong("rx_bytes")),shortTime(x.optLong("last_ms"))};
                         String[] filters={null,app,tracker,pkg.isEmpty()?null:pkg,null,null,null,null,null};
                         addTableRow(table,values,filters,widths,level,search,()->renderTrackers(search.getText().toString()),
-                            v->showJsonDetail("Traqueur · "+app+" → "+tracker,x,pkg));
+                            v->showTrackerGroupDetail(x));
                     }
                     page.addView(tableScroller(table));
                 });
@@ -518,7 +553,7 @@ public final class MainActivity extends Activity {
                         String[] filters={null,null,actor,title,severity,null,explanation};
                         final int rowLevel=level;
                         addTableRow(table,values,filters,widths,rowLevel,search,()->renderAnomalies(search.getText().toString()),
-                            v->showJsonDetail("Anomalie · "+actor+" · "+title,x,pkg));
+                            v->showAnomalyDetail(x,pkg));
                     }
                     page.addView(tableScroller(table));
                 });
@@ -538,11 +573,13 @@ public final class MainActivity extends Activity {
         addTableRow(table,new String[]{"Service d'intégrité",service,s.optString("status","—")},null,widths,0,null,null,
             v->showDetail("Service d'intégrité","Service : "+service+"\nÉtat : "+s.optString("status","—"),
                 "Réglages accessibilité",()->openSetting(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
+        addTableRow(table,new String[]{"Badge AIV",s.optBoolean("overlay_visible")?"ACTIF":"INACTIF","Le badge en haut à droite confirme que le service d’accessibilité AIV est connecté."},null,widths,0,null,null,
+            v->showJsonDetail("Intégrité · badge AIV",s,null));
         addTableRow(table,new String[]{"Application observée",s.optString("observed_package","—"),"Package actuellement exposé par le service."},null,widths,0,null,null,
             v->showJsonDetail("Intégrité · état complet",s,null));
         addTableRow(table,new String[]{"Arbre sémantique",s.optInt("node_count")+" nœuds",s.optInt("text_node_count")+" nœuds texte"},null,widths,0,null,null,
             v->showJsonDetail("Intégrité · arbre sémantique",s,null));
-        addTableRow(table,new String[]{"Comparaison",s.optString("comparison_status","—"),"Une divergence n'est signalée que si une seconde preuve est disponible."},null,widths,0,null,null,
+        addTableRow(table,new String[]{"Comparaison",s.optString("comparison_status","—"),"La couche sémantique est observée; la validation d’une anomalie visuelle attend encore une seconde preuve indépendante."},null,widths,0,null,null,
             v->showJsonDetail("Intégrité · comparaison",s,null));
         page.addView(tableScroller(table));
         page.addView(action("Actualiser l'état",v->renderIntegrity()));
@@ -889,6 +926,160 @@ public final class MainActivity extends Activity {
     }
 
     private String levelShort(int level){return level>=1&&level<=5?"A"+level:"—";}
+
+    private void showTrackerGroupDetail(JSONObject group){
+        try{
+            String app=group.optString("app","—");
+            String tracker=group.optString("tracker_name","—");
+            String appKey=group.optString("app_key","");
+            int trackerId=group.optInt("tracker_id",-1);
+            JSONObject journeys=TrackerIndex.get(this).journeys(appKey,trackerId,0,30);
+
+            LinearLayout body=new LinearLayout(this);
+            body.setOrientation(LinearLayout.VERTICAL);
+            body.setPadding(dp(12),dp(8),dp(12),dp(12));
+            body.addView(text(app+" → "+tracker,16,TEXT,true));
+            body.addView(text(group.optLong("journeys")+" trajet(s) · "+group.optLong("destinations_count")+" destination(s)",13,MUTED,false));
+            JSONObject apk=group.optJSONObject("apk");
+            if(apk!=null)body.addView(text("Preuve APK : "+apk.optString("status","—")+" · tracker présent : "+String.valueOf(apk.opt("present")),13,MUTED,false));
+
+            JSONArray rows=journeys.optJSONArray("rows");
+            if(rows==null||rows.length()==0)body.addView(note("Aucun trajet détaillé disponible pour ce groupe."));
+            else for(int i=0;i<rows.length();i++){
+                JSONObject j=rows.optJSONObject(i);if(j==null)continue;
+                String correlation=j.optString("correlation");
+                String host=j.optString("host");if(host.isEmpty())host=j.optString("remote_ip","—");
+                String label=shortTime(j.optLong("last_ms"))+" · "+host+" · "+j.optLong("steps")+" étape(s)";
+                final JSONObject journey=j;
+                body.addView(action(label,v->showTrackerTrail(app+" → "+tracker,journey)));
+            }
+
+            ScrollView scroll=new ScrollView(this);scroll.addView(body);
+            new AlertDialog.Builder(this).setTitle("Traqueur · chaîne de trajets").setView(scroll).setPositiveButton("Fermer",null).show();
+        }catch(Exception e){
+            showDetail("Traqueur","Détail indisponible : "+e.getClass().getSimpleName()+" · "+String.valueOf(e.getMessage()),null,null);
+        }
+    }
+
+    private void showTrackerTrail(String title,JSONObject journey){
+        try{
+            String correlation=journey.optString("correlation");
+            JSONObject trail=TrackerIndex.get(this).trail(correlation);
+            LinearLayout body=new LinearLayout(this);
+            body.setOrientation(LinearLayout.VERTICAL);
+            body.setPadding(dp(12),dp(8),dp(12),dp(12));
+            body.addView(text("Corrélation : "+correlation,13,MUTED,false));
+            body.addView(text("UID "+journey.optInt("uid",-1)+" · ↑ "+formatBytes(journey.optLong("tx_bytes"))+" · ↓ "+formatBytes(journey.optLong("rx_bytes")),13,MUTED,false));
+
+            JSONArray steps=trail.optJSONArray("steps");
+            if(steps==null||steps.length()==0)body.addView(note("Aucune étape conservée."));
+            else for(int i=0;i<steps.length();i++){
+                JSONObject step=steps.optJSONObject(i);if(step==null)continue;
+                long eventId=step.optLong("event_id");
+                String label="#"+eventId+" · "+shortTime(step.optLong("observed_ms"))+" · "+step.optString("action","—");
+                String dest=step.optString("tls_sni");if(dest.isEmpty())dest=step.optString("destination",step.optString("remote_ip","—"));
+                LinearLayout item=card(label,dest+"\n↑ "+formatBytes(step.optLong("tx_bytes"))+" · ↓ "+formatBytes(step.optLong("rx_bytes")));
+                item.setOnClickListener(v->showEventPedigreeById(eventId));
+                body.addView(item);
+            }
+            if(trail.optBoolean("truncated"))body.addView(note("Chaîne tronquée à 250 étapes dans cette vue."));
+
+            ScrollView scroll=new ScrollView(this);scroll.addView(body);
+            new AlertDialog.Builder(this).setTitle(title+" · trajet").setView(scroll).setPositiveButton("Fermer",null).show();
+        }catch(Exception e){
+            showDetail("Trajet","Détail indisponible : "+e.getClass().getSimpleName()+" · "+String.valueOf(e.getMessage()),null,null);
+        }
+    }
+
+    private void showAnomalyDetail(JSONObject anomaly,String fallbackPkg){
+        try{
+            LinearLayout body=new LinearLayout(this);
+            body.setOrientation(LinearLayout.VERTICAL);
+            body.setPadding(dp(12),dp(8),dp(12),dp(12));
+            body.addView(text(anomaly.optString("title","Anomalie"),16,TEXT,true));
+            body.addView(text(anomaly.optString("explanation",""),13,MUTED,false));
+            body.addView(text("Occurrences : "+anomaly.optLong("occurrences",1)+" · "+anomaly.optString("severity","—"),13,MUTED,false));
+
+            long id=anomaly.optLong("id",-1);
+            if(id>0){
+                JSONObject ev=AnomalyMonitor.get(this).evidence(id);
+                JSONArray events=ev.optJSONArray("events");
+                if(events!=null&&events.length()>0){
+                    body.addView(text("Événements reliés",15,TEXT,true));
+                    for(int i=0;i<events.length();i++){
+                        JSONObject e=events.optJSONObject(i);if(e==null)continue;
+                        long eventId=e.optLong("id",-1);
+                        String label="#"+eventId+" · "+e.optString("app","—")+" · "+e.optString("action","—");
+                        final JSONObject event=e;
+                        String pkg=uniquePackage(e.optJSONObject("details"));
+                        final String eventPkg=pkg.isEmpty()?fallbackPkg:pkg;
+                        body.addView(action(label,v->showEventPedigree("Événement #"+eventId,event,eventPkg)));
+                    }
+                }else body.addView(note("Aucun événement source disponible."));
+            }
+
+            ScrollView scroll=new ScrollView(this);scroll.addView(body);
+            new AlertDialog.Builder(this).setTitle("Anomalie · détail").setView(scroll).setPositiveButton("Fermer",null).show();
+        }catch(Exception e){
+            showJsonDetail("Anomalie",anomaly,fallbackPkg);
+        }
+    }
+
+    private void showEventPedigreeById(long eventId){
+        try{
+            JSONArray ids=new JSONArray().put(eventId);
+            JSONArray events=EventStore.get(this).evidence(ids);
+            if(events.length()==0){showDetail("Événement #"+eventId,"Événement non disponible dans le journal local.",null,null);return;}
+            JSONObject e=events.getJSONObject(0);
+            showEventPedigree("Événement #"+eventId,e,uniquePackage(e.optJSONObject("details")));
+        }catch(Exception e){
+            showDetail("Événement #"+eventId,"Lecture impossible : "+e.getClass().getSimpleName(),null,null);
+        }
+    }
+
+    private void showEventPedigree(String title,JSONObject event,String fallbackPkg){
+        StringBuilder body=new StringBuilder();
+        try{body.append("ÉVÉNEMENT\n").append(event.toString(2));}
+        catch(Exception e){body.append("ÉVÉNEMENT\n").append(String.valueOf(event));}
+
+        long eventId=event.optLong("id",-1);
+        if(eventId>0){
+            try{
+                JSONObject chain=AivStore.detail(this,eventId);
+                body.append("\n\nCHAÎNE AIV / DÉCISION\n").append(chain.toString(2));
+            }catch(Exception e){
+                body.append("\n\nCHAÎNE AIV\nIndisponible : ").append(e.getClass().getSimpleName());
+            }
+        }
+
+        String pkg=uniquePackage(event.optJSONObject("details"));
+        if(pkg.isEmpty())pkg=fallbackPkg==null?"":fallbackPkg;
+        if(!pkg.isEmpty()){
+            try{
+                JSONObject identity=AppIdentity.forPackage(this,pkg);
+                body.append("\n\nIDENTITÉ CRYPTOGRAPHIQUE DE L’APPLICATION\n").append(identity.toString(2));
+                try{
+                    JSONObject dossier=DefenseStore.get(this).detail(pkg,0);
+                    body.append("\n\nPÉDIGRÉE LOCAL / HISTORIQUE\n").append(dossier.toString(2));
+                }catch(Exception ignored){}
+            }catch(Exception e){
+                body.append("\n\nIDENTITÉ CRYPTOGRAPHIQUE\nIndisponible pour ").append(pkg).append(" : ").append(e.getClass().getSimpleName());
+            }
+        }
+
+        showLargeTextDetail(title,body.toString(),pkg);
+    }
+
+    private void showLargeTextDetail(String title,String body,String pkg){
+        TextView content=text(body==null?"—":body,12,TEXT,false);
+        content.setTypeface(Typeface.MONOSPACE);
+        content.setTextIsSelectable(true);
+        content.setPadding(dp(14),dp(10),dp(14),dp(18));
+        ScrollView scroll=new ScrollView(this);scroll.addView(content);
+        AlertDialog.Builder dialog=new AlertDialog.Builder(this).setTitle(title).setView(scroll).setPositiveButton("Fermer",null);
+        if(pkg!=null&&!pkg.isEmpty())dialog.setNeutralButton("Réglages Android",(d,w)->openAppSettings(pkg));
+        dialog.show();
+    }
 
     private void showJsonDetail(String title,JSONObject data,String pkg){
         String body;
