@@ -21,6 +21,7 @@ import android.view.WindowInsets;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.HorizontalScrollView;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -31,7 +32,7 @@ import java.util.Locale;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * AIV 1.2 native shell.
+ * AIV 2.0 native shell.
  *
  * Deliberately contains no WebView, JavaScript bridge or HTML renderer.
  * Data shown here is read directly from the local Android/SQLite sources.
@@ -49,6 +50,8 @@ public final class MainActivity extends Activity {
     private static final int GREEN=0xff65df70;
     private static final int ORANGE=0xfff2a44d;
     private static final int RED=0xffff6673;
+    private static final int YELLOW=0xfff3d65a;
+    private static final int VIOLET=0xffd065ff;
 
     private final Handler main=new Handler(Looper.getMainLooper());
     private final AtomicInteger generation=new AtomicInteger();
@@ -92,16 +95,42 @@ public final class MainActivity extends Activity {
 
         LinearLayout head=new LinearLayout(this);
         head.setOrientation(LinearLayout.VERTICAL);
-        head.setPadding(dp(18),dp(14),dp(18),dp(12));
+        head.setPadding(dp(18),dp(14),dp(18),dp(10));
         head.setBackgroundColor(0xff051329);
+
+        LinearLayout brand=new LinearLayout(this);
+        brand.setOrientation(LinearLayout.HORIZONTAL);
+        brand.setGravity(Gravity.CENTER_VERTICAL);
+        ImageView logo=new ImageView(this);
+        logo.setImageResource(fr.erick.journallocal.R.drawable.aiv_logo);
+        logo.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        LinearLayout.LayoutParams logoLp=new LinearLayout.LayoutParams(dp(52),dp(52));
+        logoLp.setMargins(0,0,dp(12),0);
+        brand.addView(logo,logoLp);
+        LinearLayout brandText=new LinearLayout(this);
+        brandText.setOrientation(LinearLayout.VERTICAL);
         TextView title=text("ALL IN VISIBLE",24,TEXT,true);
         title.setLetterSpacing(.09f);
-        TextView sub=text("AIV 1.2.0 · interface Android native",13,MUTED,false);
+        TextView sub=text("AIV 2.0.0 · interface Android native",13,MUTED,false);
         TextView nativeTag=text("●  NATIF · WebView absent",13,GREEN,true);
-        nativeTag.setPadding(0,dp(7),0,0);
-        head.addView(title);
-        head.addView(sub);
-        head.addView(nativeTag);
+        nativeTag.setPadding(0,dp(4),0,0);
+        brandText.addView(title);brandText.addView(sub);brandText.addView(nativeTag);
+        brand.addView(brandText,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
+        head.addView(brand);
+
+        HorizontalScrollView statusScroll=new HorizontalScrollView(this);
+        statusScroll.setHorizontalScrollBarEnabled(false);
+        LinearLayout statusRow=new LinearLayout(this);
+        statusRow.setOrientation(LinearLayout.HORIZONTAL);
+        statusRow.setPadding(0,dp(9),0,0);
+        statusRow.addView(statusChip("Collecte",RecorderService.running));
+        statusRow.addView(statusChip("Corrélation",NetworkCaptureService.running));
+        boolean shizukuOk=false;
+        try{JSONObject ss=ShizukuCleanup.state(this);shizukuOk=ss.optBoolean("binder")&&ss.optBoolean("authorized");}catch(Throwable ignored){}
+        statusRow.addView(statusChip("Shizuku",shizukuOk));
+        statusRow.addView(statusChip("VPN",NetworkCaptureService.running));
+        statusScroll.addView(statusRow);
+        head.addView(statusScroll);
         root.addView(head,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT));
 
         HorizontalScrollView scroller=new HorizontalScrollView(this);
@@ -111,9 +140,13 @@ public final class MainActivity extends Activity {
         nav.setPadding(dp(10),dp(8),dp(10),dp(8));
         nav.setBackgroundColor(0xff050b12);
         addTab("Présentation","presentation");
+        addTab("Journal","journal");
+        addTab("Flux","flows");
+        addTab("Traqueurs","trackers");
+        addTab("Anomalies","anomalies");
         addTab("Applications","applications");
         addTab("Accès","access");
-        addTab("Flux","flows");
+        addTab("Intégrité","integrity");
         addTab("Shizuku","shizuku");
         scroller.addView(nav);
         root.addView(scroller,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -190,9 +223,13 @@ public final class MainActivity extends Activity {
             View v=nav.getChildAt(i);
             if(v instanceof Button)styleTab((Button)v,id.equals(v.getTag()));
         }
-        if("applications".equals(id))renderApplications("");
-        else if("access".equals(id))renderSpecialAccess();
+        if("journal".equals(id))renderJournal("");
         else if("flows".equals(id))renderFlows("");
+        else if("trackers".equals(id))renderTrackers("");
+        else if("anomalies".equals(id))renderAnomalies("");
+        else if("applications".equals(id))renderApplications("");
+        else if("access".equals(id))renderSpecialAccess();
+        else if("integrity".equals(id))renderIntegrity();
         else if("shizuku".equals(id)){ if(previewTier>=TIER_PAID)renderShizuku(); else renderUpgradeGate(); }
         else renderPresentation();
     }
@@ -269,7 +306,7 @@ public final class MainActivity extends Activity {
                 "\nCes deux accès sont distincts : le VPN observe les flux; Shizuku exécute les actions de contrôle validées."));
             page.addView(card("Fichiers",
                 "Accès à tous les fichiers : "+(s.optBoolean("all_files_declared")?(s.optBoolean("all_files_granted")?"ACTIF":"DÉCLARÉ, NON ACTIF"):"NON DEMANDÉ")+
-                "\nAIV 1.2.0 ne le demande pas par défaut : cet accès couvre surtout le stockage partagé et ne donne pas accès aux données privées /data/data des autres applications."));
+                "\nAIV 2.0.0 ne le demande pas par défaut : cet accès couvre surtout le stockage partagé et ne donne pas accès aux données privées /data/data des autres applications."));
             page.addView(card("Autres accès",
                 "Superposition : "+yesNo(s.optBoolean("overlay"))+
                 "\nModifier les réglages système : "+yesNo(s.optBoolean("write_settings"))+
@@ -281,6 +318,122 @@ public final class MainActivity extends Activity {
         page.addView(action("Ouvrir Accès spéciaux Android",v->openSetting("android.settings.MANAGE_SPECIAL_APP_ACCESSES")));
         page.addView(action("Ouvrir les réglages VPN",v->openSetting(Settings.ACTION_VPN_SETTINGS)));
         page.addView(action("Ouvrir les options développeur",v->openSetting(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)));
+    }
+
+    private void renderJournal(String query){
+        int ticket=generation.incrementAndGet();
+        page.removeAllViews();
+        page.addView(sectionTitle("Journal"));
+        page.addView(note("Chronologie locale native. Recherche dans les événements SQLite AIV; aucune vue Web n'intervient."));
+        EditText search=searchBox("Application, domaine, action, UID ou ID",query);
+        page.addView(search);
+        page.addView(action("Rechercher / actualiser",v->renderJournal(search.getText().toString())));
+        TextView loading=text("Lecture du journal…",14,MUTED,false);page.addView(loading);
+        new Thread(()->{
+            try{
+                JSONObject data=EventStore.get(this).page(query,"",0,150,0,"","",false);
+                JSONArray rows=data.optJSONArray("events");
+                main.post(()->{
+                    if(ticket!=generation.get()||!"journal".equals(currentPage))return;
+                    page.removeView(loading);
+                    page.addView(text(data.optLong("matched")+" résultat(s) · "+data.optLong("total")+" événement(s)",14,MUTED,true));
+                    if(rows==null)return;
+                    for(int i=0;i<rows.length();i++){
+                        JSONObject e=rows.optJSONObject(i);if(e==null)continue;
+                        JSONObject d=e.optJSONObject("details");
+                        int uid=d==null?-1:d.optInt("uid",-1);
+                        String pkg=uniquePackage(d);
+                        int level=levelForPackage(pkg);
+                        String title=levelPrefix(level)+e.optString("app","Android");
+                        String body=shortTime(e.optLong("timestamp_ms"))+" · UID "+(uid<0?"—":uid)+"\n"+
+                            e.optString("action")+"\n"+e.optString("destination");
+                        page.addView(levelCard(title,body,level));
+                    }
+                });
+            }catch(Exception e){main.post(()->{if(ticket==generation.get()){page.removeView(loading);page.addView(card("Erreur journal",e.getClass().getSimpleName()));}});}
+        },"aiv-native-journal").start();
+    }
+
+    private void renderTrackers(String query){
+        int ticket=generation.incrementAndGet();
+        page.removeAllViews();
+        page.addView(sectionTitle("Traqueurs · Exodus"));
+        page.addView(note("Regroupement local des trajets réseau qui correspondent au catalogue Exodus. Une correspondance de signature est un indice technique, pas une conclusion sur le contenu ou l'intention."));
+        EditText search=searchBox("Application, tracker ou destination",query);
+        page.addView(search);
+        page.addView(action("Actualiser",v->{TrackerIndex.get(this).request();renderTrackers(search.getText().toString());}));
+        TextView loading=text("Indexation des traqueurs…",14,MUTED,false);page.addView(loading);
+        new Thread(()->{
+            try{
+                JSONObject data=TrackerIndex.get(this).groups(query,0,60);
+                JSONArray rows=data.optJSONArray("rows");
+                JSONObject status=data.optJSONObject("status");
+                main.post(()->{
+                    if(ticket!=generation.get()||!"trackers".equals(currentPage))return;
+                    page.removeView(loading);
+                    page.addView(text((rows==null?0:rows.length())+" groupe(s) affiché(s) · "+data.optLong("total")+" total",14,MUTED,true));
+                    if(status!=null)page.addView(card("Index Exodus","Événements moulinés : "+status.optLong("checkpoint")+" / "+status.optLong("latest_event")+"\nGroupes : "+status.optLong("tracker_groups")+" · étapes : "+status.optLong("trail_steps")));
+                    if(rows==null)return;
+                    for(int i=0;i<rows.length();i++){
+                        JSONObject x=rows.optJSONObject(i);if(x==null)continue;
+                        String pkg=x.optString("package_name");
+                        int level=levelForPackage(pkg);
+                        String body=(pkg.isEmpty()?"Paquet non attribué":pkg)+"\n"+
+                            x.optLong("journeys")+" trajet(s) · "+x.optLong("destinations_count")+" destination(s) · ↑ "+formatBytes(x.optLong("tx_bytes"))+" · ↓ "+formatBytes(x.optLong("rx_bytes"))+
+                            "\nDernier : "+shortTime(x.optLong("last_ms"));
+                        page.addView(levelCard(levelPrefix(level)+x.optString("app")+" → "+x.optString("tracker_name"),body,level));
+                    }
+                });
+            }catch(Exception e){main.post(()->{if(ticket==generation.get()){page.removeView(loading);page.addView(card("Erreur traqueurs",e.getClass().getSimpleName()+": "+String.valueOf(e.getMessage())));}});}
+        },"aiv-native-trackers").start();
+    }
+
+    private void renderAnomalies(String query){
+        int ticket=generation.incrementAndGet();
+        page.removeAllViews();
+        page.addView(sectionTitle("Anomalies"));
+        page.addView(note("Signalements déterministes générés à partir du journal local. Ils indiquent ce qui mérite un examen et conservent les preuves associées."));
+        EditText search=searchBox("Application, signal ou contexte",query);
+        page.addView(search);
+        page.addView(action("Actualiser",v->{AnomalyMonitor.request(this);renderAnomalies(search.getText().toString());}));
+        TextView loading=text("Lecture de l'analyse…",14,MUTED,false);page.addView(loading);
+        new Thread(()->{
+            try{
+                JSONObject data=AnomalyMonitor.get(this).page("anomaly",false,0,100,query);
+                JSONArray rows=data.optJSONArray("rows");
+                main.post(()->{
+                    if(ticket!=generation.get()||!"anomalies".equals(currentPage))return;
+                    page.removeView(loading);
+                    page.addView(text(data.optLong("total")+" groupe(s)",14,MUTED,true));
+                    if(rows==null)return;
+                    for(int i=0;i<rows.length();i++){
+                        JSONObject x=rows.optJSONObject(i);if(x==null)continue;
+                        JSONObject identity=x.optJSONObject("identity"),details=identity==null?null:identity.optJSONObject("details");
+                        String pkg=uniquePackage(details);
+                        int level=levelForPackage(pkg);
+                        if(level==0&&"attention".equals(x.optString("severity")))level=4;
+                        String actor=x.optString("actor",identity==null?"—":identity.optString("app","—"));
+                        String body=shortTime(x.optLong("last_ms"))+" · "+x.optString("severity")+" · "+x.optLong("occurrences",1)+" occurrence(s)\n"+x.optString("explanation");
+                        page.addView(levelCard(levelPrefix(level)+actor+" · "+x.optString("title"),body,level));
+                    }
+                });
+            }catch(Exception e){main.post(()->{if(ticket==generation.get()){page.removeView(loading);page.addView(card("Erreur anomalies",e.getClass().getSimpleName()+": "+String.valueOf(e.getMessage())));}});}
+        },"aiv-native-anomalies").start();
+    }
+
+    private void renderIntegrity(){
+        page.removeAllViews();
+        page.addView(sectionTitle("Intégrité d'affichage"));
+        JSONObject s=ScreenIntegrityService.state();
+        page.addView(card("Surveillance AIV",
+            "Service : "+(s.optBoolean("connected")?"ACTIF":"INACTIF")+"\n"+
+            "État : "+s.optString("status")+"\n"+
+            "Application observée : "+s.optString("observed_package","—")+"\n"+
+            "Nœuds : "+s.optInt("node_count")+" · texte : "+s.optInt("text_node_count")+"\n"+
+            "Comparaison : "+s.optString("comparison_status")));
+        page.addView(note("AIV observe la couche sémantique Android lorsque l'utilisateur active volontairement le service d'accessibilité. Les divergences visuelles ne sont signalées que lorsqu'une seconde preuve permet une comparaison; l'absence de preuve reste 'indéterminée'."));
+        page.addView(action("Activer / régler l'accessibilité AIV",v->openSetting(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
+        page.addView(action("Actualiser l'état",v->renderIntegrity()));
     }
 
     private void renderApplications(String query){
@@ -410,7 +563,7 @@ public final class MainActivity extends Activity {
         page.addView(note("Aperçu investisseur. La gestion de parc n'est pas finalisée dans cette version."));
         page.addView(card("Vue parc",
             "Appareils enrôlés · état de conformité · anomalies · politiques · rapports · bascule entre vue appareil et vue parc"));
-        page.addView(card("Statut","Architecture prévue · fonctions de parc non activées dans AIV 1.2.0."));
+        page.addView(card("Statut","Architecture prévue · fonctions de parc non activées dans AIV 2.0.0."));
     }
 
     private void prepareLocalData(){
@@ -463,6 +616,35 @@ public final class MainActivity extends Activity {
     private void openAppSettings(String pkg){
         try{startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:"+pkg)));}
         catch(Exception e){toast("Réglages indisponibles");}
+    }
+
+    private TextView statusChip(String label,boolean active){
+        TextView v=text((active?"● ":"○ ")+label,12,active?GREEN:MUTED,true);
+        v.setPadding(dp(10),dp(5),dp(10),dp(5));
+        v.setBackground(panelDrawable(0xff0a1a25,active?0xff2b7045:BORDER,999));
+        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.setMargins(0,0,dp(7),0);v.setLayoutParams(lp);return v;
+    }
+    private int levelForPackage(String pkg){try{return DefenseStore.get(this).levelFor(pkg);}catch(Throwable t){return 0;}}
+    private int levelColor(int level){return level==1?GREEN:level==2?YELLOW:level==3?ORANGE:level==4?RED:level==5?VIOLET:MUTED;}
+    private String levelPrefix(int level){return level>=1&&level<=5?"A"+level+" · ":"? · ";}
+    private LinearLayout levelCard(String title,String body,int level){
+        LinearLayout box=card(title,body);box.setBackground(panelDrawable(PANEL_2,levelColor(level),18));return box;
+    }
+    private String uniquePackage(JSONObject d){
+        if(d==null)return "";
+        JSONArray a=d.optJSONArray("packages");
+        return a!=null&&a.length()==1?a.optString(0):"";
+    }
+    private String shortTime(long ms){
+        if(ms<=0)return "—";
+        java.text.SimpleDateFormat f=new java.text.SimpleDateFormat("dd-MM HH:mm:ss.SSS",Locale.CANADA_FRENCH);
+        return f.format(new java.util.Date(ms));
+    }
+    private String formatBytes(long n){
+        if(n<1024)return n+" o";
+        if(n<1024L*1024L)return String.format(Locale.CANADA_FRENCH,"%.1f Kio",n/1024.0);
+        return String.format(Locale.CANADA_FRENCH,"%.2f Mio",n/(1024.0*1024.0));
     }
 
     private TextView sectionTitle(String value){TextView v=text(value,28,TEXT,true);v.setPadding(dp(4),dp(6),dp(4),dp(10));return v;}
