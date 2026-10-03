@@ -577,6 +577,13 @@ public final class MainActivity extends Activity {
                 "Réglages accessibilité",()->openSetting(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
         addTableRow(table,new String[]{"Badge AIV",s.optBoolean("overlay_visible")?"ACTIF":"INACTIF","Le badge en haut à droite confirme que le service d’accessibilité AIV est connecté."},null,widths,0,null,null,
             v->showJsonDetail("Intégrité · badge AIV",s,null));
+        addTableRow(table,new String[]{"État global",s.optBoolean("core_active")?"TOUT ACTIF":"À VÉRIFIER",
+            "Collecte "+yesNo(s.optBoolean("collector_active"))+
+            " · Corrélation "+yesNo(s.optBoolean("correlation_active"))+
+            " · VPN "+(s.optBoolean("vpn_expected")?yesNo(s.optBoolean("vpn_active")):"OPTIONNEL")+
+            " · Shizuku "+(s.optBoolean("shizuku_expected")?yesNo(s.optBoolean("shizuku_active")):"NON REQUIS")+
+            " · Anomalies "+s.optLong("unread_anomalies",0)},null,widths,0,null,null,
+            v->showJsonDetail("Intégrité · état global",s,null));
         addTableRow(table,new String[]{"Disponibilité","FREE","Détection d’intégrité d’affichage incluse pour tous les utilisateurs."},null,widths,0,null,null,
             v->showDetail("Intégrité d’affichage · Free","Cette fonction reste disponible dans le niveau Free. Aucune fonction de contrôle Shizuku n’est requise pour l’observation.",null,null));
         addTableRow(table,new String[]{"Application observée",s.optString("observed_package","—"),"Package actuellement exposé par le service."},null,widths,0,null,null,
