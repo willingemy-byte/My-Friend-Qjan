@@ -39,7 +39,8 @@ public final class SpecialAccess {
             "overlay",Settings.canDrawOverlays(c),
             "write_settings",Settings.System.canWrite(c),
             "ignore_battery_optimizations",ignoresBatteryOptimizations(c,pkg),
-            "can_request_package_installs",Build.VERSION.SDK_INT>=26 && pm.canRequestPackageInstalls(),
+            "request_install_packages_declared",declared(pm,pkg,Manifest.permission.REQUEST_INSTALL_PACKAGES),
+            "can_request_package_installs",canRequestPackageInstalls(pm,pkg),
             "scope","État local exposé par Android. AIV n'accorde aucun accès spécial silencieusement."
         );
 
@@ -75,6 +76,13 @@ public final class SpecialAccess {
             for(String name:info.requestedPermissions)if(permission.equals(name))return true;
         }catch(Exception ignored){}
         return false;
+    }
+
+    private static boolean canRequestPackageInstalls(PackageManager pm,String pkg){
+        if(Build.VERSION.SDK_INT<26)return false;
+        if(!declared(pm,pkg,Manifest.permission.REQUEST_INSTALL_PACKAGES))return false;
+        try{return pm.canRequestPackageInstalls();}
+        catch(SecurityException e){return false;}
     }
 
     private static boolean usageAccess(Context c,String pkg){
