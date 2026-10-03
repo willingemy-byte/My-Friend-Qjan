@@ -50,7 +50,9 @@ public final class NetworkCaptureService extends VpnService {
         String local,remote,actor="Application non identifiée",attribution="UID non disponible",journalGroup="android";
         boolean systemApp=false,updatedSystemApp=false;
         JSONArray packages=new JSONArray(),security=new JSONArray();
-        JSONObject cryptographicIdentity=EventStore.object("schema","aiv-app-identity/1","type","unresolved","status","UID_NOT_RESOLVED");
+        JSONObject cryptographicIdentity=EventStore.object("schema","aiv-app-identity/2","type","unresolved","status","UID_NOT_RESOLVED");
+        String originatingPackage="",provenanceStatus="UNRESOLVED",provenanceMethod="NETWORK_OWNER_UID";
+        int originatingUid=-1;
         String tlsName="",tlsStatus="non_observe";boolean ech=false;
     }
     @Override public void onCreate(){
@@ -196,7 +198,8 @@ public final class NetworkCaptureService extends VpnService {
             "entitlement_state",ProductAccess.status(this),
             "key_id",vpnKeyId,
             "security_level",vpnSecurityLevel,
-            "app_identity_id",f.cryptographicIdentity.optString("app_identity_id",
+            "app_identity_id",f.cryptographicIdentity.optString("app_identity_id",""),
+            "network_actor_identity_id",f.cryptographicIdentity.optString("network_actor_identity_id",
                 f.cryptographicIdentity.optString("uid_identity_id","")),
             "flow_correlation_id",f.correlationId,
             "native_flow_id",id,
@@ -214,6 +217,7 @@ public final class NetworkCaptureService extends VpnService {
                 "flow="+f.correlationId+"\n"+
                 "native_id="+id+"\n"+
                 "app_id="+out.optString("app_identity_id")+"\n"+
+                "network_actor_id="+out.optString("network_actor_identity_id")+"\n"+
                 "uid="+f.uid+"\n"+
                 "proto="+f.protocol+"\n"+
                 "local="+f.local+":"+f.localPort+"\n"+
@@ -236,13 +240,21 @@ public final class NetworkCaptureService extends VpnService {
             "correlation_scope","Identifiant local aléatoire 128 bits; il reste dans All In Visible et n’est pas ajouté aux paquets Internet",
             "first_observed_ms",f.firstMs,"first_outbound_ms",f.firstOutboundMs==0?JSONObject.NULL:f.firstOutboundMs,"first_inbound_ms",f.firstInboundMs==0?JSONObject.NULL:f.firstInboundMs,
             "outbound_observed",f.firstOutboundMs!=0,"inbound_observed",f.firstInboundMs!=0,
-            "flow_linkage","Les deux directions partagent le même état de connexion du relais local; cela relie le retour réseau au flux sans déchiffrer TLS et sans résoudre un UID partagé en paquet individuel",
+            "flow_linkage","Les deux directions partagent le même état de connexion du relais local; AIV relie donc le retour au même flow et à la même identité de propriétaire réseau. Une provenance applicative supplémentaire reste séparée tant qu'elle n'est pas corroborée.",
             "ip_version",f.version,
             "protocol",f.protocol==6?"TCP":f.protocol==17?"UDP":f.protocol==1?"ICMP":f.protocol==58?"ICMPv6":String.valueOf(f.protocol),
             "local_ip",f.local,"local_port",f.localPort,"remote_ip",f.remote,"port",f.remotePort,"uid",f.uid,"packages",f.packages,"package_list_scope","Paquets retournés par Android; visibilité éventuellement limitée",
             "attribution",f.attribution,"journal_group",f.journalGroup,"system_app",f.systemApp,"updated_system_app",f.updatedSystemApp,"package_list_scope","Paquets retournés par Android; visibilité éventuellement limitée","app_identity",f.cryptographicIdentity,"vpn_identity",vpnIdentity(id,f),
-            "cross_analysis",EventStore.object("status",f.uid<0?"uid_inconnu":(f.packages.length()>1||f.uid==1000)?"uid_partage_non_resolu":"uid_observe","pid",JSONObject.NULL,"process_name",JSONObject.NULL,"service",JSONObject.NULL,
-                "automatic_system_logcat","Non accessible à cette application ordinaire","diagnostic_correlation","Disponible à la demande après import d’un diagnostic horodaté; une coïncidence temporelle ne prouve pas la propriété d’un socket"),
+            "provenance",EventStore.object(
+                "network_owner_uid",f.uid<0?JSONObject.NULL:f.uid,
+                "network_actor_identity_id",f.cryptographicIdentity.optString("network_actor_identity_id",f.cryptographicIdentity.optString("uid_identity_id","")),
+                "originating_uid",f.originatingUid<0?JSONObject.NULL:f.originatingUid,
+                "originating_package",f.originatingPackage.isEmpty()?JSONObject.NULL:f.originatingPackage,
+                "status",f.provenanceStatus,
+                "method",f.provenanceMethod,
+                "scope","Le propriétaire du socket est observé directement. Une application demandeuse derrière un service système n'est renseignée que lorsqu'une preuve indépendante permet la corrélation."),
+            "cross_analysis",EventStore.object("status",f.uid<0?"uid_inconnu":(f.packages.length()>1||f.uid%100000<10000)?"uid_partage_non_resolu":"uid_observe","pid",JSONObject.NULL,"process_name",JSONObject.NULL,"service",JSONObject.NULL,
+                "automatic_system_logcat","Non accessible à cette application ordinaire","diagnostic_correlation","Disponible après import d’un diagnostic horodaté ou autre source de provenance; une coïncidence temporelle seule ne prouve pas la propriété d’un socket"),
             "security_context",f.security,"tls_sni",f.tlsName,"tls_observation",f.protocol==6?f.tlsStatus:"Non analysé (UDP/QUIC et autres protocoles)","ech_extension_present",f.ech,"sni_scope",f.ech?"Nom externe possible; ECH ou GREASE, nom interne non observable":"Nom annoncé dans le ClientHello; service ou contenu non prouvé","transport",current==null?"Inconnu":current.transport,
             "scope","Métadonnées du flux IP; aucun contenu de message conservé, aucune frontière de message déduite");
     }
