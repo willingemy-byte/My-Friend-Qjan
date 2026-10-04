@@ -45,6 +45,7 @@ public final class MainActivity extends Activity {
     private static final int VPN_REQUEST=1201;
     private static final int NOTIFICATION_REQUEST=1202;
     private static final int EXPORT_REQUEST=1203;
+    private static final int ANALYSIS_EXPORT_REQUEST=1204;
     private static final int BG=0xff04102f;
     private static final int PANEL=0xff081827;
     private static final int PANEL_2=0xff0c2233;
@@ -126,7 +127,7 @@ public final class MainActivity extends Activity {
         brandText.setOrientation(LinearLayout.VERTICAL);
         TextView title=text("ALL IN VISIBLE",24,TEXT,true);
         title.setLetterSpacing(.09f);
-        TextView sub=text("AIV 2.0.3 · interface Android native",13,MUTED,false);
+        TextView sub=text("AIV 2.0.4 · interface Android native",13,MUTED,false);
         TextView nativeTag=text("●  NATIF · WebView absent",13,GREEN,true);
         nativeTag.setPadding(0,dp(4),0,0);
         brandText.addView(title);brandText.addView(sub);brandText.addView(nativeTag);
@@ -158,6 +159,7 @@ public final class MainActivity extends Activity {
         addTab("Accès","access");
         addTab("Intégrité","integrity");
         addTab("Shizuku","shizuku");
+        addTab("Supabase","supabase");
         scroller.addView(nav);
         root.addView(scroller,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT));
 
@@ -232,13 +234,14 @@ public final class MainActivity extends Activity {
         else if("access".equals(id))renderSpecialAccess();
         else if("integrity".equals(id))renderIntegrity();
         else if("shizuku".equals(id)){ if(previewTier>=TIER_PAID)renderShizuku(); else renderUpgradeGate(); }
+        else if("supabase".equals(id))renderSupabase();
         else renderPresentation();
     }
 
     private void renderPresentation(){
         page.removeAllViews();
         page.addView(sectionTitle("Présentation"));
-        page.addView(note("Interface Android native. Build propriétaire 2.0.3 : niveau TI local déverrouillé, VPN AIV désactivé par défaut pendant le diagnostic, journal et export locaux disponibles sans VPN."));
+        page.addView(note("Interface Android native. Build propriétaire 2.0.4 : niveau TI local déverrouillé, VPN AIV désactivé par défaut pendant le diagnostic, journal et export locaux disponibles sans VPN."));
 
         page.addView(sectionTitle("Mode d’utilisation"));
         tierFooter=new LinearLayout(this);
@@ -539,6 +542,7 @@ public final class MainActivity extends Activity {
         EditText search=searchBox("Application, signal ou contexte",query);
         page.addView(search);
         page.addView(action("Actualiser",v->{AnomalyMonitor.request(this);renderAnomalies(search.getText().toString());}));
+        page.addView(action("Exporter les anomalies",v->beginAnalysisExport()));
         page.addView(note("Double-tape une valeur utile pour filtrer. Ouvrir affiche le détail complet de l'anomalie."));
         TextView loading=text("Lecture de l'analyse…",14,MUTED,false);page.addView(loading);
         new Thread(()->{
@@ -550,8 +554,8 @@ public final class MainActivity extends Activity {
                     page.removeView(loading);
                     page.addView(text(data.optLong("total")+" groupe(s)",14,MUTED,true));
                     if(rows==null)return;
-                    String[] headers={"Niv.","Heure","Application","Signal","Sévérité","Occ.","Explication","Détail"};
-                    int[] widths={64,120,190,220,110,80,360,100};
+                    String[] headers={"Niv.","Heure","Application","Règle","Destination / sujet","Occ.","Sévérité","Détail"};
+                    int[] widths={64,135,190,220,310,80,110,100};
                     TableLayout table=dataTable(headers,widths);
                     for(int i=0;i<rows.length();i++){
                         JSONObject x=rows.optJSONObject(i);if(x==null)continue;
@@ -562,9 +566,12 @@ public final class MainActivity extends Activity {
                         String actor=x.optString("actor",identity==null?"—":identity.optString("app","—"));
                         String title=x.optString("title","—");
                         String severity=x.optString("severity","—");
-                        String explanation=x.optString("explanation","—");
-                        String[] values={levelShort(level),shortTime(x.optLong("last_ms")),actor,title,severity,String.valueOf(x.optLong("occurrences",1)),explanation};
-                        String[] filters={null,null,actor,title,severity,null,explanation};
+                        JSONObject facts=x.optJSONObject("facts");
+                        String destination=facts==null?"":facts.optString("Destination contactée","");
+                        if(destination.isEmpty())destination=x.optString("subject","—");
+                        String rule=x.optString("rule",title);
+                        String[] values={levelShort(level),shortTime(x.optLong("last_ms")),actor,rule,destination,String.valueOf(x.optLong("occurrences",1)),severity};
+                        String[] filters={null,null,actor,rule,destination,null,severity};
                         final int rowLevel=level;
                         addTableRow(table,values,filters,widths,rowLevel,search,()->renderAnomalies(search.getText().toString()),
                             v->showAnomalyDetail(x,pkg));
@@ -709,10 +716,52 @@ public final class MainActivity extends Activity {
         },"aiv-native-flows").start();
     }
 
+    private void renderSupabase(){
+        page.removeAllViews();
+        page.addView(sectionTitle("Supabase · archive"));
+        page.addView(note("État de l’archive distante. AIV envoie seulement les segments scellés du journal; un segment contient jusqu’à 50 000 événements. Un segment courant non scellé reste local jusqu’à sa fermeture."));
+        try{
+            JSONObject s=ArchiveSync.state(this);
+            JSONObject w=JournalSegments.window(this,0);
+            String[] headers={"Élément","État","Détail","Ouvrir"};
+            int[] widths={220,170,470,100};
+            TableLayout table=dataTable(headers,widths);
+
+            String lastError=s.optString("last_error","");
+            String syncState=s.optBoolean("running")?"SYNCHRO":(lastError.isEmpty()?"PRÊT":"ERREUR");
+            addTableRow(table,new String[]{"Connexion / synchronisation",syncState,lastError.isEmpty()?"Aucune erreur Supabase enregistrée.":lastError},
+                null,widths,0,null,null,v->showJsonDetail("Supabase · état local",s,null));
+
+            long tracked=s.optLong("tracked_segments",0),verified=s.optLong("verified_segments",0);
+            addTableRow(table,new String[]{"Segments suivis",String.valueOf(tracked),verified+" vérifié(s) à distance · dernier vérifié : "+s.optLong("last_verified_segment",0)},
+                null,widths,0,null,null,v->showJsonDetail("Supabase · segments",s,null));
+
+            String active=w.optLong("segment",0)>0?"#"+w.optLong("segment"):"récent";
+            String activeDetail=(w.isNull("event_count")?"indexation en cours":w.optLong("event_count")+" événement(s)")+" · scellé : "+yesNo(w.optBoolean("sealed"));
+            addTableRow(table,new String[]{"Segment local actif",active,activeDetail},
+                null,widths,0,null,null,v->showJsonDetail("Journal · segment actif",w,null));
+
+            addTableRow(table,new String[]{"Taille de segment",String.valueOf(s.optInt("segment_size",50000)),"L’envoi automatique commence lorsqu’un segment est scellé. Les données locales ne sont pas supprimées par cette synchronisation."},
+                null,widths,0,null,null,v->showJsonDetail("Supabase · politique d’archive",s,null));
+
+            page.addView(tableScroller(table));
+            page.addView(action("Synchroniser Supabase maintenant",v->{
+                ArchiveSync.request(this);
+                toast("Synchronisation Supabase demandée");
+                main.postDelayed(this::renderSupabase,1200);
+            }));
+            page.addView(action("Exporter le journal local",v->beginJournalExport()));
+            page.addView(action("Exporter les anomalies",v->beginAnalysisExport()));
+        }catch(Exception e){
+            page.addView(card("Supabase","État indisponible : "+e.getClass().getSimpleName()+" · "+String.valueOf(e.getMessage())));
+            page.addView(action("Réessayer la synchronisation",v->{ArchiveSync.request(this);main.postDelayed(this::renderSupabase,1200);}));
+        }
+    }
+
     private void renderShizuku(){
         page.removeAllViews();
         page.addView(sectionTitle("Shizuku"));
-        page.addView(note("Build propriétaire 2.0.3 · contrôle local déverrouillé au niveau TI. L'état réel de Shizuku est affiché ici. Les futures éditions commerciales conserveront un entitlement vérifié séparé."));
+        page.addView(note("Build propriétaire 2.0.4 · contrôle local déverrouillé au niveau TI. L'état réel de Shizuku est affiché ici. Les futures éditions commerciales conserveront un entitlement vérifié séparé."));
         try{
             JSONObject s=ShizukuCleanup.state(this);
             String[] headers={"Élément","État","Détail","Ouvrir"};
@@ -816,6 +865,28 @@ public final class MainActivity extends Activity {
         }catch(Exception e){toast("Export indisponible : "+e.getClass().getSimpleName());}
     }
 
+    private void beginAnalysisExport(){
+        try{
+            Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);
+            i.addCategory(Intent.CATEGORY_OPENABLE);
+            i.setType("application/json");
+            i.putExtra(Intent.EXTRA_TITLE,"AIV-anomalies-"+System.currentTimeMillis()+".json");
+            startActivityForResult(i,ANALYSIS_EXPORT_REQUEST);
+        }catch(Exception e){toast("Export anomalies indisponible : "+e.getClass().getSimpleName());}
+    }
+
+    private void exportAnalysisTo(Uri destination){
+        new Thread(()->{
+            try{
+                java.io.File ready=ExportFiles.stage(this,writer->AnomalyMonitor.get(this).export(writer));
+                String result=ExportFiles.copy(this,ready,destination);
+                main.post(()->toast(result));
+            }catch(Exception e){
+                main.post(()->showDetail("Export des anomalies","Échec : "+e.getClass().getSimpleName()+" · "+String.valueOf(e.getMessage()),null,null));
+            }
+        },"aiv-analysis-export").start();
+    }
+
     private void exportJournalTo(Uri destination){
         new Thread(()->{
             try{
@@ -835,6 +906,8 @@ public final class MainActivity extends Activity {
             catch(Exception e){toast("VPN : "+e.getClass().getSimpleName());}
         }else if(requestCode==EXPORT_REQUEST&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){
             exportJournalTo(data.getData());
+        }else if(requestCode==ANALYSIS_EXPORT_REQUEST&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){
+            exportAnalysisTo(data.getData());
         }
     }
 
