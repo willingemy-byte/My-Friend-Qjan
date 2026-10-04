@@ -769,27 +769,86 @@ public final class MainActivity extends Activity {
     private void renderShizuku(){
         page.removeAllViews();
         page.addView(sectionTitle("Shizuku"));
-        page.addView(note("Build propriétaire 2.0.4 · contrôle local déverrouillé au niveau TI. L'état réel de Shizuku est affiché ici. Les futures éditions commerciales conserveront un entitlement vérifié séparé."));
+        page.addView(note("Build propriétaire 2.0.4 · contrôle local déverrouillé au niveau TI. AIV prépare d'abord un plan lisible, exclut les rôles essentiels, les UID partagés et les paquets système, puis applique uniquement des retraits vérifiables avec restauration."));
         try{
             JSONObject s=ShizukuCleanup.state(this);
+            JSONObject last=ShizukuCleanup.lastSnapshot(this);
             String[] headers={"Élément","État","Détail","Ouvrir"};
             int[] widths={220,170,430,100};
             TableLayout table=dataTable(headers,widths);
-            addTableRow(table,new String[]{"Accès commercial","APERÇU","Le paiement et l'entitlement vérifié ne sont pas encore connectés."},null,widths,0,null,null,
-                v->showDetail("Accès commercial","Aperçu User Paid actif pour la présentation. Aucune fonction payante ne doit dépendre uniquement de ce sélecteur visuel.",null,null));
             addTableRow(table,new String[]{"Binder",yesNo(s.optBoolean("binder")),"Connexion au service Shizuku."},null,widths,0,null,null,
                 v->showJsonDetail("Shizuku · état complet",s,null));
             addTableRow(table,new String[]{"Autorisation",yesNo(s.optBoolean("authorized")),"Autorisation accordée à AIV via Shizuku."},null,widths,0,null,null,
                 v->showJsonDetail("Shizuku · autorisation",s,null));
-            addTableRow(table,new String[]{"UID serveur",String.valueOf(s.optInt("server_uid",-1)),"UID rapporté par le serveur Shizuku."},null,widths,0,null,null,
+            addTableRow(table,new String[]{"UID serveur",String.valueOf(s.optInt("server_uid",-1)),"UID rapporté par le serveur Shizuku. 2000 correspond à l'identité shell, pas à root."},null,widths,0,null,null,
                 v->showJsonDetail("Shizuku · serveur",s,null));
-            addTableRow(table,new String[]{"Candidats actuels",String.valueOf(s.optInt("candidates",-1)),"Applications actuellement candidates aux actions contrôlées."},null,widths,0,null,null,
+            addTableRow(table,new String[]{"Candidats actuels",String.valueOf(s.optInt("candidates",-1)),"Applications non-système, UID unique, profil courant, admissibles à un examen de permissions."},null,widths,0,null,null,
                 v->showJsonDetail("Shizuku · candidats",s,null));
+            addTableRow(table,new String[]{"Dernier nettoyage",last.optBoolean("exists")?"DISPONIBLE":"AUCUN",
+                last.optBoolean("exists")?last.optInt("changed")+" changement(s) · "+last.optInt("failed")+" échec(s) · "+last.optInt("skipped")+" ignoré(s)":"Aucun snapshot de restauration conservé."},
+                null,widths,0,null,null,v->showJsonDetail("Shizuku · dernier snapshot",last,null));
             addTableRow(table,new String[]{"Statut",s.optString("status","—"),"État brut du module Shizuku."},null,widths,0,null,null,
                 v->showDetail("Shizuku",s.optString("status","—"),"Ouvrir Shizuku",()->openPackage("moe.shizuku.privileged.api")));
             page.addView(tableScroller(table));
         }catch(Exception e){page.addView(card("État Shizuku","Indisponible : "+e.getClass().getSimpleName()));}
+
+        page.addView(action("Préparer le plan de ménage",v->showShizukuPlan()));
+        page.addView(action("Appliquer le plan contrôlé",v->confirmShizukuCleanup()));
+        page.addView(action("Restaurer le dernier nettoyage",v->restoreShizukuCleanup()));
         page.addView(action("Actualiser",v->renderShizuku()));
+        page.addView(action("Ouvrir Shizuku",v->openPackage("moe.shizuku.privileged.api")));
+    }
+
+    private void showShizukuPlan(){
+        try{
+            JSONObject plan=ShizukuCleanup.plan(this);
+            JSONArray rows=plan.optJSONArray("rows");
+            LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);body.setPadding(dp(12),dp(8),dp(12),dp(12));
+            body.addView(text(plan.optInt("candidates")+" application(s) · "+plan.optInt("planned_actions")+" action(s) proposées",15,TEXT,true));
+            body.addView(text(plan.optInt("runtime_permissions")+" permission(s) runtime · "+plan.optInt("special_access")+" accès spécial(aux) · "+plan.optInt("skipped")+" ignoré(s)",13,MUTED,false));
+            if(rows!=null)for(int i=0;i<rows.length();i++){
+                JSONObject r=rows.optJSONObject(i);if(r==null)continue;
+                int actions=r.optInt("planned_actions");
+                String pkg=r.optString("package"),label=r.optString("label",pkg);
+                JSONArray perms=r.optJSONArray("runtime_permissions"),specials=r.optJSONArray("special_access");
+                String detail=actions+" action(s)\nPermissions runtime : "+(perms==null?0:perms.length())+"\nAccès spéciaux : "+(specials==null?0:specials.length())+"\n"+pkg;
+                body.addView(card("A"+r.optInt("level")+" · "+label,detail));
+            }
+            ScrollView scroll=new ScrollView(this);scroll.addView(body);
+            new AlertDialog.Builder(this).setTitle("Plan de ménage Shizuku").setView(scroll).setPositiveButton("Fermer",null).show();
+        }catch(Exception e){showDetail("Plan Shizuku","Impossible de préparer le plan : "+e.getClass().getSimpleName()+" · "+String.valueOf(e.getMessage()),null,null);}
+    }
+
+    private void confirmShizukuCleanup(){
+        try{
+            JSONObject plan=ShizukuCleanup.plan(this);
+            int actions=plan.optInt("planned_actions");
+            if(actions<=0){showDetail("Ménage Shizuku","Aucune action sûre à appliquer dans l'état actuel.",null,null);return;}
+            new AlertDialog.Builder(this)
+                .setTitle("Appliquer le ménage contrôlé ?")
+                .setMessage(actions+" action(s) sont proposées sur "+plan.optInt("candidates")+" application(s). AIV exclut les paquets système, rôles essentiels et UID partagés; chaque changement est vérifié et sauvegardé pour restauration.")
+                .setNegativeButton("Annuler",null)
+                .setPositiveButton("Appliquer",(d,w)->{
+                    ShizukuCleanup.requestOrRun();
+                    toast("Ménage Shizuku démarré");
+                    main.postDelayed(this::renderShizuku,1200);
+                }).show();
+        }catch(Exception e){showDetail("Ménage Shizuku","Préparation impossible : "+e.getClass().getSimpleName()+" · "+String.valueOf(e.getMessage()),null,null);}
+    }
+
+    private void restoreShizukuCleanup(){
+        new AlertDialog.Builder(this)
+            .setTitle("Restaurer le dernier nettoyage ?")
+            .setMessage("AIV rejouera les commandes inverses conservées dans le dernier snapshot puis vérifiera l'état obtenu.")
+            .setNegativeButton("Annuler",null)
+            .setPositiveButton("Restaurer",(d,w)->new Thread(()->{
+                try{
+                    JSONObject result=ShizukuCleanup.restore(this);
+                    main.post(()->showJsonDetail("Restauration Shizuku",result,null));
+                }catch(Exception e){
+                    main.post(()->showDetail("Restauration Shizuku","Échec : "+e.getClass().getSimpleName()+" · "+String.valueOf(e.getMessage()),null,null));
+                }
+            },"aiv-shizuku-restore-ui").start()).show();
     }
 
     private void renderUpgradeGate(){
