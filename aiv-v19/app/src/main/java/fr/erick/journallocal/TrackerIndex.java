@@ -32,7 +32,7 @@ public final class TrackerIndex extends SQLiteOpenHelper {
     }
 
     private TrackerIndex(Context c){
-        super(c,"tracker-index.sqlite",null,2);
+        super(c,"tracker-index.sqlite",null,3);
         context=c;
         setWriteAheadLoggingEnabled(true);
     }
@@ -43,6 +43,18 @@ public final class TrackerIndex extends SQLiteOpenHelper {
         db.execSQL("CREATE TABLE IF NOT EXISTS hits(correlation TEXT NOT NULL,tracker_id INTEGER NOT NULL,tracker_name TEXT NOT NULL,app TEXT NOT NULL,package_name TEXT NOT NULL DEFAULT '',uid INTEGER NOT NULL DEFAULT -1,proof INTEGER NOT NULL DEFAULT 1,host TEXT NOT NULL DEFAULT '',remote_ip TEXT NOT NULL DEFAULT '',first_ms INTEGER NOT NULL DEFAULT 0,last_ms INTEGER NOT NULL DEFAULT 0,latest_event_id INTEGER NOT NULL DEFAULT 0,tx_bytes INTEGER NOT NULL DEFAULT 0,rx_bytes INTEGER NOT NULL DEFAULT 0,tx_packets INTEGER NOT NULL DEFAULT 0,rx_packets INTEGER NOT NULL DEFAULT 0,search TEXT NOT NULL DEFAULT '',PRIMARY KEY(correlation,tracker_id))");
         db.execSQL("CREATE INDEX IF NOT EXISTS tracker_hits_latest ON hits(last_ms DESC)");
         db.execSQL("CREATE INDEX IF NOT EXISTS tracker_hits_group ON hits(package_name,app,tracker_id,last_ms DESC)");
+        addColumn(db,"steps","volume_known","INTEGER NOT NULL DEFAULT 0");
+        addColumn(db,"steps","packet_bytes","INTEGER");
+        addColumn(db,"steps","attribution_status","TEXT NOT NULL DEFAULT 'UNKNOWN'");
+        addColumn(db,"hits","volume_known","INTEGER NOT NULL DEFAULT 0");
+        db.execSQL("CREATE INDEX IF NOT EXISTS tracker_hits_cursor ON hits(latest_event_id DESC)");
+    }
+
+    private static void addColumn(SQLiteDatabase db,String table,String column,String definition){
+        try(Cursor c=db.rawQuery("PRAGMA table_info("+table+")",null)){
+            while(c.moveToNext())if(column.equals(c.getString(1)))return;
+        }
+        db.execSQL("ALTER TABLE "+table+" ADD COLUMN "+column+" "+definition);
     }
 
     @Override public void onCreate(SQLiteDatabase db){
@@ -53,7 +65,13 @@ public final class TrackerIndex extends SQLiteOpenHelper {
         installDerived(db);
     }
 
-    @Override public void onUpgrade(SQLiteDatabase db,int old,int next){installDerived(db);}
+    @Override public void onUpgrade(SQLiteDatabase db,int old,int next){
+        installDerived(db);
+        if(old<3){
+            db.delete("flows",null,null);db.delete("hits",null,null);db.delete("steps",null,null);
+            db.execSQL("UPDATE progress SET checkpoint=0,revision='' WHERE id=1");
+        }
+    }
     @Override public void onOpen(SQLiteDatabase db){super.onOpen(db);installDerived(db);}
 
     private long checkpoint(){
@@ -108,7 +126,7 @@ public final class TrackerIndex extends SQLiteOpenHelper {
             error="";
             ReferenceCatalog catalog=ReferenceCatalog.get(context);
             SQLiteDatabase db=getWritableDatabase();
-            String desiredRevision="trail-v2:"+catalog.revision(),revision;
+            String desiredRevision="trail-v3:"+catalog.revision(),revision;
             try(Cursor c=db.rawQuery("SELECT revision FROM progress WHERE id=1",null)){c.moveToFirst();revision=c.getString(0);}
             if(!desiredRevision.equals(revision)){
                 db.beginTransaction();
@@ -139,7 +157,11 @@ public final class TrackerIndex extends SQLiteOpenHelper {
             error="Index des traqueurs interrompu : "+e.getClass().getSimpleName()+"; reprise au dernier lot validé.";
         }finally{
             scheduled.set(false);
-            if((more||checkpoint()<EventStore.get(context).latestId())&&worker!=null)worker.postDelayed(this::request,350);
+            // A failed derived database must not crash the Android process.
+            // A later user request or observation can retry; raw export stays independent.
+            try{
+                if(error.isEmpty()&&(more||checkpoint()<EventStore.get(context).latestId())&&worker!=null)worker.postDelayed(this::request,350);
+            }catch(Exception e){error="Reprise de l’index indisponible : "+e.getClass().getSimpleName();}
         }
     }
 
@@ -148,6 +170,9 @@ public final class TrackerIndex extends SQLiteOpenHelper {
         v.put("event_id",e.getLong("id"));v.put("correlation",correlation);v.put("observed_ms",e.optLong("timestamp_ms"));
         v.put("app",e.optString("app"));v.put("action",e.optString("action"));v.put("destination",e.optString("destination"));v.put("category",e.optString("category"));
         v.put("tx_bytes",d.optLong("tx_bytes"));v.put("rx_bytes",d.optLong("rx_bytes"));v.put("tx_packets",d.optLong("tx_packets"));v.put("rx_packets",d.optLong("rx_packets"));
+        v.put("volume_known",ObservationValues.countersKnown(d)?1:0);
+        if(ObservationValues.valid(d,"first_packet_bytes"))v.put("packet_bytes",d.optLong("first_packet_bytes"));else v.putNull("packet_bytes");
+        v.put("attribution_status",ObservationValues.attribution(d));
         v.put("tls_sni",d.optString("tls_sni"));v.put("remote_ip",d.optString("remote_ip"));
         db.insertWithOnConflict("steps",null,v,SQLiteDatabase.CONFLICT_REPLACE);
     }
@@ -162,8 +187,14 @@ public final class TrackerIndex extends SQLiteOpenHelper {
 
         JSONObject f=null;
         try(Cursor c=db.rawQuery("SELECT payload FROM flows WHERE correlation=?",new String[]{key})){if(c.moveToFirst())f=new JSONObject(c.getString(0));}
-        if(f==null&&matches.length()==0&&queries.length()==0)return;
-        if(f==null)f=EventStore.object("flow_correlation_id",key,"first_event_id",e.getLong("id"),"first_observed_ms",d.optLong("first_observed_ms"),"tracker_matches",new JSONArray(),"tracker_dns_candidates",new JSONArray());
+        // Keep every observed connection, including UNKNOWN and non-catalogue destinations.
+        if(f==null)f=EventStore.object("flow_correlation_id",key,"first_event_id",e.getLong("id"),"first_observed_ms",d.optLong("first_observed_ms"),"tracker_matches",new JSONArray(),"tracker_dns_candidates",new JSONArray(),"dns",new JSONArray());
+        if("dns".equals(e.optString("category"))){
+            String question=d.optString("question");JSONArray names=f.getJSONArray("dns");boolean seen=false;
+            for(int i=0;i<names.length();i++)if(question.equals(names.optString(i)))seen=true;
+            if(!question.isEmpty()&&!seen){if(names.length()<128)names.put(question);else f.put("dns_truncated",true);}
+            f.put("dns_scope","Questions DNS observées sur ce flux vers le résolveur; aucune association automatique à une connexion différente.");
+        }
 
         if(matches.length()>0)f.put("tracker_matches",matches);
         if(queries.length()>0){
@@ -174,11 +205,12 @@ public final class TrackerIndex extends SQLiteOpenHelper {
                 if(!exists&&old.length()<128)old.put(candidate);
             }
         }
-        for(String n:new String[]{"tx_bytes","rx_bytes","tx_packets","rx_packets"})f.put(n,Math.max(f.optLong(n),d.optLong(n)));
-        for(String n:new String[]{"uid","packages","attribution","journal_group","remote_ip","protocol","port","tls_sni","first_outbound_ms","first_inbound_ms","closed","last_packet_ms","ech_extension_present"})if(d.has(n)&&!d.isNull(n))f.put(n,d.get(n));
-        f.put("app",e.optString("app")).put("latest_event_id",e.getLong("id")).put("latest_timestamp_ms",e.optLong("timestamp_ms")).put("catalog_revision",catalog.revision());
-        JSONArray pkgs=d.optJSONArray("packages");int uid=d.optInt("uid",-1);
-        f.put("attribution_unique",uid>=0&&uid%100000>=10000&&pkgs!=null&&pkgs.length()==1);
+        ObservationValues.mergeCounters(f,d);
+        for(String n:new String[]{"remote_ip","local_ip","local_port","protocol","port","tls_sni","first_outbound_ms","first_inbound_ms","outbound_observed","inbound_observed","closed","last_packet_ms","ech_extension_present","app_identity","provenance"})if(d.has(n)&&!d.isNull(n))f.put(n,d.get(n));
+        ObservationValues.mergeIdentity(f,d,e.optString("app"));
+        f.put("latest_event_id",e.getLong("id")).put("latest_timestamp_ms",e.optLong("timestamp_ms")).put("catalog_revision",catalog.revision());
+        f.put("attribution_unique",ObservationValues.uniquePackage(f));
+        f.put("attribution_status",ObservationValues.attribution(f)).put("confidence",ObservationValues.confidence(f));
 
         ContentValues row=new ContentValues();row.put("correlation",key);row.put("latest",e.getLong("id"));row.put("payload",f.toString());row.put("search",f.toString().toLowerCase(Locale.ROOT));
         db.insertWithOnConflict("flows",null,row,SQLiteDatabase.CONFLICT_REPLACE);
@@ -192,7 +224,7 @@ public final class TrackerIndex extends SQLiteOpenHelper {
         if(network!=null)for(int i=0;i<network.length();i++){JSONObject x=new JSONObject(network.getJSONObject(i).toString());x.put("_proof",2);chosen.put(x.optInt("tracker_id"),x);}
         if(chosen.isEmpty())return;
 
-        JSONArray pkgs=f.optJSONArray("packages");String pkg=pkgs!=null&&pkgs.length()==1?pkgs.optString(0):"";
+        JSONArray pkgs=f.optJSONArray("packages");String pkg=ObservationValues.uniquePackage(f)?pkgs.optString(0):"";
         long first=f.optLong("first_outbound_ms");if(first<=0)first=f.optLong("first_observed_ms");
         long last=f.optLong("last_packet_ms");if(last<=0)last=f.optLong("latest_timestamp_ms");
         for(JSONObject x:chosen.values()){
@@ -205,6 +237,7 @@ public final class TrackerIndex extends SQLiteOpenHelper {
             v.put("app",f.optString("app","Application non identifiée"));v.put("package_name",pkg);v.put("uid",f.optInt("uid",-1));v.put("proof",proof);
             v.put("host",host);v.put("remote_ip",f.optString("remote_ip"));v.put("first_ms",first);v.put("last_ms",last);v.put("latest_event_id",f.optLong("latest_event_id"));
             v.put("tx_bytes",f.optLong("tx_bytes"));v.put("rx_bytes",f.optLong("rx_bytes"));v.put("tx_packets",f.optLong("tx_packets"));v.put("rx_packets",f.optLong("rx_packets"));v.put("search",search);
+            v.put("volume_known",ObservationValues.countersKnown(f)?1:0);
             db.insertWithOnConflict("hits",null,v,SQLiteDatabase.CONFLICT_REPLACE);
         }
     }
@@ -218,7 +251,8 @@ public final class TrackerIndex extends SQLiteOpenHelper {
             long version=android.os.Build.VERSION.SDK_INT>=28?installed.getLongVersionCode():installed.versionCode;
             JSONObject apk=ApkEvidence.get(context).read(pkg,version,installed.lastUpdateTime);JSONArray sdk=apk.optJSONArray("trackers");boolean present=false;
             if(sdk!=null)for(int i=0;i<sdk.length();i++)if(sdk.getJSONObject(i).optInt("id")==trackerId){present=true;break;}
-            return EventStore.object("status",apk.optString("status"),"present",present,"version",version);
+            Object presence=present?Boolean.TRUE:"COMPLETE_WITHIN_SCOPE".equals(apk.optString("status"))?Boolean.FALSE:JSONObject.NULL;
+            return EventStore.object("status",apk.optString("status"),"present",presence,"version",version);
         }catch(Exception e){return EventStore.object("status",e instanceof android.content.pm.PackageManager.NameNotFoundException?"NOT_VISIBLE_OR_REMOVED":"UNKNOWN","present",JSONObject.NULL);}
     }
 
@@ -228,11 +262,11 @@ public final class TrackerIndex extends SQLiteOpenHelper {
         SQLiteDatabase db=getReadableDatabase();String[] base=q.isEmpty()?new String[]{}:new String[]{q};long total=0;
         try(Cursor c=db.rawQuery("SELECT COUNT(*) FROM (SELECT 1 FROM hits"+where+" GROUP BY "+groupExpr()+",tracker_id)",base)){if(c.moveToFirst())total=c.getLong(0);}
         ArrayList<String> args=new ArrayList<>(Arrays.asList(base));args.add(String.valueOf(limit));args.add(String.valueOf(offset));JSONArray rows=new JSONArray();
-        String sql="SELECT "+groupExpr()+" app_key,MAX(app),MAX(package_name),tracker_id,MAX(tracker_name),COUNT(*),COUNT(DISTINCT CASE WHEN host<>'' THEN host ELSE remote_ip END),MIN(first_ms),MAX(last_ms),MAX(latest_event_id),SUM(tx_bytes),SUM(rx_bytes),MAX(proof) FROM hits"+where+" GROUP BY app_key,tracker_id ORDER BY MAX(last_ms) DESC LIMIT ? OFFSET ?";
+        String sql="SELECT "+groupExpr()+" app_key,MAX(app),MAX(package_name),tracker_id,MAX(tracker_name),COUNT(*),COUNT(DISTINCT CASE WHEN host<>'' THEN host ELSE remote_ip END),MIN(first_ms),MAX(last_ms),MAX(latest_event_id),SUM(CASE WHEN volume_known=1 THEN tx_bytes END),SUM(CASE WHEN volume_known=1 THEN rx_bytes END),MAX(proof),SUM(volume_known) FROM hits"+where+" GROUP BY app_key,tracker_id ORDER BY MAX(last_ms) DESC,app_key,tracker_id LIMIT ? OFFSET ?";
         try(Cursor c=db.rawQuery(sql,args.toArray(new String[0]))){
             while(c.moveToNext()){
                 String key=c.getString(0),app=c.getString(1),pkg=c.getString(2);int trackerId=c.getInt(3);
-                JSONObject row=EventStore.object("app_key",key,"app",app,"package_name",pkg,"tracker_id",trackerId,"tracker_name",c.getString(4),"journeys",c.getLong(5),"destinations_count",c.getLong(6),"first_ms",c.getLong(7),"last_ms",c.getLong(8),"latest_event_id",c.getLong(9),"tx_bytes",c.getLong(10),"rx_bytes",c.getLong(11),"proof",c.getInt(12));
+                JSONObject row=EventStore.object("app_key",key,"app",app,"package_name",pkg,"tracker_id",trackerId,"tracker_name",c.getString(4),"journeys",c.getLong(5),"destinations_count",c.getLong(6),"first_ms",c.getLong(7),"last_ms",c.getLong(8),"latest_event_id",c.getLong(9),"tx_bytes",c.isNull(10)?JSONObject.NULL:c.getLong(10),"rx_bytes",c.isNull(11)?JSONObject.NULL:c.getLong(11),"proof",c.getInt(12),"journeys_with_volume",c.getLong(13),"volume_status",c.getLong(13)==c.getLong(5)?"OBSERVED":c.getLong(13)>0?"PARTIAL":"UNKNOWN");
                 JSONArray destinations=new JSONArray();
                 try(Cursor d=db.rawQuery("SELECT CASE WHEN host<>'' THEN host ELSE remote_ip END dest,COUNT(*),MAX(last_ms) FROM hits WHERE "+groupExpr()+"=? AND tracker_id=? AND (host<>'' OR remote_ip<>'') GROUP BY dest ORDER BY COUNT(*) DESC,MAX(last_ms) DESC LIMIT 8",new String[]{key,String.valueOf(trackerId)})){
                     while(d.moveToNext())destinations.put(EventStore.object("name",d.getString(0),"journeys",d.getLong(1),"last_ms",d.getLong(2)));
@@ -246,23 +280,44 @@ public final class TrackerIndex extends SQLiteOpenHelper {
     public JSONObject journeys(String appKey,int trackerId,long before,int limit)throws Exception{
         if(appKey==null||appKey.length()>512||trackerId<0)throw new IllegalArgumentException("Groupe de traqueur invalide.");
         limit=Math.max(1,Math.min(30,limit));ArrayList<String> args=new ArrayList<>();args.add(appKey);args.add(String.valueOf(trackerId));
-        String where=groupExpr()+"=? AND tracker_id=?";if(before>0){where+=" AND last_ms<?";args.add(String.valueOf(before));}args.add(String.valueOf(limit));
+        String where=groupExpr()+"=? AND tracker_id=?";if(before>0){where+=" AND latest_event_id<?";args.add(String.valueOf(before));}args.add(String.valueOf(limit+1));
         JSONArray rows=new JSONArray();long next=0;SQLiteDatabase db=getReadableDatabase();
-        String sql="SELECT correlation,app,package_name,uid,proof,host,remote_ip,first_ms,last_ms,latest_event_id,tx_bytes,rx_bytes,tx_packets,rx_packets,(SELECT COUNT(*) FROM steps s WHERE s.correlation=hits.correlation) FROM hits WHERE "+where+" ORDER BY last_ms DESC LIMIT ?";
+        String sql="SELECT correlation,app,package_name,uid,proof,host,remote_ip,first_ms,last_ms,latest_event_id,tx_bytes,rx_bytes,tx_packets,rx_packets,(SELECT COUNT(*) FROM steps s WHERE s.correlation=hits.correlation),volume_known FROM hits WHERE "+where+" ORDER BY latest_event_id DESC LIMIT ?";
         try(Cursor c=db.rawQuery(sql,args.toArray(new String[0]))){
-            while(c.moveToNext()){next=c.getLong(8);rows.put(EventStore.object("correlation",c.getString(0),"app",c.getString(1),"package_name",c.getString(2),"uid",c.getInt(3),"proof",c.getInt(4),"host",c.getString(5),"remote_ip",c.getString(6),"first_ms",c.getLong(7),"last_ms",c.getLong(8),"latest_event_id",c.getLong(9),"tx_bytes",c.getLong(10),"rx_bytes",c.getLong(11),"tx_packets",c.getLong(12),"rx_packets",c.getLong(13),"steps",c.getLong(14)));}
+            while(c.moveToNext()){boolean known=c.getInt(15)!=0;next=c.getLong(9);rows.put(EventStore.object("correlation",c.getString(0),"app",c.getString(1),"package_name",c.getString(2),"uid",c.getInt(3),"proof",c.getInt(4),"host",c.getString(5),"remote_ip",c.getString(6),"first_ms",c.getLong(7),"last_ms",c.getLong(8),"latest_event_id",c.getLong(9),"tx_bytes",known?c.getLong(10):JSONObject.NULL,"rx_bytes",known?c.getLong(11):JSONObject.NULL,"tx_packets",known?c.getLong(12):JSONObject.NULL,"rx_packets",known?c.getLong(13):JSONObject.NULL,"steps",c.getLong(14)));}
         }
-        return EventStore.object("rows",rows,"next_before",next,"limit",limit);
+        boolean more=rows.length()>limit;if(more)rows.remove(limit);next=rows.length()==0?0:rows.getJSONObject(rows.length()-1).getLong("latest_event_id");
+        return EventStore.object("rows",rows,"next_before",next,"limit",limit,"has_more",more);
     }
 
     public JSONObject trail(String correlation)throws Exception{
+        return trail(correlation,0,250);
+    }
+    public JSONObject trail(String correlation,long after,int limit)throws Exception{
         if(correlation==null||correlation.length()<8||correlation.length()>128)throw new IllegalArgumentException("Identifiant de trajet invalide.");
+        limit=Math.max(1,Math.min(250,limit));after=Math.max(0,after);
         SQLiteDatabase db=getReadableDatabase();JSONArray rows=new JSONArray();long total=0;
         try(Cursor c=db.rawQuery("SELECT COUNT(*) FROM steps WHERE correlation=?",new String[]{correlation})){if(c.moveToFirst())total=c.getLong(0);}
-        try(Cursor c=db.rawQuery("SELECT event_id,observed_ms,app,action,destination,category,tx_bytes,rx_bytes,tx_packets,rx_packets,tls_sni,remote_ip FROM steps WHERE correlation=? ORDER BY event_id ASC LIMIT 250",new String[]{correlation})){
-            while(c.moveToNext())rows.put(EventStore.object("event_id",c.getLong(0),"observed_ms",c.getLong(1),"app",c.getString(2),"action",c.getString(3),"destination",c.getString(4),"category",c.getString(5),"tx_bytes",c.getLong(6),"rx_bytes",c.getLong(7),"tx_packets",c.getLong(8),"rx_packets",c.getLong(9),"tls_sni",c.getString(10),"remote_ip",c.getString(11)));
+        try(Cursor c=db.rawQuery("SELECT event_id,observed_ms,app,action,destination,category,tx_bytes,rx_bytes,tx_packets,rx_packets,tls_sni,remote_ip,volume_known,packet_bytes,attribution_status FROM steps WHERE correlation=? AND event_id>? ORDER BY event_id ASC LIMIT ?",new String[]{correlation,String.valueOf(after),String.valueOf(limit+1)})){
+            while(c.moveToNext()){boolean known=c.getInt(12)!=0;rows.put(EventStore.object("event_id",c.getLong(0),"observed_ms",c.getLong(1),"app",c.getString(2),"action",c.getString(3),"destination",c.getString(4),"category",c.getString(5),"tx_bytes",known?c.getLong(6):JSONObject.NULL,"rx_bytes",known?c.getLong(7):JSONObject.NULL,"tx_packets",known?c.getLong(8):JSONObject.NULL,"rx_packets",known?c.getLong(9):JSONObject.NULL,"tls_sni",c.getString(10),"remote_ip",c.getString(11),"first_packet_bytes",c.isNull(13)?JSONObject.NULL:c.getLong(13),"attribution_status",c.getString(14)));}
         }
-        return EventStore.object("correlation",correlation,"steps",rows,"total",total,"truncated",total>rows.length(),"scope","Chronologie locale du même flux corrélé sur le téléphone. Elle ne suit pas un paquet individuel après sa sortie vers Internet.");
+        boolean more=rows.length()>limit;if(more)rows.remove(limit);long next=rows.length()==0?after:rows.getJSONObject(rows.length()-1).getLong("event_id");
+        return EventStore.object("correlation",correlation,"steps",rows,"total",total,"has_more",more,"next_after_id",next,"truncated",more,"scope","Chronologie locale du même flux corrélé sur le téléphone. Elle ne suit pas un paquet individuel après sa sortie vers Internet; une succession temporelle ne démontre pas de causalité.");
+    }
+
+    public JSONObject flows(String query,long before,int limit)throws Exception{
+        request();if(query==null)query="";if(query.length()>512)throw new IllegalArgumentException("Recherche trop longue");
+        limit=Math.max(1,Math.min(100,limit));JSONArray rows=new JSONArray();long next=0;
+        try(Cursor c=getReadableDatabase().rawQuery("SELECT latest,payload FROM flows WHERE latest<? AND instr(search,?)>0 ORDER BY latest DESC LIMIT ?",new String[]{String.valueOf(before>0?before:Long.MAX_VALUE),query.toLowerCase(Locale.ROOT),String.valueOf(limit+1)})){
+            while(c.moveToNext()){
+                JSONObject f=new JSONObject(c.getString(1));f.put("actor",f.optString("app","Application non identifiée"));
+                f.put("destination",f.optString("remote_ip")+":"+f.optInt("port",-1));
+                ReferenceCatalog.get(context).flow(f);rows.put(f);
+            }
+        }
+        boolean more=rows.length()>limit;if(more)rows.remove(limit);if(rows.length()>0)next=rows.getJSONObject(rows.length()-1).getLong("latest_event_id");
+        return EventStore.object("flows",rows,"next_before_id",next,"has_more",more,"limit",limit,"quality",NetworkQuality.flows(rows),"status",status(),
+            "notice","Tous les flux observés sont indexés, y compris les inconnus et les destinations absentes du catalogue. L’index se reconstruit depuis le journal; l’avancement est affiché.");
     }
 
     public void export(java.io.Writer writer)throws Exception{

@@ -8,6 +8,15 @@ import org.json.JSONObject;
 /** Complete a private snapshot before opening the chosen document for writing. */
 final class ExportFiles {
     interface Write {void write(Writer writer)throws Exception;}
+    interface BinaryWrite {void write(File destination)throws Exception;}
+    static File stageBinary(Context context,BinaryWrite operation)throws Exception{
+        File dir=new File(context.getCacheDir(),AivConfig.PATHS_EXPORTS_CACHE);if(!dir.isDirectory()&&!dir.mkdirs())throw new IOException("Cache indisponible");
+        File temp=File.createTempFile("snapshot-",".partial",dir);
+        try{
+            operation.write(temp);try(RandomAccessFile bytes=new RandomAccessFile(temp,"rw")){bytes.getFD().sync();}
+            File ready=new File(dir,temp.getName().replace(".partial",".ready"));if(!temp.renameTo(ready))throw new IOException("Finalisation locale impossible");return ready;
+        }catch(Exception e){temp.delete();throw e;}
+    }
     static File stage(Context context,Write operation)throws Exception{
         File dir=new File(context.getCacheDir(),AivConfig.PATHS_EXPORTS_CACHE);if(!dir.isDirectory()&&!dir.mkdirs())throw new IOException("Cache indisponible");File[] old=dir.listFiles();if(old!=null)for(File f:old)if(System.currentTimeMillis()-f.lastModified()>7L*86400000)f.delete();File temp=File.createTempFile("snapshot-",".partial",dir);
         try{try(FileOutputStream bytes=new FileOutputStream(temp);Writer writer=new BufferedWriter(new OutputStreamWriter(bytes,StandardCharsets.UTF_8))){operation.write(writer);writer.flush();bytes.getFD().sync();}File ready=new File(dir,temp.getName().replace(".partial",".ready"));if(!temp.renameTo(ready))throw new IOException("Finalisation locale impossible");return ready;}catch(Exception e){temp.delete();throw e;}
@@ -19,7 +28,7 @@ final class ExportFiles {
         try{verify=c.getContentResolver().openInputStream(destination);}catch(Exception e){return "Copie écrite; relecture indisponible. Instantané complet conservé temporairement dans l’application.";}
         if(verify==null)return "Copie écrite; relecture indisponible.";MessageDigest actual=MessageDigest.getInstance("SHA-256");long copied=0;
         try(InputStream in=verify){byte[] b=new byte[32768];int n;while((n=in.read(b))!=-1){actual.update(b,0,n);copied+=n;if(copied>size)break;}}
-        if(copied!=size||!hash.equals(JournalRecovery.hex(actual.digest())))throw new IOException("La copie ne correspond pas à l’instantané complet; recommencer l’export");return "Export terminé et copie vérifiée.";
+        if(copied!=size||!hash.equals(JournalRecovery.hex(actual.digest())))throw new IOException("La copie ne correspond pas à l’instantané complet; recommencer l’export");return "Export vérifié · "+size+" octets\nSHA-256 : "+hash;
     }
     static File recover(Context c,Uri source,JSONObject[] report)throws Exception{
         MessageDigest original=MessageDigest.getInstance("SHA-256");return stage(c,writer->{

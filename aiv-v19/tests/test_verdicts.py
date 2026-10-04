@@ -6,6 +6,8 @@ from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
 P=ROOT/'tools/generate_verdicts.py'
+if not P.is_file():
+    raise unittest.SkipTest("Moteur historique retiré depuis V21; voir RELEASE-0.6.22.md. Les règles natives sont testées par run-v23.sh.")
 spec=importlib.util.spec_from_file_location('aiv_test_engine',P)
 engine=importlib.util.module_from_spec(spec)
 sys.modules[spec.name]=engine

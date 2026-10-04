@@ -21,7 +21,7 @@ public final class PinVault {
                 else generate(false);
             }
             privateKey=(PrivateKey)store.getKey(alias,null);publicKey=store.getCertificate(alias).getPublicKey();
-            KeyInfo info=(KeyInfo)KeyFactory.getInstance(privateKey.getAlgorithm(),"AndroidKeyStore").getKeySpec(privateKey,KeyInfo.class);
+            KeyInfo info=KeyFactory.getInstance(privateKey.getAlgorithm(),"AndroidKeyStore").getKeySpec(privateKey,KeyInfo.class);
             if(Build.VERSION.SDK_INT>=31){int level=info.getSecurityLevel();securityLevel=level==KeyProperties.SECURITY_LEVEL_STRONGBOX?"STRONGBOX":level==KeyProperties.SECURITY_LEVEL_TRUSTED_ENVIRONMENT?"TEE":level==KeyProperties.SECURITY_LEVEL_SOFTWARE?"SOFTWARE":"UNKNOWN";}
             else securityLevel=info.isInsideSecureHardware()?"HARDWARE_UNSPECIFIED":"SOFTWARE";
         }

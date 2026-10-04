@@ -46,6 +46,7 @@ public final class MainActivity extends Activity {
     private static final int VPN_REQUEST=1201;
     private static final int NOTIFICATION_REQUEST=1202;
     private static final int EXPORT_REQUEST=1203;
+    private static final int JSONL_EXPORT_REQUEST=1207,SQLITE_EXPORT_REQUEST=1208;
     private static final int ANALYSIS_EXPORT_REQUEST=1204;
     private static final int SHIZUKU_PERMISSION_REQUEST=1205;
     private static final int PERMISSION_EXPORT_REQUEST=1206;
@@ -101,8 +102,6 @@ public final class MainActivity extends Activity {
         }
         try{
             Continuous.initialize(this);
-            Continuous.prefs(this).edit().putBoolean("vpn_enabled",false).apply();
-            stopService(new Intent(this,NetworkCaptureService.class));
         }catch(Throwable ignored){}
         try{DefenseMonitor.start(this);}catch(Throwable ignored){}
         try{ShizukuCleanup.attach(this);}catch(Throwable ignored){}
@@ -260,7 +259,7 @@ public final class MainActivity extends Activity {
     private void renderPresentation(){
         page.removeAllViews();
         page.addView(sectionTitle("Présentation"));
-        page.addView(note("Interface Android native. Build propriétaire 2.0.6 : niveau TI local déverrouillé, VPN AIV désactivé par défaut pendant le diagnostic, journal et export locaux disponibles sans VPN."));
+        page.addView(note("AIV 2.0.6 · journal corrigé · interface Android native. Capture réseau volontaire dans Flux; journal et exports locaux. Inconnu reste inconnu. Source : "+BuildMetadata.SOURCE_COMMIT.substring(0,12)));
 
         page.addView(sectionTitle("Mode d’utilisation"));
         tierFooter=new LinearLayout(this);
@@ -467,11 +466,12 @@ public final class MainActivity extends Activity {
         }catch(Exception e){page.addView(card("Accès spéciaux","Lecture impossible : "+e.getClass().getSimpleName()));}
     }
 
-    private void renderJournal(String query){
+    private void renderJournal(String query){renderJournal(query,0,0);}
+    private void renderJournal(String query,int offset,long ceiling){
         int ticket=generation.incrementAndGet();
         page.removeAllViews();
         page.addView(sectionTitle("Journal"));
-        page.addView(note("Chronologie locale native. Recherche dans les événements SQLite AIV; aucune vue Web n'intervient."));
+        page.addView(note("Observations originales et enrichissements horodatés. La vue Flux montre la dernière identité disponible pour chaque connexion. Inconnu ne signifie pas Android."));
         EditText search=searchBox("Application, domaine, action, UID ou ID",query);
         page.addView(search);
         page.addView(action("Rechercher / actualiser",v->renderJournal(search.getText().toString())));
@@ -480,7 +480,7 @@ public final class MainActivity extends Activity {
         TextView loading=text("Lecture du journal…",14,MUTED,false);page.addView(loading);
         new Thread(()->{
             try{
-                JSONObject data=EventStore.get(this).page(query,"",0,150,0,"","",false);
+                JSONObject data=EventStore.get(this).page(query,"",offset,150,ceiling,"","",false);
                 JSONArray rows=data.optJSONArray("events");
                 main.post(()->{
                     if(ticket!=generation.get()||!"journal".equals(currentPage))return;
@@ -496,13 +496,13 @@ public final class MainActivity extends Activity {
                         int uid=d==null?-1:d.optInt("uid",-1);
                         String pkg=uniquePackage(d);
                         int level=levelForPackage(pkg);
-                        String app=e.optString("app","Android");
+                        String app=d!=null&&!d.optString("flow_correlation_id").isEmpty()&&uid<0?"Application non identifiée":e.optString("app","Application non identifiée");
                         String action=e.optString("action","—");
                         String destination=e.optString("destination","—");
-                        String uidText=uid<0?"—":String.valueOf(uid);
+                        String uidText=uid<0?"Inconnu":String.valueOf(uid);
                         String direction=d==null?"—":d.optString("direction","—");
-                        String tx=d==null||d.optLong("tx_bytes",0)==0?"—":formatBytes(d.optLong("tx_bytes"));
-                        String rx=d==null||d.optLong("rx_bytes",0)==0?"—":formatBytes(d.optLong("rx_bytes"));
+                        String tx=formatCounter(d,"tx_bytes");
+                        String rx=formatCounter(d,"rx_bytes");
                         String flow=d==null?"":d.optString("flow_correlation_id","");
                         String flowText=flow.isEmpty()?"—":(flow.length()>14?flow.substring(0,14)+"…":flow);
                         String[] values={levelShort(level),shortTime(e.optLong("timestamp_ms")),app,uidText,action,destination,direction,tx,rx,flowText};
@@ -511,12 +511,15 @@ public final class MainActivity extends Activity {
                             v->showEventPedigree("Journal · "+app,e,pkg));
                     }
                     page.addView(tableScroller(table));
+                    if(offset>0)page.addView(action("Page précédente",v->renderJournal(query,Math.max(0,offset-150),data.optLong("ceiling_id"))));
+                    if(offset+rows.length()<data.optLong("matched"))page.addView(action("Page suivante",v->renderJournal(query,offset+rows.length(),data.optLong("ceiling_id"))));
                 });
             }catch(Exception e){main.post(()->{if(ticket==generation.get()){page.removeView(loading);page.addView(card("Erreur journal",e.getClass().getSimpleName()));}});}
         },"aiv-native-journal").start();
     }
 
-    private void renderTrackers(String query){
+    private void renderTrackers(String query){renderTrackers(query,0);}
+    private void renderTrackers(String query,int offset){
         int ticket=generation.incrementAndGet();
         page.removeAllViews();
         page.addView(sectionTitle("Traqueurs · Exodus"));
@@ -528,7 +531,7 @@ public final class MainActivity extends Activity {
         TextView loading=text("Indexation des traqueurs…",14,MUTED,false);page.addView(loading);
         new Thread(()->{
             try{
-                JSONObject data=TrackerIndex.get(this).groups(query,0,60);
+                JSONObject data=TrackerIndex.get(this).groups(query,offset,60);
                 JSONArray rows=data.optJSONArray("rows");
                 JSONObject status=data.optJSONObject("status");
                 main.post(()->{
@@ -547,12 +550,14 @@ public final class MainActivity extends Activity {
                         String app=x.optString("app","—");
                         String tracker=x.optString("tracker_name","—");
                         String pkgText=pkg.isEmpty()?"—":pkg;
-                        String[] values={levelShort(level),app,tracker,pkgText,String.valueOf(x.optLong("journeys")),String.valueOf(x.optLong("destinations_count")),formatBytes(x.optLong("tx_bytes")),formatBytes(x.optLong("rx_bytes")),shortTime(x.optLong("last_ms"))};
+                        String[] values={levelShort(level),app,tracker,pkgText,String.valueOf(x.optLong("journeys")),String.valueOf(x.optLong("destinations_count")),formatCounter(x,"tx_bytes"),formatCounter(x,"rx_bytes"),shortTime(x.optLong("last_ms"))};
                         String[] filters={null,app,tracker,pkg.isEmpty()?null:pkg,null,null,null,null,null};
                         addTableRow(table,values,filters,widths,level,search,()->renderTrackers(search.getText().toString()),
                             v->showTrackerGroupDetail(x));
                     }
                     page.addView(tableScroller(table));
+                    if(offset>0)page.addView(action("Page précédente",v->renderTrackers(query,Math.max(0,offset-60))));
+                    if(offset+rows.length()<data.optLong("total"))page.addView(action("Page suivante",v->renderTrackers(query,offset+rows.length())));
                 });
             }catch(Exception e){main.post(()->{if(ticket==generation.get()){page.removeView(loading);page.addView(card("Erreur traqueurs",e.getClass().getSimpleName()+": "+String.valueOf(e.getMessage())));}});}
         },"aiv-native-trackers").start();
@@ -692,11 +697,16 @@ public final class MainActivity extends Activity {
         },"aiv-native-apps").start();
     }
 
-    private void renderFlows(String query){
+    private void renderFlows(String query){renderFlows(query,0);}
+    private void renderFlows(String query,long before){
         int ticket=generation.incrementAndGet();
         page.removeAllViews();
         page.addView(sectionTitle("Flux"));
         page.addView(note("Projection native des événements du VPN AIV. Aucun contenu TLS n'est déchiffré et aucun marqueur n'est injecté dans Internet."));
+        page.addView(action(NetworkCaptureService.running||NetworkCaptureService.starting?"Arrêter la capture réseau":"Activer la capture réseau (VPN local)",v->{
+            if(NetworkCaptureService.running||NetworkCaptureService.starting){Continuous.prefs(this).edit().putBoolean("vpn_enabled",false).apply();stopService(new Intent(this,NetworkCaptureService.class));renderFlows(query);}
+            else beginNetworkCapture();
+        }));
         EditText search=searchBox("Application, UID, IP, domaine ou ID",query);
         page.addView(search);
         page.addView(action("Actualiser",v->renderFlows(search.getText().toString())));
@@ -704,15 +714,18 @@ public final class MainActivity extends Activity {
         TextView loading=text("Lecture des flux…",14,MUTED,false);page.addView(loading);
         new Thread(()->{
             try{
-                JSONObject data=EventStore.get(this).flowPage(query,0,100);
+                JSONObject data=EventStore.get(this).flowPage(query,before,100);
                 JSONArray flows=data.optJSONArray("flows");
                 main.post(()->{
                     if(ticket!=generation.get()||!"flows".equals(currentPage))return;
                     page.removeView(loading);
-                    page.addView(text((flows==null?0:flows.length())+" flux · "+data.optInt("scanned_events")+" événements examinés",14,MUTED,true));
+                    page.addView(text((flows==null?0:flows.length())+" flux affichés",14,MUTED,true));
+                    JSONObject status=data.optJSONObject("status"),quality=data.optJSONObject("quality");
+                    if(status!=null)page.addView(note("Index du journal : "+status.optLong("checkpoint")+" / "+status.optLong("latest_event")+" événements"+(status.optBoolean("busy")?" · reconstruction en cours":"")+(status.optString("error").isEmpty()?"":" · "+status.optString("error"))));
+                    if(quality!=null)page.addView(card("Qualité de cette page", "Attribution : "+formatRate(quality,"attribution_rate")+" · inconnus : "+formatRate(quality,"unknown_rate")+"\nCouverture des volumes : "+formatRate(quality,"volume_coverage")+"\nOctets observés : ↑ "+formatCounter(quality,"tx_bytes_observed")+" · ↓ "+formatCounter(quality,"rx_bytes_observed")+"\nAlertes de compteurs : "+quality.optLong("counter_issue_connections")+"\n"+quality.optString("scope")));
                     if(flows==null)return;
-                    String[] headers={"Niv.","Heure","Application","UID","Proto","Destination","Tracker","↑","↓","Détail"};
-                    int[] widths={64,120,190,90,90,260,190,100,100,100};
+                    String[] headers={"Niv.","Heure","Application","UID","Attribution","Proto","Destination","Tracker","↑","↓","Détail"};
+                    int[] widths={64,120,190,90,150,90,260,190,100,100,100};
                     TableLayout table=dataTable(headers,widths);
                     for(int i=0;i<flows.length();i++){
                         JSONObject f=flows.optJSONObject(i);if(f==null)continue;
@@ -721,18 +734,20 @@ public final class MainActivity extends Activity {
                         String dest=f.optString("tls_sni");
                         if(dest.isEmpty())dest=f.optString("destination","—");
                         JSONArray packages=f.optJSONArray("packages");
-                        String pkg=packages!=null&&packages.length()==1?packages.optString(0):"";
+                        String pkg=uniquePackage(f);
                         int level=levelForPackage(pkg);
                         JSONArray trackers=f.optJSONArray("tracker_matches");
                         String tracker=(trackers!=null&&trackers.length()>0&&trackers.optJSONObject(0)!=null)?trackers.optJSONObject(0).optString("name","tracker"):"—";
-                        String uidText=uid<0?"—":String.valueOf(uid);
+                        String uidText=uid<0?"Inconnu":String.valueOf(uid);
                         String protocol=f.optString("protocol","—");
-                        String[] values={levelShort(level),shortTime(Math.max(f.optLong("first_outbound_ms"),f.optLong("first_inbound_ms"))),actor,uidText,protocol,dest,tracker,formatBytes(f.optLong("tx_bytes")),formatBytes(f.optLong("rx_bytes"))};
-                        String[] filters={null,null,actor,uid<0?null:uidText,protocol,dest,"—".equals(tracker)?null:tracker,null,null};
+                        String attribution=attributionLabel(f);
+                        String[] values={levelShort(level),shortTime(Math.max(f.optLong("first_outbound_ms"),f.optLong("first_inbound_ms"))),actor,uidText,attribution,protocol,dest,tracker,formatCounter(f,"tx_bytes"),formatCounter(f,"rx_bytes")};
+                        String[] filters={null,null,actor,uid<0?null:uidText,null,protocol,dest,"—".equals(tracker)?null:tracker,null,null};
                         addTableRow(table,values,filters,widths,level,search,()->renderFlows(search.getText().toString()),
                             v->showJsonDetail("Flux · "+actor,f,pkg));
                     }
                     page.addView(tableScroller(table));
+                    if(data.optBoolean("has_more"))page.addView(action("Page suivante",v->renderFlows(query,data.optLong("next_before_id"))));
                 });
             }catch(Exception e){
                 main.post(()->{if(ticket==generation.get()){page.removeView(loading);page.addView(card("Erreur flux",e.getClass().getSimpleName()+": "+String.valueOf(e.getMessage())));}});
@@ -1160,6 +1175,7 @@ public final class MainActivity extends Activity {
         try{
             Continuous.prefs(this).edit().putBoolean("enabled",true).putBoolean("analysis_enabled",true).putBoolean("vpn_enabled",false).apply();
             stopService(new Intent(this,NetworkCaptureService.class));
+            stopService(new Intent(this,NetworkCaptureService.class));
             Continuous.start(this);
             if(Build.VERSION.SDK_INT>=33&&checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)
                 requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},NOTIFICATION_REQUEST);
@@ -1170,12 +1186,16 @@ public final class MainActivity extends Activity {
     }
 
     private void beginJournalExport(){
+        new AlertDialog.Builder(this).setTitle("Exporter le journal local")
+            .setItems(new String[]{"JSON · document complet","JSONL · événements ligne par ligne","SQLite · observations et métadonnées"},(dialog,which)->requestJournalExport(which)).show();
+    }
+    private void requestJournalExport(int format){
         try{
             Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);
             i.addCategory(Intent.CATEGORY_OPENABLE);
-            i.setType("application/json");
-            i.putExtra(Intent.EXTRA_TITLE,"AIV-journal-"+System.currentTimeMillis()+".json");
-            startActivityForResult(i,EXPORT_REQUEST);
+            i.setType(format==2?"application/vnd.sqlite3":format==1?"application/x-ndjson":"application/json");
+            i.putExtra(Intent.EXTRA_TITLE,"AIV-journal-"+System.currentTimeMillis()+(format==2?".sqlite":format==1?".jsonl":".json"));
+            startActivityForResult(i,format==2?SQLITE_EXPORT_REQUEST:format==1?JSONL_EXPORT_REQUEST:EXPORT_REQUEST);
         }catch(Exception e){toast("Export indisponible : "+e.getClass().getSimpleName());}
     }
 
@@ -1201,12 +1221,13 @@ public final class MainActivity extends Activity {
         },"aiv-analysis-export").start();
     }
 
-    private void exportJournalTo(Uri destination){
+    private void exportJournalTo(Uri destination,int format){
         new Thread(()->{
             try{
-                java.io.File ready=ExportFiles.stage(this,writer->EventStore.get(this).export(writer,false));
+                java.io.File ready=format==2?ExportFiles.stageBinary(this,file->EventStore.get(this).exportDatabase(file)):
+                    ExportFiles.stage(this,writer->EventStore.get(this).export(writer,format==1));
                 String result=ExportFiles.copy(this,ready,destination);
-                main.post(()->toast(result));
+                main.post(()->showDetail("Export du journal",result,null,null));
             }catch(Exception e){
                 main.post(()->showDetail("Export du journal","Échec : "+e.getClass().getSimpleName()+" · "+String.valueOf(e.getMessage()),null,null));
             }
@@ -1216,10 +1237,9 @@ public final class MainActivity extends Activity {
     @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){
         super.onActivityResult(requestCode,resultCode,data);
         if(requestCode==VPN_REQUEST&&resultCode==RESULT_OK){
-            try{NetworkCaptureService.lastError="";startForegroundService(new Intent(this,NetworkCaptureService.class));}
-            catch(Exception e){toast("VPN : "+e.getClass().getSimpleName());}
-        }else if(requestCode==EXPORT_REQUEST&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){
-            exportJournalTo(data.getData());
+            activateNetworkCapture();
+        }else if((requestCode==EXPORT_REQUEST||requestCode==JSONL_EXPORT_REQUEST||requestCode==SQLITE_EXPORT_REQUEST)&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){
+            exportJournalTo(data.getData(),requestCode==SQLITE_EXPORT_REQUEST?2:requestCode==JSONL_EXPORT_REQUEST?1:0);
         }else if(requestCode==ANALYSIS_EXPORT_REQUEST&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){
             exportAnalysisTo(data.getData());
         }else if(requestCode==PERMISSION_EXPORT_REQUEST&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){
@@ -1276,9 +1296,32 @@ public final class MainActivity extends Activity {
         LinearLayout box=card(title,body);box.setBackground(panelDrawable(PANEL_2,levelColor(level),18));return box;
     }
     private String uniquePackage(JSONObject d){
-        if(d==null)return "";
-        JSONArray a=d.optJSONArray("packages");
-        return a!=null&&a.length()==1?a.optString(0):"";
+        return ObservationValues.uniquePackage(d)?d.optJSONArray("packages").optString(0):"";
+    }
+    private String formatCounter(JSONObject d,String key){
+        if(!ObservationValues.valid(d,key))return "Inconnu";
+        return ("PARTIAL".equals(d.optString("volume_status"))?"≥ ":"")+formatBytes(d.optLong(key));
+    }
+    private String formatRate(JSONObject d,String key){return d.isNull(key)||!d.has(key)?"Non calculable":String.format(Locale.CANADA_FRENCH,"%.1f %%",100*d.optDouble(key));}
+    private String attributionLabel(JSONObject d){
+        switch(ObservationValues.attribution(d)){
+            case "ATTRIBUTED_PACKAGE":return "Attribué";
+            case "SHARED_UID":return "UID partagé";
+            case "RESERVED_UID":return "UID système";
+            case "UID_WITHOUT_PACKAGE":return "UID seul";
+            default:return "Inconnu";
+        }
+    }
+    private void beginNetworkCapture(){
+        try{Intent permission=android.net.VpnService.prepare(this);if(permission!=null)startActivityForResult(permission,VPN_REQUEST);else activateNetworkCapture();}
+        catch(Exception e){showDetail("Capture réseau","Démarrage impossible : "+e.getClass().getSimpleName(),null,null);}
+    }
+    private void activateNetworkCapture(){
+        try{
+            Continuous.prefs(this).edit().putBoolean("enabled",true).putBoolean("vpn_enabled",true).apply();
+            NetworkCaptureService.lastError="";startForegroundService(new Intent(this,NetworkCaptureService.class));
+            toast("Capture réseau demandée · VPN local");if("flows".equals(currentPage))main.postDelayed(()->renderFlows(""),500);
+        }catch(Exception e){Continuous.prefs(this).edit().putBoolean("vpn_enabled",false).apply();showDetail("Capture réseau",e.getClass().getSimpleName(),null,null);}
     }
     private String shortTime(long ms){
         if(ms<=0)return "—";
@@ -1368,68 +1411,71 @@ public final class MainActivity extends Activity {
 
     private String levelShort(int level){return level>=1&&level<=5?"A"+level:"—";}
 
-    private void showTrackerGroupDetail(JSONObject group){
-        try{
-            String app=group.optString("app","—");
-            String tracker=group.optString("tracker_name","—");
-            String appKey=group.optString("app_key","");
-            int trackerId=group.optInt("tracker_id",-1);
-            JSONObject journeys=TrackerIndex.get(this).journeys(appKey,trackerId,0,30);
-
-            LinearLayout body=new LinearLayout(this);
-            body.setOrientation(LinearLayout.VERTICAL);
-            body.setPadding(dp(12),dp(8),dp(12),dp(12));
-            body.addView(text(app+" → "+tracker,16,TEXT,true));
-            body.addView(text(group.optLong("journeys")+" trajet(s) · "+group.optLong("destinations_count")+" destination(s)",13,MUTED,false));
-            JSONObject apk=group.optJSONObject("apk");
-            if(apk!=null)body.addView(text("Preuve APK : "+apk.optString("status","—")+" · tracker présent : "+String.valueOf(apk.opt("present")),13,MUTED,false));
-
-            JSONArray rows=journeys.optJSONArray("rows");
-            if(rows==null||rows.length()==0)body.addView(note("Aucun trajet détaillé disponible pour ce groupe."));
-            else for(int i=0;i<rows.length();i++){
-                JSONObject j=rows.optJSONObject(i);if(j==null)continue;
-                String correlation=j.optString("correlation");
-                String host=j.optString("host");if(host.isEmpty())host=j.optString("remote_ip","—");
-                String label=shortTime(j.optLong("last_ms"))+" · "+host+" · "+j.optLong("steps")+" étape(s)";
-                final JSONObject journey=j;
-                body.addView(action(label,v->showTrackerTrail(app+" → "+tracker,journey)));
-            }
-
-            ScrollView scroll=new ScrollView(this);scroll.addView(body);
-            new AlertDialog.Builder(this).setTitle("Traqueur · chaîne de trajets").setView(scroll).setPositiveButton("Fermer",null).show();
-        }catch(Exception e){
-            showDetail("Traqueur","Détail indisponible : "+e.getClass().getSimpleName()+" · "+String.valueOf(e.getMessage()),null,null);
-        }
+    private void showTrackerGroupDetail(JSONObject group){showTrackerGroupDetail(group,0);}
+    private void showTrackerGroupDetail(JSONObject group,long before){
+        new Thread(()->{
+            try{
+                JSONObject journeys=TrackerIndex.get(this).journeys(group.optString("app_key"),group.optInt("tracker_id",-1),before,30);
+                main.post(()->{
+                    if(isFinishing()||isDestroyed())return;
+                    try{
+                        String app=group.optString("app","—"),tracker=group.optString("tracker_name","—");
+                        LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);body.setPadding(dp(12),dp(8),dp(12),dp(12));
+                        body.addView(text(app+" → "+tracker,16,TEXT,true));
+                        body.addView(text(group.optLong("journeys")+" trajet(s) · "+group.optLong("destinations_count")+" destination(s)",13,MUTED,false));
+                        body.addView(note("Même connexion locale. Correspondance de catalogue corrélée; aucune intention ni chaîne de destinations distantes n’est démontrée."));
+                        JSONObject apk=group.optJSONObject("apk");if(apk!=null)body.addView(text("Preuve APK : "+apk.optString("status","—")+" · tracker présent : "+String.valueOf(apk.opt("present")),13,MUTED,false));
+                        JSONArray rows=journeys.optJSONArray("rows");
+                        if(rows==null||rows.length()==0)body.addView(note("Aucun trajet disponible dans cette page."));
+                        else for(int i=0;i<rows.length();i++){
+                            JSONObject j=rows.optJSONObject(i);if(j==null)continue;
+                            String host=j.optString("host");if(host.isEmpty())host=j.optString("remote_ip","—");
+                            String label=shortTime(j.optLong("last_ms"))+" · "+host+" · "+(j.optInt("proof")==1?"question DNS":"nom TLS annoncé")+" · "+j.optLong("steps")+" étape(s)";
+                            body.addView(action(label,v->showTrackerTrail(app+" → "+tracker,j)));
+                        }
+                        ScrollView scroll=new ScrollView(this);scroll.addView(body);
+                        AlertDialog.Builder dialog=new AlertDialog.Builder(this).setTitle("Traqueur · trajets").setView(scroll).setPositiveButton("Fermer",null);
+                        if(journeys.optBoolean("has_more"))dialog.setNeutralButton("Page suivante",(d,w)->showTrackerGroupDetail(group,journeys.optLong("next_before")));
+                        dialog.show();
+                    }catch(Exception e){showDetail("Traqueur","Détail indisponible : "+e.getClass().getSimpleName(),null,null);}
+                });
+            }catch(Exception e){main.post(()->showDetail("Traqueur","Lecture indisponible : "+e.getClass().getSimpleName(),null,null));}
+        },"aiv-tracker-journeys").start();
     }
 
-    private void showTrackerTrail(String title,JSONObject journey){
-        try{
-            String correlation=journey.optString("correlation");
-            JSONObject trail=TrackerIndex.get(this).trail(correlation);
-            LinearLayout body=new LinearLayout(this);
-            body.setOrientation(LinearLayout.VERTICAL);
-            body.setPadding(dp(12),dp(8),dp(12),dp(12));
-            body.addView(text("Corrélation : "+correlation,13,MUTED,false));
-            body.addView(text("UID "+journey.optInt("uid",-1)+" · ↑ "+formatBytes(journey.optLong("tx_bytes"))+" · ↓ "+formatBytes(journey.optLong("rx_bytes")),13,MUTED,false));
-
-            JSONArray steps=trail.optJSONArray("steps");
-            if(steps==null||steps.length()==0)body.addView(note("Aucune étape conservée."));
-            else for(int i=0;i<steps.length();i++){
-                JSONObject step=steps.optJSONObject(i);if(step==null)continue;
-                long eventId=step.optLong("event_id");
-                String label="#"+eventId+" · "+shortTime(step.optLong("observed_ms"))+" · "+step.optString("action","—");
-                String dest=step.optString("tls_sni");if(dest.isEmpty())dest=step.optString("destination",step.optString("remote_ip","—"));
-                LinearLayout item=card(label,dest+"\n↑ "+formatBytes(step.optLong("tx_bytes"))+" · ↓ "+formatBytes(step.optLong("rx_bytes")));
-                item.setOnClickListener(v->showEventPedigreeById(eventId));
-                body.addView(item);
-            }
-            if(trail.optBoolean("truncated"))body.addView(note("Chaîne tronquée à 250 étapes dans cette vue."));
-
-            ScrollView scroll=new ScrollView(this);scroll.addView(body);
-            new AlertDialog.Builder(this).setTitle(title+" · trajet").setView(scroll).setPositiveButton("Fermer",null).show();
-        }catch(Exception e){
-            showDetail("Trajet","Détail indisponible : "+e.getClass().getSimpleName()+" · "+String.valueOf(e.getMessage()),null,null);
-        }
+    private void showTrackerTrail(String title,JSONObject journey){showTrackerTrail(title,journey,0);}
+    private void showTrackerTrail(String title,JSONObject journey,long after){
+        new Thread(()->{
+            try{
+                JSONObject trail=TrackerIndex.get(this).trail(journey.optString("correlation"),after,250);
+                main.post(()->{
+                    if(isFinishing()||isDestroyed())return;
+                    try{
+                        LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);body.setPadding(dp(12),dp(8),dp(12),dp(12));
+                        body.addView(text("Corrélation : "+journey.optString("correlation"),13,MUTED,false));
+                        body.addView(text("UID "+(journey.optInt("uid",-1)<0?"inconnu":journey.optInt("uid"))+" · ↑ "+formatCounter(journey,"tx_bytes")+" · ↓ "+formatCounter(journey,"rx_bytes"),13,MUTED,false));
+                        body.addView(note(trail.optString("scope")));
+                        JSONArray steps=trail.optJSONArray("steps");
+                        if(steps==null||steps.length()==0)body.addView(note("Aucune étape dans cette page."));
+                        else for(int i=0;i<steps.length();i++){
+                            JSONObject step=steps.optJSONObject(i);if(step==null)continue;
+                            long eventId=step.optLong("event_id");
+                            String label="#"+eventId+" · "+shortTime(step.optLong("observed_ms"))+" · "+step.optString("action","—");
+                            String dest=step.optString("tls_sni");if(dest.isEmpty())dest=step.optString("destination",step.optString("remote_ip","—"));
+                            String volumes="↑ "+formatCounter(step,"tx_bytes")+" · ↓ "+formatCounter(step,"rx_bytes");
+                            if(ObservationValues.valid(step,"first_packet_bytes"))volumes+=" · premier paquet : "+formatCounter(step,"first_packet_bytes");
+                            LinearLayout item=card(label,step.optString("app","Application non identifiée")+" · "+step.optString("attribution_status","UNKNOWN")+"\n"+dest+"\n"+volumes);
+                            item.setOnClickListener(v->showEventPedigreeById(eventId));body.addView(item);
+                        }
+                        body.addView(text(trail.optLong("total")+" étapes conservées au total",13,MUTED,false));
+                        ScrollView scroll=new ScrollView(this);scroll.addView(body);
+                        AlertDialog.Builder dialog=new AlertDialog.Builder(this).setTitle(title+" · trajet").setView(scroll).setPositiveButton("Fermer",null);
+                        if(trail.optBoolean("has_more"))dialog.setNeutralButton("Page suivante",(d,w)->showTrackerTrail(title,journey,trail.optLong("next_after_id")));
+                        dialog.show();
+                    }catch(Exception e){showDetail("Trajet","Détail indisponible : "+e.getClass().getSimpleName(),null,null);}
+                });
+            }catch(Exception e){main.post(()->showDetail("Trajet","Lecture indisponible : "+e.getClass().getSimpleName(),null,null));}
+        },"aiv-tracker-trail").start();
     }
 
     private void showAnomalyDetail(JSONObject anomaly,String fallbackPkg){

@@ -2,7 +2,8 @@
 """Build AIV Android with reviewed Android SDK/NDK inputs.
 No dependency is downloaded by this script. Signing secrets stay outside the project.
 """
-import argparse, os, subprocess, zipfile, shutil, hashlib, json
+import argparse, os, subprocess, zipfile, shutil, hashlib, json, datetime
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 p=argparse.ArgumentParser()
@@ -34,6 +35,25 @@ def run(*args,env=None):
 run('python3',root/'tools/generate_config.py')
 run('python3',root/'tools/generate_access_policy.py')
 
+# Build facts are generated outside tracked sources, using the actual manifest.
+manifest=ET.parse(root/'app/src/main/AndroidManifest.xml').getroot()
+android='{http://schemas.android.com/apk/res/android}'
+commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip()
+dirty=bool(subprocess.check_output(['git','status','--porcelain','--untracked-files=normal'],cwd=root,text=True).strip())
+source_hash=hashlib.sha256()
+for source in sorted((root/'app/src/main').rglob('*')):
+    if source.is_file():
+        source_hash.update(str(source.relative_to(root)).encode()+b'\0'+source.read_bytes()+b'\0')
+metadata=build/'generated/fr/erick/journallocal/BuildMetadata.java'
+metadata.parent.mkdir(parents=True,exist_ok=True)
+metadata.write_text('package fr.erick.journallocal;\nfinal class BuildMetadata {\n'+
+    'static final String VERSION_NAME='+json.dumps(manifest.attrib[android+'versionName'])+';\n'+
+    'static final int VERSION_CODE='+manifest.attrib[android+'versionCode']+';\n'+
+    'static final String SOURCE_COMMIT='+json.dumps(commit)+';\n'+
+    'static final boolean SOURCE_DIRTY='+str(dirty).lower()+';\n'+
+    'static final String SOURCE_SHA256='+json.dumps(source_hash.hexdigest())+';\n'+
+    'static final String BUILD_UTC='+json.dumps(datetime.datetime.now(datetime.timezone.utc).isoformat())+';\n}\n')
+
 reuse_apk=a.reuse_native_apk_06 or a.reuse_native_apk
 vendor=root/'third_party/zdtun'
 cpp=root/'app/src/main/cpp'
@@ -56,7 +76,7 @@ for abi,target in [('arm64-v8a','aarch64-linux-android26'),('x86_64','x86_64-lin
                 (out/lib).write_bytes(data)
         continue
     common=[
-        clang,'--target='+target,'-O2','-fPIC','-ffunction-sections','-fdata-sections',
+        clang,'--target='+target,'-O2','-fPIC','-ffunction-sections','-fdata-sections','-Wall','-Wextra',
         '-fstack-protector-strong','-D_FORTIFY_SOURCE=2','-D_LITTLE_ENDIAN','-DNO_DEBUG',
         '-shared','-Wl,-z,relro,-z,now,-z,max-page-size=16384','-Wl,--gc-sections',
         '-Wl,--no-undefined','-I'+str(vendor)
@@ -67,7 +87,7 @@ for abi,target in [('arm64-v8a','aarch64-linux-android26'),('x86_64','x86_64-lin
         cpp/'relay.c',cpp/'tls_sni.c',cpp/'jni.c','-L'+str(out),'-ljournal_zdtun',
         '-o',out/'libjournalrelay.so')
 
-sources=sorted((root/'app/src/main/java').rglob('*.java'))
+sources=sorted((root/'app/src/main/java').rglob('*.java'))+[metadata]
 depdir=build/'deps'
 if depdir.exists(): shutil.rmtree(depdir)
 depdir.mkdir(parents=True,exist_ok=True)
@@ -84,7 +104,7 @@ if not annotation.is_file(): raise SystemExit('Missing AndroidX annotation depen
 compile_cp=os.pathsep.join(str(x) for x in dep_jars+[annotation])
 bootclasspath=os.pathsep.join([str(a.android_jar),str(a.build_tools/'core-lambda-stubs.jar')])
 run('javac','-encoding','UTF-8','-source','8','-target','8','-bootclasspath',bootclasspath,
-    '-classpath',compile_cp,'-Xlint:-deprecation','-d',classes,*sources)
+    '-classpath',compile_cp,'-Xlint:all','-d',classes,*sources)
 
 run('java','-cp',a.build_tools/'lib/d8.jar','com.android.tools.r8.D8',
     '--min-api','26','--lib',a.android_jar,'--output',dex,*sorted(classes.rglob('*.class')),*dep_jars)

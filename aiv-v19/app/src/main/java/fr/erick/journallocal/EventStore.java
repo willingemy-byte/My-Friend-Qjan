@@ -171,25 +171,8 @@ public final class EventStore extends SQLiteOpenHelper {
     }
 
     /** Bounded flow projection over the existing VPN journal. No second network log is created. */
-    public synchronized JSONObject flowPage(String search,long beforeId,int limit)throws Exception{
-        limit=Math.max(1,Math.min(500,limit));SQLiteDatabase db=getReadableDatabase();long maxId=latestId();long ceiling=beforeId>0?Math.min(beforeId,maxId):maxId;
-        String where="id<=? AND category IN ('trafic','dns')";ArrayList<String> args=new ArrayList<>();args.add(String.valueOf(ceiling));
-        if(search!=null&&!search.trim().isEmpty()){String term=search.trim(),lower=term.toLowerCase(Locale.ROOT);if(term.matches("\\d+")){where+=" AND (id=? OR search_text LIKE ? ESCAPE '\\')";args.add(term);args.add("%"+literalLike(lower)+"%");}else{where+=" AND search_text LIKE ? ESCAPE '\\'";args.add("%"+literalLike(lower)+"%");}}
-        int scanLimit=Math.min(20000,Math.max(1000,limit*40));ArrayList<String> q=new ArrayList<>(args);q.add(String.valueOf(scanLimit));
-        java.util.LinkedHashMap<String,JSONObject> flows=new java.util.LinkedHashMap<>();long next=0;int scanned=0;
-        try(Cursor c=db.rawQuery("SELECT id,payload FROM events WHERE "+where+" ORDER BY id DESC LIMIT ?",q.toArray(new String[0]))){
-            while(c.moveToNext()){scanned++;long eventId=c.getLong(0);next=eventId-1;JSONObject e=new JSONObject(c.getString(1)),d=e.optJSONObject("details");if(d==null)continue;String corr=d.optString("flow_correlation_id","");if(corr.isEmpty())continue;
-                JSONObject f=flows.get(corr);if(f==null){if(flows.size()>=limit)continue;f=object("flow_correlation_id",corr,"flow_id",d.opt("flow_id"),"native_flow_id",d.opt("native_flow_id"),"actor",e.optString("app"),"journal_group",d.optString("journal_group","android"),"uid",d.optInt("uid",-1),"packages",d.optJSONArray("packages")==null?new JSONArray():d.optJSONArray("packages"),"attribution",d.optString("attribution"),"protocol",d.optString("protocol",e.optString("protocol")),"remote_ip",d.optString("remote_ip"),"remote_port",d.optInt("port",-1),"destination",e.optString("destination"),"first_outbound_ms",d.opt("first_outbound_ms"),"first_inbound_ms",d.opt("first_inbound_ms"),"outbound_observed",d.optBoolean("outbound_observed"),"inbound_observed",d.optBoolean("inbound_observed"),"tx_bytes",d.optLong("tx_bytes",0),"rx_bytes",d.optLong("rx_bytes",0),"tx_packets",d.optLong("tx_packets",0),"rx_packets",d.optLong("rx_packets",0),"closed",d.has("closed")?d.optBoolean("closed"):JSONObject.NULL,"tls_sni",d.optString("tls_sni"),"tls_observation",d.optString("tls_observation"),"ech_extension_present",d.optBoolean("ech_extension_present"),"dns",new JSONArray(),"latest_event_id",eventId,"same_native_flow",d.optBoolean("same_native_flow",false));flows.put(corr,f);}
-                f.put("outbound_observed",f.optBoolean("outbound_observed")||d.optBoolean("outbound_observed"));f.put("inbound_observed",f.optBoolean("inbound_observed")||d.optBoolean("inbound_observed"));
-                if((f.isNull("first_outbound_ms")||f.optLong("first_outbound_ms",0)==0)&&d.optLong("first_outbound_ms",0)>0)f.put("first_outbound_ms",d.optLong("first_outbound_ms"));
-                if((f.isNull("first_inbound_ms")||f.optLong("first_inbound_ms",0)==0)&&d.optLong("first_inbound_ms",0)>0)f.put("first_inbound_ms",d.optLong("first_inbound_ms"));
-                for(String key:new String[]{"tx_bytes","rx_bytes","tx_packets","rx_packets"})if(d.optLong(key,0)>f.optLong(key,0))f.put(key,d.optLong(key,0));
-                if(d.has("closed"))f.put("closed",d.optBoolean("closed"));if(f.optString("tls_sni").isEmpty()&&!d.optString("tls_sni").isEmpty())f.put("tls_sni",d.optString("tls_sni"));if(f.optString("tls_observation").isEmpty()&&!d.optString("tls_observation").isEmpty())f.put("tls_observation",d.optString("tls_observation"));if(d.optBoolean("ech_extension_present"))f.put("ech_extension_present",true);if(d.optBoolean("same_native_flow"))f.put("same_native_flow",true);
-                if("dns".equals(e.optString("category"))){String name=d.optString("question",e.optString("destination"));JSONArray dns=f.getJSONArray("dns");boolean seen=false;for(int i=0;i<dns.length();i++)if(name.equals(dns.optString(i)))seen=true;if(!name.isEmpty()&&!seen&&dns.length()<8)dns.put(name);}
-            }
-        }
-        JSONArray rows=new JSONArray();for(JSONObject f:flows.values()){boolean unique=!"android".equals(f.optString("journal_group"))&&f.optInt("uid",-1)>=0&&f.optJSONArray("packages")!=null&&f.optJSONArray("packages").length()==1;f.put("attribution_status",unique?"ATTRIBUTION_UNIQUE":"NON_ATTRIBUABLE");f.put("same_flow_return",f.optBoolean("outbound_observed")&&f.optBoolean("inbound_observed"));f.put("limits",f.optBoolean("ech_extension_present")?"ECH/GREASE observé : le nom interne peut rester invisible. Aucun contenu TLS n’est déchiffré.":"Aucun contenu TLS n’est déchiffré; QUIC/UDP et les métadonnées non visibles restent limités par Android et le VPN local.");ReferenceCatalog.get(context).flow(f);rows.put(f);}
-        return object("flows",rows,"ceiling_id",ceiling,"next_before_id",next,"scanned_events",scanned,"limit",limit,"bounded",true,"notice","Projection bornée des événements VPN existants; aucune duplication du trafic ni marqueur injecté dans Internet.");
+    public JSONObject flowPage(String search,long beforeId,int limit)throws Exception{
+        return TrackerIndex.get(context).flows(search,beforeId,limit);
     }
 
     public synchronized JSONObject transparencySummary(){
@@ -219,11 +202,15 @@ public final class EventStore extends SQLiteOpenHelper {
     }
     public void export(Writer writer)throws Exception{export(writer,false);}
     public void export(Writer writer,boolean jsonl)throws Exception{
-        SQLiteDatabase db=getReadableDatabase();SnapshotExporter.write(writer,jsonl,new SnapshotExporter.Source(){
+        SnapshotExporter.write(writer,jsonl,exportSource());
+    }
+    public void exportDatabase(java.io.File destination)throws Exception{SQLiteSnapshot.write(destination,exportSource());}
+    private SnapshotExporter.Source exportSource(){
+        SQLiteDatabase db=getReadableDatabase();return new SnapshotExporter.Source(){
             public long[] snapshot(){try(Cursor c=db.rawQuery("SELECT COALESCE(MAX(id),0),COUNT(*) FROM events",null)){c.moveToFirst();return new long[]{c.getLong(0),c.getLong(1)};}}
             public java.util.List<String> page(long after,long ceiling)throws Exception{
                 java.util.List<String> result=new java.util.ArrayList<>();try(Cursor c=db.rawQuery("SELECT id,payload FROM events WHERE id > ? AND id <= ? ORDER BY id ASC LIMIT 200",new String[]{String.valueOf(after),String.valueOf(ceiling)})){while(c.moveToNext()){JSONObject event=new JSONObject(c.getString(1));event.put("id",c.getLong(0));result.add(event.toString());}}return result;
             }
-        });
+        };
     }
 }
