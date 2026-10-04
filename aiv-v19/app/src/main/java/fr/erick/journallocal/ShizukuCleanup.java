@@ -3,6 +3,7 @@ package fr.erick.journallocal;
 import android.app.Activity;
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.content.pm.PermissionInfo;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.io.*;
@@ -71,6 +72,92 @@ public final class ShizukuCleanup {
         return out;
     }
 
+    public static JSONObject plan(Context c)throws Exception{
+        JSONArray candidates=DefenseStore.get(c).automaticCandidates();
+        JSONArray rows=new JSONArray();
+        int planned=0,runtimePermissions=0,specialAccess=0,skipped=0;
+        for(int i=0;i<candidates.length();i++){
+            JSONObject row=candidates.getJSONObject(i),app=row.getJSONObject("app"),assessment=row.getJSONObject("assessment");
+            String pkg=app.optString("package_name"),label=app.optString("label",pkg);
+            JSONArray permissions=new JSONArray(),specials=new JSONArray(),ignored=new JSONArray();
+
+            JSONArray findings=assessment.optJSONArray("findings");
+            if(findings!=null)for(int j=0;j<findings.length();j++){
+                JSONObject finding=findings.optJSONObject(j);if(finding==null||!Boolean.TRUE.equals(finding.opt("granted")))continue;
+                String permission=finding.optString("permission");
+                if(!validPermission(permission)){ignored.put(EventStore.object("name",permission,"reason","permission_invalide"));skipped++;continue;}
+                if(runtimeRevocable(c,pkg,permission)){
+                    permissions.put(EventStore.object("name",permission,"level",finding.optInt("level"),"action","revoke_runtime"));
+                    runtimePermissions++;planned++;
+                }else{
+                    ignored.put(EventStore.object("name",permission,"reason","non_runtime_revocable"));
+                    skipped++;
+                }
+            }
+
+            JSONArray actions=assessment.optJSONArray("special_actions");
+            if(actions!=null)for(int j=0;j<actions.length();j++){
+                String action=actions.optString(j),op=appOp(action);
+                if(op==null){ignored.put(EventStore.object("name",action,"reason","appop_non_pris_en_charge"));skipped++;continue;}
+                JSONObject before=queryAppOp(pkg,op);
+                String mode=before.optString("mode");
+                if(mode.isEmpty()||!validMode(mode)){
+                    ignored.put(EventStore.object("name",op,"reason","etat_appop_indisponible"));
+                    skipped++;
+                    continue;
+                }
+                if("deny".equals(mode)||"ignore".equals(mode))continue;
+                specials.put(EventStore.object("name",op,"before",mode,"action","deny_appop"));
+                specialAccess++;planned++;
+            }
+
+            rows.put(EventStore.object(
+                "package",pkg,
+                "label",label,
+                "level",assessment.optInt("level"),
+                "runtime_permissions",permissions,
+                "special_access",specials,
+                "skipped",ignored,
+                "planned_actions",permissions.length()+specials.length(),
+                "protected_reasons",assessment.optJSONArray("protected_reasons"),
+                "policy","Utilisateur non-système, UID unique, profil courant; rôles essentiels et UID partagés exclus."
+            ));
+        }
+        return EventStore.object(
+            "schema","aiv-shizuku-plan/1",
+            "generated_ms",System.currentTimeMillis(),
+            "candidates",candidates.length(),
+            "planned_actions",planned,
+            "runtime_permissions",runtimePermissions,
+            "special_access",specialAccess,
+            "skipped",skipped,
+            "rows",rows,
+            "scope","Plan automatique conservateur. Aucune désinstallation ni désactivation système. Chaque changement est vérifié et possède une commande inverse."
+        );
+    }
+
+    public static JSONObject lastSnapshot(Context c){
+        try{
+            File f=snapshotFile(c);
+            if(!f.isFile())return EventStore.object("exists",false);
+            JSONObject s=new JSONObject(readAll(f));
+            JSONArray changes=s.optJSONArray("changes");
+            return EventStore.object(
+                "exists",true,
+                "schema",s.optString("schema"),
+                "created_ms",s.optLong("created_ms"),
+                "finished_ms",s.optLong("finished_ms"),
+                "attempted",s.optInt("attempted"),
+                "changed",s.optInt("changed"),
+                "failed",s.optInt("failed"),
+                "skipped",s.optInt("skipped"),
+                "changes",changes==null?0:changes.length()
+            );
+        }catch(Exception e){
+            return EventStore.object("exists",false,"error",e.getClass().getSimpleName());
+        }
+    }
+
     public static void requestOrRun(){
         if(DeveloperControl.isBusy()){status="Intervention de contrôle en cours";return;}
         if(!AccessPolicy.allows("shizuku.control",AccessPolicy.DISTRIBUTION_TIER)){status="Contrôle Shizuku réservé au palier 2";pending=false;return;}
@@ -128,6 +215,11 @@ public final class ShizukuCleanup {
                 if(!Boolean.TRUE.equals(finding.opt("granted"))){continue;}
                 String permission=finding.optString("permission");
                 if(!validPermission(permission)){skipped++;continue;}
+                if(!runtimeRevocable(c,pkg,permission)){
+                    skipped++;
+                    log(c,"CLEANUP_SKIP",EventStore.object("package",pkg,"permission",permission,"reason","Permission non runtime; pm revoke non applicable"));
+                    continue;
+                }
                 attempted++;
                 JSONObject change=EventStore.object("package",pkg,"kind","permission","name",permission,"before","granted","command","pm revoke");
                 change.put("inverse","pm grant --user current "+q(pkg)+" "+q(permission));
@@ -261,6 +353,13 @@ public final class ShizukuCleanup {
             int uid=c.getPackageManager().getApplicationInfo(pkg,0).uid;
             String[] peers=c.getPackageManager().getPackagesForUid(uid);
             return uid%100000>=10000&&uid/100000==android.os.Process.myUid()/100000&&uid!=android.os.Process.myUid()&&peers!=null&&peers.length==1;
+        }catch(Exception e){return false;}
+    }
+    private static boolean runtimeRevocable(Context c,String pkg,String permission){
+        try{
+            if(c.getPackageManager().checkPermission(permission,pkg)!=PackageManager.PERMISSION_GRANTED)return false;
+            PermissionInfo info=c.getPackageManager().getPermissionInfo(permission,0);
+            return (info.protectionLevel&PermissionInfo.PROTECTION_MASK_BASE)==PermissionInfo.PROTECTION_DANGEROUS;
         }catch(Exception e){return false;}
     }
     private static boolean validPermission(String s){return s!=null&&PERMISSION.matcher(s).matches();}
