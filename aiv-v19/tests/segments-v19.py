@@ -9,12 +9,12 @@ def stmt(prefix):return next(s for s in sql if s.startswith(prefix))
 with tempfile.TemporaryDirectory() as tmp:
  path=Path(tmp)/'journal.db'
  db=sqlite3.connect(path)
- for s in sql[:5]:db.execute(s)
+ for s in sql[:6]:db.execute(s)
  # Existing V13 checkpoint, with gaps in global event IDs.
  db.execute('UPDATE journal_segments SET first_id=11,last_id=50009,event_count=49999 WHERE segment=1')
  db.execute('UPDATE journal_segment_state SET checkpoint=50009,total=49999,active=1 WHERE id=1');db.commit()
  # Re-opening must not reset V13 state.
- for s in sql[:5]:db.execute(s)
+ for s in sql[:6]:db.execute(s)
  assert db.execute('SELECT checkpoint,total FROM journal_segment_state').fetchone()==(50009,49999)
  update=stmt('UPDATE journal_segments SET first_id=')
  checkpoint=stmt('UPDATE journal_segment_state SET checkpoint=')
