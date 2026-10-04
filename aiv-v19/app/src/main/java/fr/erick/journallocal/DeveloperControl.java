@@ -82,8 +82,8 @@ public final class DeveloperControl {
         String sms=android.provider.Telephony.Sms.getDefaultSmsPackage(c);if(sms!=null)core.add(sms);
         String services=Settings.Secure.getString(c.getContentResolver(),Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
         if(services!=null)for(String service:services.split(":")){ComponentName name=ComponentName.unflattenFromString(service);if(name!=null)core.add(name.getPackageName());}
-        String reason=reserved(target,core);if(!reason.isEmpty())return reason;
-        if(target.getJSONArray("shared_packages").length()!=1)return "UID partagé : retrait individuel non isolable";
+        if(target.getJSONArray("shared_packages").length()!=1)return "Portée UID partagé : un retrait pourrait toucher plusieurs applications";
+        String reason=reserved(target,core);if(!reason.isEmpty())return "Protection AIV : "+reason;
         return "";
     }
     public static JSONObject targets(Context c)throws Exception{

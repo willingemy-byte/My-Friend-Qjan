@@ -15,10 +15,13 @@ import java.util.*;
 final class PermissionControl {
     private static final int USER=android.os.Process.myUid()/100000;
     private static final int MAX_CHANGES=500, PAGE=50;
-    private static volatile boolean running;
+    private static volatile boolean running,analysing;
+    private static final java.util.concurrent.atomic.AtomicBoolean stop=new java.util.concurrent.atomic.AtomicBoolean();
+    private static volatile String batchPrefix="";
     private static volatile String status="Aucun retrait de permissions en cours";
     private PermissionControl(){}
-    static boolean running(){return running;}
+    static boolean running(){return running||analysing;}
+    static void requestStop(){stop.set(true);status="Arrêt demandé — fin de la commande en cours";}
     static String status(){return status;}
     static boolean authorized(){
         try{return Shizuku.pingBinder()&&!Shizuku.isPreV11()&&Shizuku.checkSelfPermission()==PackageManager.PERMISSION_GRANTED;}
@@ -45,6 +48,178 @@ final class PermissionControl {
         }
     }
     private static String hash(String s)throws Exception{return ApkEvidence.hex(MessageDigest.getInstance("SHA-256").digest(s.getBytes(StandardCharsets.UTF_8)));}
+    static boolean includeProtected(Context c){return prefs(c).getBoolean("include-protected",false);}
+    static Set<String> reviewGroups(Context c){
+        Set<String> groups=new LinkedHashSet<>();SharedPreferences p=prefs(c);
+        for(String group:PermissionReviewRules.GROUPS)if(p.getBoolean("review:"+group,PermissionReviewRules.defaults().contains(group)))groups.add(group);
+        return groups;
+    }
+    static void setReviewGroup(Context c,String group,boolean checked)throws Exception{
+        if(running())throw new IllegalStateException("Attendre la fin de l’opération");
+        if(!Arrays.asList(PermissionReviewRules.GROUPS).contains(group))throw new IllegalArgumentException("Catégorie inconnue");
+        if(!prefs(c).edit().putBoolean("review:"+group,checked).commit())throw new IOException("Politique non enregistrée");
+    }
+    static void setIncludeProtected(Context c,boolean checked)throws Exception{
+        if(running())throw new IllegalStateException("Attendre la fin de l’opération");
+        if(!prefs(c).edit().putBoolean("include-protected",checked).commit())throw new IOException("Politique non enregistrée");
+    }
+    private static boolean sameTarget(Context c,String pkg,JSONObject planned){
+        return PermissionReviewRules.sameTarget(planned.optString("target_guard",""),targetReason(c,pkg),planned.optBoolean("include_protected"));
+    }
+    static JSONObject review(Context c)throws Exception{
+        JSONObject result;
+        try{result=read(c,"review.json");}catch(FileNotFoundException e){return EventStore.object("phase","none","applications",new JSONArray());}
+        if("analysing".equals(result.optString("phase"))&&!analysing)result.put("phase","interrupted");
+        int proposed=0;JSONObject norms=profiles(c);Set<String> groups=reviewGroups(c);boolean include=includeProtected(c);JSONArray rows=result.optJSONArray("applications");
+        if(rows!=null)for(int i=0;i<rows.length();i++){
+            JSONObject row=rows.getJSONObject(i);int count=0;
+            if(!row.optBoolean("aiv_protection")||include){
+                JSONObject counts=row.optJSONObject("candidate_groups");String profile=prefs(c).getString("profile:"+row.optString("package"),"");
+                if(!profile.isEmpty()){Set<String> denied=denied(norms,profile);JSONArray names=row.optJSONArray("eligible_names");if(names!=null)for(int n=0;n<names.length();n++)if(denied.contains(names.optString(n)))count++;}
+                else if(counts!=null)for(String group:groups)count+=counts.optInt(group);
+            }
+            row.put("proposed",count);proposed+=count;
+        }
+        return result.put("proposed",proposed).put("selected_groups",new JSONArray(groups)).put("include_protected",include);
+    }
+    static synchronized void startReview(Context context)throws Exception{
+        access();if(running())throw new IllegalStateException("Une opération est en cours");
+        Context c=context.getApplicationContext();analysing=true;stop.set(false);status="Analyse globale — lecture des applications";
+        new Thread(()->{
+            JSONObject report=null;
+            try{
+                List<PackageInfo> apps=c.getPackageManager().getInstalledPackages(PackageManager.GET_PERMISSIONS|PackageManager.MATCH_DISABLED_COMPONENTS);
+                apps.removeIf(p->p.applicationInfo==null||p.applicationInfo.uid/100000!=USER);
+                if(apps.size()>AivConfig.REFERENCE_MAX_APPS)throw new IOException("Inventaire supérieur à la borne de 20 000 applications");
+                apps.sort(Comparator.comparing(p->p.packageName));long started=System.currentTimeMillis();
+                report=EventStore.object("schema","aiv-permission-review/1","id",UUID.randomUUID().toString(),"phase","analysing","created_ms",started,
+                    "user",USER,"total",apps.size(),"scanned",0,"permissions",0,"android_locked",0,"aiv_protected",0,"uid_scope",0,"unknown",0,"errors",0,
+                    "applications",new JSONArray(),"catalogs",ReferenceCatalog.get(c).summary());write(c,"review.json",report);
+                for(PackageInfo app:apps){
+                    if(stop.get())throw new InterruptedIOException("Analyse arrêtée; résultats partiels conservés");
+                    if(System.currentTimeMillis()-started>15*60*1000L)throw new InterruptedIOException("Borne de 15 minutes atteinte; résultats partiels conservés");
+                    access();status="Analyse "+(report.optInt("scanned")+1)+"/"+apps.size()+" · "+String.valueOf(app.applicationInfo.loadLabel(c.getPackageManager()));
+                    JSONObject row;
+                    try{
+                        // Observe platform eligibility even for AIV-protected apps; inclusion remains an explicit policy.
+                        JSONObject d=detail(c,app.packageName,true,true);JSONArray permissions=d.getJSONArray("permissions");
+                        JSONObject counts=new JSONObject();JSONArray eligibleNames=new JSONArray();int profiles=0,locked=0,scope=0,unknown=0,eligible=0;
+                        String protection=d.optString("target_reason");boolean protectedApp=protection.startsWith("Protection AIV");
+                        for(int i=0;i<permissions.length();i++){
+                            JSONObject permission=permissions.getJSONObject(i);String origin=permission.optString("block_origin"),name=permission.getString("name");
+                            if("ANDROID_LOCK".equals(origin))locked++;if("UID_SCOPE".equals(origin))scope++;if("OBSERVATION".equals(origin))unknown++;
+                            String mode=permission.optJSONObject("appop")==null?"":permission.getJSONObject("appop").optString("mode");
+                            boolean can=permission.optBoolean("can_revoke")&&(!"appop".equals(permission.optString("kind"))||Arrays.asList("allow","foreground").contains(mode));
+                            permission.put("review_candidate",can).put("review_reason",d.optString("profile").isEmpty()?"Accès sélectionnable selon la politique globale : "+PermissionReviewRules.label(PermissionReviewRules.group(name)):permission.optString("assessment"));
+                            if(can){eligible++;eligibleNames.put(name);String group=PermissionReviewRules.group(name);counts.put(group,counts.optInt(group)+1);if(permission.optBoolean("outside_profile"))profiles++;}
+                        }
+                        d.put("review_id",report.getString("id")).put("observed_ms",System.currentTimeMillis());write(c,"review-"+app.packageName+".json",d);
+                        row=EventStore.object("package",app.packageName,"label",d.getString("label"),"uid",d.getInt("uid"),"declared",permissions.length(),
+                            "eligible",eligible,"android_locked",locked,"uid_scope",scope,"unknown",unknown,"target_reason",protection,"aiv_protection",protectedApp,
+                            "candidate_groups",counts,"eligible_names",eligibleNames,"has_profile",!d.optString("profile").isEmpty(),"profile_candidates",profiles,
+                            "tracker_count",d.getJSONObject("apk_evidence").optJSONArray("trackers")==null?0:d.getJSONObject("apk_evidence").getJSONArray("trackers").length(),
+                            "tracker_status",d.getJSONObject("apk_evidence").optString("status","PENDING"));
+                        report.put("permissions",report.optInt("permissions")+permissions.length()).put("android_locked",report.optInt("android_locked")+locked)
+                            .put("uid_scope",report.optInt("uid_scope")+scope).put("unknown",report.optInt("unknown")+unknown)
+                            .put("aiv_protected",report.optInt("aiv_protected")+(protectedApp?1:0));
+                    }catch(Exception e){
+                        row=EventStore.object("package",app.packageName,"label",String.valueOf(app.applicationInfo.loadLabel(c.getPackageManager())),"error",String.valueOf(e.getMessage()));
+                        report.put("errors",report.optInt("errors")+1);
+                    }
+                    report.getJSONArray("applications").put(row);report.put("scanned",report.getJSONArray("applications").length());write(c,"review.json",report);
+                }
+                report.put("phase","finished").put("finished_ms",System.currentTimeMillis());write(c,"review.json",report);
+                status="Analyse terminée · "+report.optInt("scanned")+" applications · "+report.optInt("permissions")+" permissions";
+            }catch(Exception e){
+                status="Analyse interrompue : "+e.getMessage();if(report!=null)try{report.put("phase","interrupted").put("error",String.valueOf(e.getMessage()));write(c,"review.json",report);}catch(Exception ignored){}
+            }finally{analysing=false;}
+        },"aiv-permission-global-review").start();
+    }
+    /** Preview all selected apps; create bounded child plans without dropping the tail. */
+    static synchronized JSONObject previewReview(Context c)throws Exception{
+        access();if(running())throw new IllegalStateException("Attendre la fin de l’analyse ou de l’intervention");
+        JSONObject analysis=review(c);if("none".equals(analysis.optString("phase")))throw new IllegalStateException("Lancer d’abord Analyser toutes les applications");
+        JSONObject norms=profiles(c);Set<String> groups=reviewGroups(c);boolean include=includeProtected(c);Map<String,JSONObject> details=new HashMap<>(),selected=new HashMap<>();List<PermissionReviewRules.Target> targets=new ArrayList<>();
+        JSONArray apps=analysis.getJSONArray("applications");
+        for(int a=0;a<apps.length();a++){
+            JSONObject app=apps.getJSONObject(a);if(app.has("error")||(!include&&app.optBoolean("aiv_protection")))continue;
+            String pkg=app.getString("package");if(!PermissionControlRules.packageName(pkg))throw new IOException("Paquet d’analyse invalide");
+            JSONObject d=read(c,"review-"+pkg+".json");if(!analysis.getString("id").equals(d.optString("review_id"))||!pkg.equals(d.optString("package")))throw new IOException("Analyse remplacée : relancer l’analyse");
+            String currentProfile=prefs(c).getString("profile:"+pkg,"");Set<String> excluded=denied(norms,currentProfile);
+            details.put(pkg,d);JSONArray rows=d.getJSONArray("permissions");
+            for(int i=0;i<rows.length();i++){
+                JSONObject row=rows.getJSONObject(i);String name=row.getString("name");JSONObject op=row.optJSONObject("appop");
+                if(!PermissionReviewRules.selected(name,row.optBoolean("can_revoke"),row.optString("kind"),op==null?"":op.optString("mode"),!currentProfile.isEmpty(),excluded.contains(name),groups))continue;
+                row.put("review_reason",currentProfile.isEmpty()?"Politique globale : "+PermissionReviewRules.label(PermissionReviewRules.group(name)):"Hors de l’usage enregistré : "+norms.getJSONObject(currentProfile).optString("label"));
+                targets.add(new PermissionReviewRules.Target(pkg,name));selected.put(pkg+"|"+name,row);
+                if(targets.size()>20000)throw new IOException("Plus de 20 000 droits sélectionnés : réduire les catégories du plan");
+            }
+        }
+        Map<String,Integer> priorities=new HashMap<>();
+        for(PermissionReviewRules.Target target:targets){JSONObject evidence=details.get(target.pkg).getJSONObject("apk_evidence");JSONArray trackers=evidence.optJSONArray("trackers");int value=PermissionReviewRules.priority(target.name,trackers==null?0:trackers.length());priorities.put(target.pkg,Math.min(priorities.getOrDefault(target.pkg,99),value));}
+        targets.sort(Comparator.comparingInt((PermissionReviewRules.Target t)->priorities.get(t.pkg)).thenComparing(t->t.pkg).thenComparingInt(t->PermissionControlRules.revokeOrder(t.name)).thenComparing(t->t.name));
+        String queueId=UUID.randomUUID().toString();JSONArray batches=new JSONArray(),summary=new JSONArray();Set<String> packages=new HashSet<>();int batchIndex=0;
+        for(List<PermissionReviewRules.Target> part:PermissionReviewRules.batches(targets,AivConfig.CONTROL_BATCH_MAX_APPS,MAX_CHANGES)){
+            JSONObject identities=new JSONObject(),observations=new JSONObject();JSONArray changes=new JSONArray();String id=UUID.randomUUID().toString();
+            for(PermissionReviewRules.Target target:part){
+                JSONObject d=details.get(target.pkg),row=selected.get(target.pkg+"|"+target.name);packages.add(target.pkg);identities.put(target.pkg,d.getString("identity"));
+                if(!observations.has(target.pkg)){
+                    JSONObject grants=new JSONObject();JSONArray permissions=d.getJSONArray("permissions");
+                    for(int i=0;i<permissions.length();i++){JSONObject p=permissions.getJSONObject(i);if((p.optInt("protection_level",-1)&15)==1&&!p.isNull("flags"))grants.put(p.getString("name"),EventStore.object("granted",p.getBoolean("granted"),"flags",p.getString("flags")));}
+                    observations.put(target.pkg,grants);
+                }
+                JSONObject change=EventStore.object("package",target.pkg,"label",d.getString("label"),"name",target.name,"kind",row.getString("kind"),"before",row,
+                    "identity",d.getString("identity"),"target_guard",d.optString("target_reason"),"include_protected",include,"command",row.getString("command"),"reason",row.getString("review_reason"));
+                changes.put(change);summary.put(EventStore.object("package",target.pkg,"label",d.getString("label"),"name",target.name,"group",row.optString("review_group_label"),"command",row.getString("command"),"before",row.getString("state_key"),"reason",row.getString("review_reason")));
+            }
+            JSONObject draft=EventStore.object("schema","aiv-permission-plan/1","id",id,"queue_id",queueId,"user",USER,"identities",identities,"observations_before",observations,"changes",changes,"phase","preview");
+            write(c,queueId+"-plan-"+batchIndex+".json",draft);batches.put(EventStore.object("id",id,"index",batchIndex++,"rights",changes.length(),"apps",identities.length()));
+        }
+        JSONObject plan=EventStore.object("schema","aiv-permission-queue/1","id",queueId,"created_ms",System.currentTimeMillis(),"user",USER,"server_uid",Shizuku.getUid(),
+            "analysis_id",analysis.getString("id"),"analysis_phase",analysis.getString("phase"),"scanned",analysis.optInt("scanned"),"total",analysis.optInt("total"),
+            "policy",new JSONArray(groups),"include_protected",include,"batches",batches,"changes",summary,"apps",packages.size(),"rights",targets.size(),"phase","preview");
+        plan.put("stamp",hash(plan.toString()));write(c,"review-plan.json",plan);return plan;
+    }
+    static synchronized JSONObject applyReview(Context context,String stamp)throws Exception{
+        access();if(running())throw new IllegalStateException("Une opération est en cours");if(!ControlCoordinator.acquire())throw new IllegalStateException("Une intervention est déjà en cours");
+        Context c=context.getApplicationContext();
+        try{
+            JSONObject plan=read(c,"review-plan.json");
+            if(plan.optBoolean("used")||!stamp.equals(plan.optString("stamp"))||!PermissionControlRules.fresh(System.currentTimeMillis(),plan.getLong("created_ms"),AivConfig.CONTROL_PREVIEW_VALID_MS))throw new IllegalStateException("Plan expiré ou consommé : préparer de nouveau");
+            if(plan.getInt("user")!=USER||plan.getInt("server_uid")!=Shizuku.getUid()||plan.optInt("rights")==0)throw new IllegalStateException("Profil ou serveur modifié, ou aucun retrait sélectionné");
+            plan.put("phase","queued").put("reports",new JSONArray()).put("entries",new JSONArray()).put("changed",0).put("failed",0);saveReport(c,plan);
+            write(c,"review-plan.json",new JSONObject(plan.toString()).put("used",true));
+            if(!prefs(c).edit().putString("last_apply_report",plan.getString("id")).commit())throw new IOException("Référence de restauration non enregistrée");
+            stop.set(false);running=true;status="Retrait global — "+plan.optInt("rights")+" droits dans "+plan.getJSONArray("batches").length()+" lots";
+            new Thread(()->{try{runQueue(c,plan);PermissionAudit.get(c).scan();}catch(Exception e){interrupt(c,plan,e);}finally{running=false;batchPrefix="";ControlCoordinator.release();}},"aiv-permission-global-apply").start();
+            return EventStore.object("report_id",plan.getString("id"),"status",status);
+        }catch(Exception e){ControlCoordinator.release();throw e;}
+    }
+    private static void runQueue(Context c,JSONObject report)throws Exception{
+        JSONArray batches=report.getJSONArray("batches");report.put("phase","applying");saveReport(c,report);
+        for(int i=0;i<batches.length();i++){
+            if(stop.get())throw new InterruptedIOException("Arrêt demandé; le rapport global conserve les lots exécutés");
+            batchPrefix="Lot "+(i+1)+"/"+batches.length()+" · ";
+            JSONObject child=read(c,report.getString("id")+"-plan-"+i+".json");
+            if(!report.getString("id").equals(child.optString("queue_id"))||!batches.getJSONObject(i).getString("id").equals(child.optString("id")))throw new IOException("Lot incompatible avec le plan");
+            child.put("entries",new JSONArray()).put("phase","queued");saveReport(c,child);report.getJSONArray("reports").put(child.getString("id"));saveReport(c,report);
+            try{run(c,child);}catch(Exception e){interrupt(c,child,e);report.put("changed",report.optInt("changed")+child.optInt("changed")).put("failed",report.optInt("failed")+child.optInt("failed"));saveReport(c,report);throw e;}
+            report.put("changed",report.optInt("changed")+child.optInt("changed")).put("failed",report.optInt("failed")+child.optInt("failed")).put("completed_batches",i+1);saveReport(c,report);
+        }
+        report.put("phase","finished").put("finished_ms",System.currentTimeMillis());saveReport(c,report);
+        status=report.optInt("changed")+" retrait(s) confirmé(s) · "+report.optInt("failed")+" refus/état(s) non confirmé(s) · "+batches.length()+" lots terminés";
+    }
+    private static void restoreQueue(Context c,JSONObject original,JSONObject report)throws Exception{
+        JSONArray ids=original.getJSONArray("reports");JSONArray children=new JSONArray();report.put("batches",children);int restored=0,failed=0,skipped=0;
+        for(int i=ids.length()-1;i>=0;i--){
+            if(stop.get())throw new InterruptedIOException("Restauration globale arrêtée");batchPrefix="Restauration lot "+(ids.length()-i)+"/"+ids.length()+" · ";
+            JSONObject child=read(c,ids.getString(i)+".json"),result=EventStore.object("schema","aiv-permission-restore/1","id",UUID.randomUUID().toString(),"source_report",ids.getString(i),"phase","restoring","entries",new JSONArray());
+            saveReport(c,result);children.put(EventStore.object("id",result.getString("id"),"source_report",ids.getString(i)));saveReport(c,report);
+            try{restoreRun(c,child,result);}catch(Exception e){interrupt(c,result,e);throw e;}
+            restored+=result.optInt("restored");failed+=result.optInt("failed");skipped+=result.optInt("skipped");report.put("restored",restored).put("failed",failed).put("skipped",skipped);saveReport(c,report);
+        }
+        report.put("phase","finished").put("finished_ms",System.currentTimeMillis());saveReport(c,report);status=restored+" droits restaurés · "+failed+" états non confirmés · "+skipped+" ignorés";
+    }
     private static JSONObject profiles(Context c)throws Exception{
         try(InputStream in=c.getAssets().open("permission-baselines.json");ByteArrayOutputStream out=new ByteArrayOutputStream()){
             byte[] b=new byte[4096];int n;while((n=in.read(b))!=-1){if(out.size()+n>256*1024)throw new IOException("Normes trop volumineuses");out.write(b,0,n);}
@@ -78,7 +253,8 @@ final class PermissionControl {
             .put(p.applicationInfo.targetSdkVersion).put(new JSONArray(names)).toString());
     }
     private static String targetReason(Context c,String pkg){
-        if("android".equals(pkg))return "Identité système fondamentale";
+        if(c.getPackageName().equals(pkg))return "Continuité AIV : une révocation de ses propres droits interromprait l’exécuteur et la vérification";
+        if("android".equals(pkg))return "Protection AIV : identité système fondamentale";
         try{return DeveloperControl.permissionTargetReason(c,pkg);}catch(Exception e){return "Identité ou rôle non vérifiable : "+e.getClass().getSimpleName();}
     }
     private static Map<String,PermissionControlRules.Grant> shellPermissions(String pkg)throws Exception{
@@ -116,13 +292,14 @@ final class PermissionControl {
             String[] peers=pm.getPackagesForUid(p.applicationInfo.uid);
             rows.put(EventStore.object("package",pkg,"label",label,"uid",p.applicationInfo.uid,"system",(p.applicationInfo.flags&ApplicationInfo.FLAG_SYSTEM)!=0,
                 "declared",p.requestedPermissions==null?0:p.requestedPermissions.length,"granted",granted,"runtime_granted",runtime,
-                "profile",profile,"profile_label",norm==null?"À définir":norm.optString("label"),"outside_profile",proposed,
+                "profile",profile,"profile_label",norm==null?"Politique globale":norm.optString("label"),"outside_profile",proposed,
                 "tracker_count",trackers==null?0:trackers.length(),"tracker_status",evidence.optString("status","PENDING"),"uid_packages",peers==null?0:peers.length));
         }
         return EventStore.object("rows",rows,"matched",matched,"total",total,"offset",Math.max(0,offset),"limit",PAGE,"user",USER,
             "scope","Toutes les applications visibles du profil courant, y compris préinstallées et désactivées. Dossier sécurisé et autres profils non couverts par cet inventaire.");
     }
-    static JSONObject detail(Context c,String pkg,boolean useShell)throws Exception{
+    static JSONObject detail(Context c,String pkg,boolean useShell)throws Exception{return detail(c,pkg,useShell,includeProtected(c));}
+    private static JSONObject detail(Context c,String pkg,boolean useShell,boolean includeProtected)throws Exception{
         PackageInfo p=info(c,pkg);PackageManager pm=c.getPackageManager();JSONObject all=profiles(c);
         String profile=prefs(c).getString("profile:"+pkg,"");Set<String> excess=denied(all,profile);
         String reason=targetReason(c,pkg),shellError="";
@@ -134,12 +311,13 @@ final class PermissionControl {
             int protection=-1;String label=name,description="Description Android indisponible";
             try{PermissionInfo pi=pm.getPermissionInfo(name,0);protection=pi.protectionLevel;label=String.valueOf(pi.loadLabel(pm));CharSequence desc=pi.loadDescription(pm);if(desc!=null)description=desc.toString();}catch(Exception ignored){}
             boolean granted=pm.checkPermission(name,pkg)==PackageManager.PERMISSION_GRANTED;PermissionControlRules.Grant state=shell.get(name);
-            String blocked=PermissionControlRules.runtimeReason(protection,granted,state,reason),kind="permission";
+            String targetBlock=PermissionReviewRules.targetAllowed(reason,includeProtected)?"":reason;
+            String blocked=PermissionControlRules.runtimeReason(protection,granted,state,targetBlock),kind="permission";
             JSONObject appOp=null;String opName=PermissionControlRules.appOp(name);
             if(!opName.isEmpty()){
                 kind="appop";appOp=observed?op(pkg,name):EventStore.object("mode","","uid_scope",false);
                 String mode=appOp.optString("mode");
-                blocked=!reason.isEmpty()?reason:mode.isEmpty()?"État AppOp non vérifié : autoriser Shizuku puis actualiser":
+                blocked=!targetBlock.isEmpty()?targetBlock:mode.isEmpty()?"État AppOp non vérifié : autoriser Shizuku puis actualiser":
                     appOp.optBoolean("uid_scope")?"AppOp appliquée à l’UID : retrait individuel non isolable":
                     ("ignore".equals(mode)||"deny".equals(mode))?"Opération déjà bloquée":"";
             }
@@ -149,8 +327,9 @@ final class PermissionControl {
             JSONObject row=EventStore.object("name",name,"label",label,"description",description,"protection_level",protection,
                 "protection",protection<0?"Inconnue":(protection&15)==1?"Runtime":(protection&15)==0?"Normale":(protection&15)==2?"Signature":"Interne / autre",
                 "granted",granted,"shell_granted",state==null?JSONObject.NULL:state.granted,"flags",state==null?JSONObject.NULL:state.flags,
-                "kind",kind,"can_revoke",can,"blocked_reason",blocked,"outside_profile",suggested,
-                "assessment",suggested?"Hors de l’usage choisi — retrait à examiner":profile.isEmpty()?"Usage à définir":"Non exclue par cet usage",
+                "kind",kind,"can_revoke",can,"blocked_reason",blocked,"block_origin",PermissionReviewRules.origin(blocked,state),"outside_profile",suggested,
+                "review_group",PermissionReviewRules.group(name),"review_group_label",PermissionReviewRules.label(PermissionReviewRules.group(name)),
+                "assessment",suggested?"Hors de l’usage choisi — retrait à examiner":profile.isEmpty()?"Politique globale : "+PermissionReviewRules.label(PermissionReviewRules.group(name)):"Non exclue par cet usage",
                 "bayton",bayton==null?JSONObject.NULL:bayton,"appop",appOp==null?JSONObject.NULL:appOp,
                 "command",can?PermissionControlRules.command(pkg,USER,kind,name,"appop".equals(kind)?"ignore":"revoke"):JSONObject.NULL);
             row.put("state_key",stateKey(row));permissions.put(row);
@@ -158,8 +337,8 @@ final class PermissionControl {
         JSONObject evidence=ApkEvidence.get(c).read(pkg,Build.VERSION.SDK_INT>=28?p.getLongVersionCode():p.versionCode,p.lastUpdateTime);
         return EventStore.object("schema","aiv-permission-detail/1","package",pkg,"label",String.valueOf(p.applicationInfo.loadLabel(pm)),"user",USER,"uid",p.applicationInfo.uid,
             "identity",identity(c,p),"system",(p.applicationInfo.flags&ApplicationInfo.FLAG_SYSTEM)!=0,"permissions",permissions,"can_revoke",actionable,
-            "outside_profile",proposed,"profile",profile,"profile_label",all.has(profile)?all.getJSONObject(profile).optString("label"):"Aucun usage choisi",
-            "target_reason",reason,"shell_observed",observed,"shell_error",shellError,"apk_evidence",evidence,"catalogs",ReferenceCatalog.get(c).summary(),
+            "outside_profile",proposed,"profile",profile,"profile_label",all.has(profile)?all.getJSONObject(profile).optString("label"):"Politique globale",
+            "target_reason",reason,"include_protected",includeProtected,"shell_observed",observed,"shell_error",shellError,"apk_evidence",evidence,"catalogs",ReferenceCatalog.get(c).summary(),
             "scope","Bayton décrit les permissions; Exodus relève des signatures de traqueurs. Aucun de ces catalogues ne prouve à lui seul qu’une permission est superflue.");
     }
     private static String stateKey(JSONObject row){
@@ -172,7 +351,7 @@ final class PermissionControl {
     }
     /** Requests contain exact names explicitly selected in the native table. */
     static synchronized JSONObject preview(Context c,JSONArray requests)throws Exception{
-        access();if(running||requests.length()>AivConfig.CONTROL_BATCH_MAX_APPS)throw new IllegalStateException("Une intervention est en cours ou le lot dépasse 50 applications");
+        access();if(running()||requests.length()>AivConfig.CONTROL_BATCH_MAX_APPS)throw new IllegalStateException("Une intervention est en cours ou le lot dépasse 50 applications");
         JSONObject identities=new JSONObject(),observations=new JSONObject();JSONArray changes=new JSONArray();Set<String> seen=new HashSet<>();
         for(int i=0;i<requests.length();i++){
             JSONObject request=requests.getJSONObject(i);String pkg=request.getString("package");JSONArray selected=request.getJSONArray("permissions");
@@ -185,7 +364,7 @@ final class PermissionControl {
                 String name=selected.getString(j);if(!seen.add(pkg+"|"+name))continue;JSONObject row=find(d,name);
                 if(!row.getBoolean("can_revoke"))throw new IllegalStateException(name+" : "+row.getString("blocked_reason"));
                 changes.put(EventStore.object("package",pkg,"label",d.getString("label"),"name",name,"kind",row.getString("kind"),"before",row,
-                    "identity",d.getString("identity"),"command",row.getString("command"),"reason",row.getString("assessment")));
+                    "identity",d.getString("identity"),"target_guard",d.getString("target_reason"),"include_protected",d.optBoolean("include_protected"),"command",row.getString("command"),"reason",row.getString("assessment")));
                 if(changes.length()>MAX_CHANGES)throw new IllegalArgumentException("Lot limité à 500 droits");
             }
         }
@@ -216,6 +395,18 @@ final class PermissionControl {
     static JSONObject lastReport(Context c)throws Exception{
         String id=prefs(c).getString("last_report","");return id.isEmpty()?EventStore.object("phase","none","status",status):read(c,id+".json").put("status",status);
     }
+    static JSONObject reportPage(Context c,int offset)throws Exception{
+        JSONObject report=lastReport(c);List<JSONObject> receipts=new ArrayList<>();JSONArray entries=report.optJSONArray("entries");
+        if(entries!=null)for(int i=0;i<entries.length();i++)receipts.add(entries.getJSONObject(i));
+        JSONArray children=report.optJSONArray("reports"),restored=report.optJSONArray("batches");
+        if(children==null&&"aiv-permission-restore/1".equals(report.optString("schema"))&&restored!=null){children=new JSONArray();for(int i=0;i<restored.length();i++)children.put(restored.getJSONObject(i).getString("id"));}
+        if(children!=null)for(int i=0;i<children.length();i++){
+            String id=children.getString(i);if(!id.matches("[a-f0-9-]{36}"))throw new IOException("Référence de rapport invalide");
+            JSONArray rows=read(c,id+".json").optJSONArray("entries");if(rows!=null)for(int j=0;j<rows.length();j++)receipts.add(rows.getJSONObject(j));
+        }
+        JSONArray page=new JSONArray();for(int i=Math.max(0,offset);i<Math.min(receipts.size(),Math.max(0,offset)+PAGE);i++)page.put(receipts.get(i));
+        return EventStore.object("report",report,"rows",page,"total",receipts.size(),"offset",Math.max(0,offset),"limit",PAGE);
+    }
     static synchronized JSONObject apply(Context context,String stamp)throws Exception{
         access();if(!ControlCoordinator.acquire())throw new IllegalStateException("Une intervention est déjà en cours");
         Context c=context.getApplicationContext();
@@ -236,9 +427,9 @@ final class PermissionControl {
             draft.put("entries",new JSONArray()).put("phase","queued");saveReport(c,draft);
             write(c,"draft.json",new JSONObject(draft.toString()).put("used",true));
             if(!prefs(c).edit().putString("last_apply_report",draft.getString("id")).commit())throw new IOException("Référence de restauration non enregistrée");
-            running=true;status="Retrait Shell en cours";
+            stop.set(false);running=true;status="Retrait Shell en cours";
             new Thread(()->{
-                try{run(c,draft);}catch(Exception e){interrupt(c,draft,e);}finally{running=false;ControlCoordinator.release();}
+                try{run(c,draft);PermissionAudit.get(c).scan();}catch(Exception e){interrupt(c,draft,e);}finally{running=false;ControlCoordinator.release();}
             },"aiv-permissions-apply").start();
             return EventStore.object("report_id",draft.getString("id"),"status",status);
         }catch(Exception e){ControlCoordinator.release();throw e;}
@@ -255,12 +446,13 @@ final class PermissionControl {
         JSONArray changes=report.getJSONArray("changes");int changed=0,failed=0;
         report.put("phase","applying");saveReport(c,report);
         for(int i=0;i<changes.length();i++){
+            if(stop.get())throw new InterruptedIOException("Arrêt demandé; retraits confirmés conservés dans le rapport");
             access();JSONObject planned=changes.getJSONObject(i);String pkg=planned.getString("package"),name=planned.getString("name"),kind=planned.getString("kind");
-            status="Retrait "+(i+1)+"/"+changes.length()+" · "+planned.getString("label");
+            status=batchPrefix+"Retrait "+(i+1)+"/"+changes.length()+" · "+planned.getString("label");
             JSONObject entry=new JSONObject(planned.toString()).put("outcome","pending").put("started_ms",System.currentTimeMillis());
             report.getJSONArray("entries").put(entry);saveReport(c,report); // Receipt exists before issuing Shell.
             try{
-                if(!planned.getString("identity").equals(identity(c,info(c,pkg)))||!targetReason(c,pkg).isEmpty())throw new IllegalStateException("Identité ou rôle modifié");
+                if(!planned.getString("identity").equals(identity(c,info(c,pkg)))||!sameTarget(c,pkg,planned))throw new IllegalStateException("Identité, rôle ou portée UID modifié");
                 JSONObject before=readState(c,pkg,name,kind);
                 if(!stateKey(before).equals(planned.getJSONObject("before").getString("state_key")))throw new IllegalStateException("Droit modifié depuis l’aperçu");
                 String command=PermissionControlRules.command(pkg,USER,kind,name,"appop".equals(kind)?"ignore":"revoke");
@@ -281,7 +473,6 @@ final class PermissionControl {
         report.put("phase","finished").put("finished_ms",System.currentTimeMillis());saveReport(c,report);
         status=changed+" retrait(s) confirmé(s) · "+failed+" refus/état(s) non confirmé(s)";
         if(report.getJSONArray("additional_changes").length()>0)status+=" · "+report.getJSONArray("additional_changes").length()+" changement(s) annexe(s) à examiner";
-        PermissionAudit.get(c).scan();
     }
     /** Report collateral changes without inventing attribution or silently granting extra rights. */
     private static void observeCollateral(Context c,JSONObject report)throws Exception{
@@ -314,20 +505,21 @@ final class PermissionControl {
             }
             if(!Arrays.asList("finished","interrupted").contains(original.optString("phase")))throw new IllegalStateException("Intervention non terminée : état à vérifier");
             JSONObject report=EventStore.object("schema","aiv-permission-restore/1","id",UUID.randomUUID().toString(),"source_report",id,"created_ms",System.currentTimeMillis(),"phase","restoring","entries",new JSONArray());saveReport(c,report);
-            running=true;status="Restauration des droits en cours";
-            new Thread(()->{try{restoreRun(c,original,report);}catch(Exception e){interrupt(c,report,e);}finally{running=false;ControlCoordinator.release();}},"aiv-permissions-restore").start();
+            stop.set(false);running=true;status="Restauration des droits en cours";
+            new Thread(()->{try{if("aiv-permission-queue/1".equals(original.optString("schema")))restoreQueue(c,original,report);else restoreRun(c,original,report);PermissionAudit.get(c).scan();}catch(Exception e){interrupt(c,report,e);}finally{running=false;batchPrefix="";ControlCoordinator.release();}},"aiv-permissions-restore").start();
             return EventStore.object("report_id",report.getString("id"),"status",status);
         }catch(Exception e){ControlCoordinator.release();throw e;}
     }
     private static void restoreRun(Context c,JSONObject original,JSONObject report)throws Exception{
         JSONArray entries=original.getJSONArray("entries");int restored=0,skipped=0,failed=0;
         for(int i=entries.length()-1;i>=0;i--){
+            if(stop.get())throw new InterruptedIOException("Restauration arrêtée; résultats conservés");
             JSONObject old=entries.getJSONObject(i);if(!"confirmed".equals(old.optString("outcome"))){skipped++;continue;}
             String pkg=old.getString("package"),name=old.getString("name"),kind=old.getString("kind");
             JSONObject receipt=EventStore.object("package",pkg,"name",name,"kind",kind,"outcome","pending");report.getJSONArray("entries").put(receipt);saveReport(c,report);
             try{
                 access();JSONObject now=readState(c,pkg,name,kind);
-                boolean same=old.getString("identity").equals(identity(c,info(c,pkg)))&&targetReason(c,pkg).isEmpty();
+                boolean same=old.getString("identity").equals(identity(c,info(c,pkg)))&&sameTarget(c,pkg,old);
                 if(same&&stateKey(now).equals(old.getJSONObject("before").getString("state_key"))){receipt.put("outcome","already_restored");skipped++;saveReport(c,report);continue;}
                 if(!PermissionControlRules.restoreAllowed(old.getString("outcome"),same,stateKey(now),old.getString("after_key")))throw new IllegalStateException("APK, rôle ou droit modifié depuis le retrait : restauration refusée");
                 String desired="appop".equals(kind)?old.getJSONObject("before").getJSONObject("appop").getString("mode"):"grant";
@@ -349,7 +541,7 @@ final class PermissionControl {
             report.put("restored",restored).put("skipped",skipped).put("failed",failed);saveReport(c,report);log(c,"PERMISSION_RESTORE",receipt);
         }
         report.put("phase","finished").put("finished_ms",System.currentTimeMillis()).put("restored",restored).put("skipped",skipped).put("failed",failed);saveReport(c,report);
-        status=restored+" droit(s) restauré(s) · "+failed+" refus/état(s) non confirmé(s)";PermissionAudit.get(c).scan();
+        status=restored+" droit(s) restauré(s) · "+failed+" refus/état(s) non confirmé(s)";
     }
     static void export(Context c,Writer out)throws Exception{
         out.write("{\"schema\":\"aiv-permission-control-export/1\",\"android_api\":"+Build.VERSION.SDK_INT+",\"user\":"+USER+",\"catalogs\":"+ReferenceCatalog.get(c).summary()+",\"applications\":[");
@@ -359,6 +551,11 @@ final class PermissionControl {
             JSONObject app;
             try{app=detail(c,p.packageName,false);}catch(Exception e){app=EventStore.object("package",p.packageName,"error",e.getMessage());}
             if(!first)out.write(',');out.write(app.toString());first=false;
+        }
+        JSONObject analysis=review(c);out.write("],\"analysis\":"+analysis+",\"analysis_snapshots\":[");first=true;
+        JSONArray reviewed=analysis.optJSONArray("applications");if(reviewed!=null)for(int i=0;i<reviewed.length();i++){
+            JSONObject row=reviewed.getJSONObject(i);if(row.has("error"))continue;String pkg=row.getString("package");if(!PermissionControlRules.packageName(pkg))continue;
+            JSONObject snapshot=read(c,"review-"+pkg+".json");if(!analysis.optString("id").equals(snapshot.optString("review_id")))continue;if(!first)out.write(',');out.write(snapshot.toString());first=false;
         }
         out.write("],\"reports\":[");first=true;File[] files=dir(c).listFiles();
         if(files!=null){Arrays.sort(files,Comparator.comparing(File::getName));for(File f:files)if(f.getName().matches("[a-f0-9-]{36}\\.json")){if(!first)out.write(',');out.write(read(c,f.getName()).toString());first=false;}}

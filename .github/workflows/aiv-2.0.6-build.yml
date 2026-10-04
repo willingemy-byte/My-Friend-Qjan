@@ -1,4 +1,4 @@
-name: AIV 2.0.5 permissions Shell
+name: AIV 2.0.6 permissions Shell
 on:
   workflow_dispatch:
 permissions:
@@ -17,13 +17,14 @@ jobs:
         run: |
           set -euo pipefail
           bash aiv-v19/tests/run-permission-control.sh
+          bash aiv-v19/tests/run-permission-integration.sh
           bash aiv-v19/tests/run-v23.sh
           python -m unittest discover -s aiv-v19/tests -p 'test_*config.py' -v
           python -m unittest discover -s aiv-v19/tests -p 'test_access_policy.py' -v
       - uses: actions/cache@v6.1.0
         with:
           path: aiv-v19/.toolchain
-          key: aiv-2.0.5-android35-ndk27d-shizuku-13.1.5
+          key: aiv-2.0.6-android35-ndk27d-shizuku-13.1.5
       - name: Build unsigned APK from source
         working-directory: aiv-v19
         env:
@@ -32,14 +33,14 @@ jobs:
       - name: Verify native package and version
         run: |
           set -euo pipefail
-          test -s aiv-v19/build/AIV-2.0.5-unsigned.apk
-          sha256sum -c aiv-v19/build/AIV-2.0.5-unsigned.apk.sha256
-          grep -q 'android:versionName="2.0.5"' aiv-v19/app/src/main/AndroidManifest.xml
+          test -s aiv-v19/build/AIV-2.0.6-unsigned.apk
+          sha256sum -c aiv-v19/build/AIV-2.0.6-unsigned.apk.sha256
+          grep -q 'android:versionName="2.0.6"' aiv-v19/app/src/main/AndroidManifest.xml
           grep -q 'SUPPORTS_ALWAYS_ON" android:value="false"' aiv-v19/app/src/main/AndroidManifest.xml
       - uses: actions/upload-artifact@v7.0.1
         with:
-          name: AIV-2.0.5-unsigned
+          name: AIV-2.0.6-unsigned
           path: |
-            aiv-v19/build/AIV-2.0.5-unsigned.apk
-            aiv-v19/build/AIV-2.0.5-unsigned.apk.sha256
+            aiv-v19/build/AIV-2.0.6-unsigned.apk
+            aiv-v19/build/AIV-2.0.6-unsigned.apk.sha256
           retention-days: 14

@@ -77,6 +77,7 @@ public final class MainActivity extends Activity {
     private int permissionOffset;
     private final java.util.Set<String> permissionSelection=new java.util.LinkedHashSet<>();
     private TextView permissionStatusView;
+    private boolean permissionPrepareAfterReview,permissionShowReportAfterJob;
     private final rikka.shizuku.Shizuku.OnRequestPermissionResultListener permissionAuthListener=(code,result)->{
         if(code!=SHIZUKU_PERMISSION_REQUEST)return;
         main.post(()->{
@@ -145,7 +146,7 @@ public final class MainActivity extends Activity {
         brandText.setOrientation(LinearLayout.VERTICAL);
         TextView title=text("ALL IN VISIBLE",24,TEXT,true);
         title.setLetterSpacing(.09f);
-        TextView sub=text("AIV 2.0.5 · interface Android native",13,MUTED,false);
+        TextView sub=text("AIV 2.0.6 · interface Android native",13,MUTED,false);
         TextView nativeTag=text("●  NATIF · WebView absent",13,GREEN,true);
         nativeTag.setPadding(0,dp(4),0,0);
         brandText.addView(title);brandText.addView(sub);brandText.addView(nativeTag);
@@ -259,7 +260,7 @@ public final class MainActivity extends Activity {
     private void renderPresentation(){
         page.removeAllViews();
         page.addView(sectionTitle("Présentation"));
-        page.addView(note("Interface Android native. Build propriétaire 2.0.5 : niveau TI local déverrouillé, VPN AIV désactivé par défaut pendant le diagnostic, journal et export locaux disponibles sans VPN."));
+        page.addView(note("Interface Android native. Build propriétaire 2.0.6 : niveau TI local déverrouillé, VPN AIV désactivé par défaut pendant le diagnostic, journal et export locaux disponibles sans VPN."));
 
         page.addView(sectionTitle("Mode d’utilisation"));
         tierFooter=new LinearLayout(this);
@@ -795,50 +796,117 @@ public final class MainActivity extends Activity {
 
     private void permissionControls(){
         TextView state=text((PermissionControl.authorized()?"Shizuku autorisé":"Shizuku à autoriser")+" · "+PermissionControl.status(),15,BLUE,true);
-        permissionStatusView=state;
-        page.addView(state);
-        page.addView(action("Autoriser AIV dans Shizuku",v->{
+        permissionStatusView=state;page.addView(state);
+        if(!PermissionControl.authorized())page.addView(action("Autoriser AIV dans Shizuku",v->{
             try{
                 if(!rikka.shizuku.Shizuku.pingBinder()){showDetail("Shizuku","Démarre Shizuku, puis reviens autoriser AIV.","Ouvrir Shizuku",()->openPackage("moe.shizuku.privileged.api"));return;}
-                if(PermissionControl.authorized()){toast("AIV est déjà autorisée");return;}
                 if(rikka.shizuku.Shizuku.shouldShowRequestPermissionRationale()){showDetail("Shizuku","Active AIV dans les applications autorisées de Shizuku.","Ouvrir Shizuku",()->openPackage("moe.shizuku.privileged.api"));return;}
                 rikka.shizuku.Shizuku.requestPermission(SHIZUKU_PERMISSION_REQUEST);
             }catch(Exception e){showDetail("Shizuku",String.valueOf(e.getMessage()),null,null);}
         }));
-        page.addView(action("Rapport des retraits / restauration",v->new Thread(()->{
-            try{JSONObject result=PermissionControl.lastReport(this);main.post(()->showJsonDetail("Rapport Shell",result,null));}
-            catch(Exception e){main.post(()->toast("Rapport : "+e.getMessage()));}
-        },"aiv-permission-report-ui").start()));
-        page.addView(action("Restaurer le dernier lot de permissions",v->new AlertDialog.Builder(this)
-            .setTitle("Restaurer les droits du dernier lot ?")
-            .setMessage("AIV restaure uniquement les retraits confirmés et refuse d’écraser un état modifié depuis l’intervention.")
-            .setNegativeButton("Annuler",null).setPositiveButton("Restaurer",(dialog,which)->permissionJob(()->PermissionControl.restore(this))).show()));
-        page.addView(action("Exporter les rapports Shell",v->requestPermissionExport()));
-        if(PermissionControl.running())pollPermissionOperation();
+        if(PermissionControl.running()){
+            page.addView(action("Arrêter après la commande en cours",v->{permissionPrepareAfterReview=false;PermissionControl.requestStop();}));pollPermissionOperation();
+        }
+        page.addView(action("Résultats, restauration et export",v->new AlertDialog.Builder(this).setTitle("Interventions Shell")
+            .setItems(new String[]{"Voir le résultat des commandes","Restaurer les derniers retraits","Exporter les rapports Shell"},(dialog,which)->{
+                if(which==0)showPermissionReport(0);
+                else if(which==1)new AlertDialog.Builder(this).setTitle("Restaurer les retraits confirmés ?")
+                    .setMessage("AIV parcourt tous les lots du dernier plan. Elle vérifie l’identité et l’état de chaque droit avant restauration.")
+                    .setNegativeButton("Annuler",null).setPositiveButton("Restaurer",(d,w)->permissionJob(()->PermissionControl.restore(this))).show();
+                else requestPermissionExport();
+            }).setNegativeButton("Fermer",null).show()));
+    }
+
+    private void chooseGlobalPermissionPolicy(){
+        LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);body.setPadding(dp(12),dp(12),dp(12),dp(12));
+        body.addView(note("Ces catégories définissent les accès à réduire. Les usages particuliers enregistrés restent prioritaires. Le plan explique chaque proposition; une signature Exodus aide à prioriser l’examen."));
+        java.util.Set<String> groups=PermissionControl.reviewGroups(this);
+        for(int i=0;i<PermissionReviewRules.GROUPS.length;i++){
+            String key=PermissionReviewRules.GROUPS[i];CheckBox box=new CheckBox(this);box.setText(PermissionReviewRules.LABELS[i]);box.setTextColor(TEXT);box.setTextSize(16);box.setChecked(groups.contains(key));box.setEnabled(!PermissionControl.running());
+            box.setButtonTintList(android.content.res.ColorStateList.valueOf(BLUE));
+            box.setOnCheckedChangeListener((button,checked)->{try{PermissionControl.setReviewGroup(this,key,checked);}catch(Exception e){toast(e.getMessage());}});body.addView(box);
+        }
+        CheckBox protectedApps=new CheckBox(this);protectedApps.setText("Inclure les applications protégées par AIV");protectedApps.setTextColor(ORANGE);protectedApps.setTextSize(16);protectedApps.setChecked(PermissionControl.includeProtected(this));protectedApps.setEnabled(!PermissionControl.running());
+        protectedApps.setButtonTintList(android.content.res.ColorStateList.valueOf(BLUE));protectedApps.setOnCheckedChangeListener((button,checked)->{try{PermissionControl.setIncludeProtected(this,checked);}catch(Exception e){toast(e.getMessage());}});body.addView(protectedApps);
+        body.addView(note("Cette option autorise l’examen des rôles actifs et composants que la 2.0.5 protégeait dans AIV. Le plan peut réduire leurs fonctions. Les verrous Android restent identifiés. Un UID partagé reste un groupe d’applications : cette version conserve cette portée en lecture seule."));
+        ScrollView scroll=new ScrollView(this);scroll.addView(body);
+        new AlertDialog.Builder(this).setTitle("Accès à réduire sur le téléphone").setView(scroll).setPositiveButton("Terminé",(d,w)->{if(permissionPackage.isEmpty())renderPermissionApps(permissionQuery,permissionOffset);else openPermissions(permissionPackage,"",0);}).show();
+    }
+
+    private void prepareGlobalPermissions(){
+        toast("Préparation de tous les lots…");new Thread(()->{
+            try{JSONObject plan=PermissionControl.previewReview(this);main.post(()->renderGlobalPermissionPlan(plan,0));}
+            catch(Exception e){main.post(()->showDetail("Plan global",String.valueOf(e.getMessage()),null,null));}
+        },"aiv-global-preview-ui").start();
+    }
+
+    private void renderGlobalPermissionPlan(JSONObject plan,int offset){
+        generation.incrementAndGet();currentPage="shizuku";permissionPackage="";page.removeAllViews();page.addView(sectionTitle("Plan global de retrait"));
+        page.addView(text(plan.optInt("rights")+" droits · "+plan.optInt("apps")+" applications · "+plan.optJSONArray("batches").length()+" lots",21,TEXT,true));
+        page.addView(note("Analyse : "+plan.optInt("scanned")+"/"+plan.optInt("total")+" applications. Chaque commande sera revérifiée avant exécution. Les droits sont proposés selon les catégories choisies et les usages enregistrés; le retrait peut couper les fonctions correspondantes."));
+        page.addView(action("Retour aux applications",v->renderPermissionApps(permissionQuery,permissionOffset)));
+        if(plan.optInt("rights")>0)page.addView(action("Appliquer les "+plan.optInt("rights")+" retraits",v->new AlertDialog.Builder(this).setTitle("Appliquer ce plan global ?")
+            .setMessage(plan.optInt("rights")+" droits sur "+plan.optInt("apps")+" applications. Tous les lots s’enchaînent; les résultats et les états avant sont enregistrés pour restauration.")
+            .setNegativeButton("Annuler",null).setPositiveButton("Appliquer",(dialog,which)->{permissionJob(()->PermissionControl.applyReview(this,plan.optString("stamp")));renderPermissionApps(permissionQuery,0);}).show()));
+        else page.addView(note("Aucun accès actif admissible dans les catégories sélectionnées. Choisir d’autres accès à réduire ou ouvrir les permissions d’une application pour un examen individuel."));
+        JSONArray rows=plan.optJSONArray("changes");String[] headers={"Application","Permission","Proposition","Avant","Commande Shell","Détail"};int[] widths={190,300,260,230,440,100};TableLayout table=dataTable(headers,widths);
+        int end=Math.min(rows.length(),offset+50);for(int i=offset;i<end;i++){JSONObject row=rows.optJSONObject(i);addTableRow(table,new String[]{row.optString("label"),row.optString("name"),row.optString("reason"),row.optString("before"),row.optString("command")},null,widths,0,null,null,v->showJsonDetail("Retrait proposé",row,row.optString("package")));}
+        page.addView(tableScroller(table));page.addView(text("Propositions "+(rows.length()==0?0:offset+1)+" à "+end+" sur "+rows.length(),15,MUTED,false));
+        if(offset>0)page.addView(action("Propositions précédentes",v->renderGlobalPermissionPlan(plan,Math.max(0,offset-50))));
+        if(end<rows.length())page.addView(action("Propositions suivantes",v->renderGlobalPermissionPlan(plan,offset+50)));
+    }
+
+    private void showPermissionReport(int offset){
+        int ticket=generation.incrementAndGet();currentPage="shizuku";permissionPackage="";page.removeAllViews();page.addView(sectionTitle("Résultat des commandes Shell"));page.addView(action("Retour aux applications",v->renderPermissionApps(permissionQuery,permissionOffset)));permissionControls();
+        new Thread(()->{
+            try{JSONObject data=PermissionControl.reportPage(this,offset);main.post(()->{
+                if(ticket!=generation.get())return;JSONObject report=data.optJSONObject("report");JSONArray rows=data.optJSONArray("rows");
+                page.addView(text(report.optInt("changed",report.optInt("restored"))+" changements confirmés · "+report.optInt("failed")+" états non confirmés · "+report.optString("phase"),18,TEXT,true));
+                String[] headers={"Détail","Application","Permission","Résultat","Avant","Après / erreur"};int[] widths={100,190,290,210,220,300};TableLayout table=dataTable(headers,widths);
+                for(int i=0;i<rows.length();i++){
+                    JSONObject row=rows.optJSONObject(i),before=row.optJSONObject("before"),after=row.optJSONObject("after");
+                    String result=row.optString("outcome"),label="confirmed".equals(result)?"Confirmé":"no_effect".equals(result)?"Sans effet":"already_restored".equals(result)?"Déjà restauré":"refused".equals(result)?"Refus Android":"À vérifier : "+result;
+                    addLeadingPermissionRow(table,new String[]{row.optString("label",row.optString("package")),row.optString("name"),label,before==null?"—":before.optString("state_key",before.toString()),after==null?row.optString("error",row.optString("stderr")):after.toString()},widths,"Détail",v->showJsonDetail("Résultat Shell",row,row.optString("package")));
+                }
+                page.addView(tableScroller(table));page.addView(text(data.optInt("total")+" commandes enregistrées",15,MUTED,false));
+                if(offset>0)page.addView(action("Résultats précédents",v->showPermissionReport(Math.max(0,offset-50))));
+                if(offset+rows.length()<data.optInt("total"))page.addView(action("Résultats suivants",v->showPermissionReport(offset+50)));
+            });}catch(Exception e){main.post(()->showDetail("Rapport",e.getMessage(),null,null));}
+        },"aiv-permission-readable-report").start();
+    }
+
+    private void addLeadingPermissionRow(TableLayout table,String[] values,int[] widths,String action,View.OnClickListener listener){
+        TableRow row=new TableRow(this);row.setBackgroundColor(((table.getChildCount()-1)&1)==0?PANEL_2:PANEL);Button open=button(action);open.setTextSize(13);open.setOnClickListener(listener);row.addView(open,new TableRow.LayoutParams(dp(widths[0]),dp(52)));
+        for(int i=0;i<values.length;i++){TextView cell=tableCell(values[i],widths[i+1],false,TEXT);if(i==0)cell.setOnClickListener(listener);row.addView(cell);}table.addView(row);
     }
 
     private void renderPermissionApps(String query,int offset){
         int ticket=generation.incrementAndGet();currentPage="shizuku";permissionPackage="";permissionQuery=query;permissionOffset=offset;
-        page.removeAllViews();page.addView(sectionTitle("Applications · permissions · Shell"));
-        page.addView(note("Toutes les applications du profil courant, y compris préinstallées et désactivées. Choisis l’usage d’une application pour examiner les droits hors usage. Exodus fournit les signatures de traqueurs et Bayton les descriptions; les états accordés et les verrous viennent du téléphone."));
-        permissionControls();EditText search=searchBox("Nom, package ou usage",query);page.addView(search);
+        page.removeAllViews();page.addView(sectionTitle("Contrôle des permissions"));
+        page.addView(action("Analyser et préparer le contrôle du téléphone",v->{permissionPrepareAfterReview=true;permissionJob(()->{PermissionControl.startReview(this);return new JSONObject();});}));
+        page.addView(action("Préparer à nouveau la dernière analyse",v->prepareGlobalPermissions()));
+        page.addView(action("Choisir les accès à réduire",v->chooseGlobalPermissionPolicy()));
+        permissionControls();
+        page.addView(note("Analyse globale du profil courant, préinstallées et désactivées comprises. Accès en arrière-plan et accès spéciaux sélectionnés au départ; les autres catégories sont disponibles dans Choisir les accès à réduire. Bayton décrit les droits; Exodus apporte les signatures de traqueurs. Les états et verrous viennent du téléphone."));
+        EditText search=searchBox("Nom, package ou usage",query);page.addView(search);
         page.addView(action("Rechercher / actualiser",v->renderPermissionApps(search.getText().toString(),0)));
-        page.addView(action("Préparer le retrait pour mes usages enregistrés",v->preparePermissionPlan(null)));
+
         TextView loading=text("Lecture complète des applications…",16,BLUE,true);page.addView(loading);
         new Thread(()->{
             try{
-                JSONObject data=PermissionControl.inventory(this,query,offset);JSONArray rows=data.getJSONArray("rows");
+                JSONObject data=PermissionControl.inventory(this,query,offset),review=PermissionControl.review(this);JSONArray rows=data.getJSONArray("rows");java.util.Map<String,JSONObject> reviewed=new java.util.HashMap<>();JSONArray audited=review.optJSONArray("applications");if(audited!=null)for(int i=0;i<audited.length();i++)reviewed.put(audited.getJSONObject(i).optString("package"),audited.getJSONObject(i));
                 main.post(()->{
                     if(ticket!=generation.get())return;page.removeView(loading);
                     page.addView(text(data.optInt("total")+" applications · "+data.optInt("matched")+" résultat(s) · profil "+data.optInt("user"),18,TEXT,true));
-                    String[] headers={"Application","Package","UID","Type","Déclarées","Accordées","Runtime accordées","Usage","Hors usage","Exodus","Permissions"};
-                    int[] widths={190,270,100,130,105,105,130,230,110,180,110};TableLayout table=dataTable(headers,widths);
+                    if(!"none".equals(review.optString("phase")))page.addView(note("Analyse "+review.optString("phase")+" : "+review.optInt("scanned")+"/"+review.optInt("total")+" applications · "+review.optInt("permissions")+" permissions · "+review.optInt("proposed")+" propositions"+" · "+review.optInt("android_locked")+" verrous Android · "+review.optInt("aiv_protected")+" applications protégées par AIV · "+review.optInt("unknown")+" états non vérifiés · "+review.optInt("errors")+" erreurs"));
+                    String[] headers={"Ouvrir","Application","Proposés","Package","UID","Type","Déclarées","Accordées","Runtime accordées","Usage","Hors usage","Exodus"};
+                    int[] widths={100,190,105,270,100,130,105,105,130,230,110,180};TableLayout table=dataTable(headers,widths);
                     for(int i=0;i<rows.length();i++){
                         JSONObject row=rows.optJSONObject(i);if(row==null)continue;String pkg=row.optString("package"),label=row.optString("label",pkg);
                         String trackerStatus=row.optString("tracker_status");String trackers="PENDING".equals(trackerStatus)?"En attente":row.optInt("tracker_count")+" signature(s) · "+("PARTIAL".equals(trackerStatus)?"partiel":"analysé");
                         String type=row.optInt("uid")%100000<10000?"Android":row.optBoolean("system")?"Système":"Utilisateur";
-                        addTableRow(table,new String[]{label,pkg,String.valueOf(row.optInt("uid")),type,String.valueOf(row.optInt("declared")),String.valueOf(row.optInt("granted")),String.valueOf(row.optInt("runtime_granted")),row.optString("profile_label"),String.valueOf(row.optInt("outside_profile")),trackers},
-                            new String[]{label,pkg},widths,0,search,()->renderPermissionApps(search.getText().toString(),0),v->{permissionSelection.clear();openPermissions(pkg,"",0);});
+                        JSONObject audit=reviewed.get(pkg);String count=audit==null?"À analyser":audit.has("error")?"Erreur":String.valueOf(audit.optInt("proposed"));
+                        addLeadingPermissionRow(table,new String[]{label,count,pkg,String.valueOf(row.optInt("uid")),type,String.valueOf(row.optInt("declared")),String.valueOf(row.optInt("granted")),String.valueOf(row.optInt("runtime_granted")),row.optString("profile_label"),String.valueOf(row.optInt("outside_profile")),trackers},widths,"Permissions",v->{permissionSelection.clear();openPermissions(pkg,"",0);});
                     }
                     page.addView(tableScroller(table));
                     page.addView(note("Runtime accordées indique un type de droit; les verrous et la révocation effective sont vérifiés dans le détail. Hors usage compte les droits déclarés exclus par l’usage choisi. "+data.optString("scope")));
@@ -867,13 +935,14 @@ public final class MainActivity extends Activity {
                     page.addView(text(d.optString("label")+" · "+all.length()+" permissions déclarées",23,TEXT,true));
                     page.addView(note(pkg+" · UID "+d.optInt("uid")+" · "+d.optInt("can_revoke")+" retrait(s) admissible(s)\nUsage : "+d.optString("profile_label")+"\n"+
                         (!d.optString("target_reason").isEmpty()?d.optString("target_reason")+"\n":"")+(d.optBoolean("shell_observed")?"État Shell collecté":"État Shell indisponible : "+d.optString("shell_error"))));
-                    page.addView(action("Choisir l’usage de cette application",v->choosePermissionProfile(pkg)));
+                    page.addView(action("Usage particulier (facultatif)",v->choosePermissionProfile(pkg)));
+                    page.addView(action("Choisir les accès à réduire",v->chooseGlobalPermissionPolicy()));
                     page.addView(action("Traqueurs Exodus / APK et catalogues",v->showJsonDetail("Exodus et Bayton · "+d.optString("label"),d,pkg)));
                     EditText search=searchBox("Permission, état ou raison",query);page.addView(search);
                     page.addView(action("Filtrer / actualiser les permissions",v->openPermissions(pkg,search.getText().toString(),0)));
                     TextView selected=text(permissionSelection.size()+" droit(s) sélectionné(s)",18,BLUE,true);page.addView(selected);
-                    page.addView(action("Sélectionner les droits hors usage révocables",v->{
-                        permissionSelection.clear();for(int i=0;i<all.length();i++){JSONObject row=all.optJSONObject(i);if(row!=null&&row.optBoolean("outside_profile")&&row.optBoolean("can_revoke"))permissionSelection.add(row.optString("name"));}
+                    page.addView(action("Sélectionner les retraits proposés",v->{
+                        permissionSelection.clear();for(int i=0;i<all.length();i++){JSONObject row=all.optJSONObject(i);if(row!=null&&PermissionReviewRules.selected(row.optString("name"),row.optBoolean("can_revoke"),row.optString("kind"),row.optJSONObject("appop")==null?"":row.optJSONObject("appop").optString("mode"),!d.optString("profile").isEmpty(),row.optBoolean("outside_profile"),PermissionControl.reviewGroups(this)))permissionSelection.add(row.optString("name"));}
                         openPermissions(pkg,query,offset);
                     }));
                     page.addView(action("Effacer la sélection",v->{permissionSelection.clear();openPermissions(pkg,query,offset);}));
@@ -944,8 +1013,8 @@ public final class MainActivity extends Activity {
     private interface PermissionJob {JSONObject run()throws Exception;}
     private void permissionJob(PermissionJob job){
         toast("Vérification avant intervention…");new Thread(()->{
-            try{job.run();main.post(this::pollPermissionOperation);}
-            catch(Exception e){main.post(()->showDetail("Contrôle Shell",String.valueOf(e.getMessage()),null,null));}
+            try{JSONObject result=job.run();main.post(()->{permissionShowReportAfterJob=result.has("report_id");if("shizuku".equals(currentPage)){if(permissionPackage.isEmpty())renderPermissionApps(permissionQuery,permissionOffset);else openPermissions(permissionPackage,"",0);}pollPermissionOperation();});}
+            catch(Exception e){main.post(()->{permissionPrepareAfterReview=false;permissionShowReportAfterJob=false;showDetail("Contrôle Shell",String.valueOf(e.getMessage()),null,null);});}
         },"aiv-permission-request-ui").start();
     }
     private boolean permissionPollScheduled;
@@ -958,6 +1027,8 @@ public final class MainActivity extends Activity {
                 pollPermissionOperation();return;
             }
             toast(PermissionControl.status());permissionSelection.clear();
+            if(permissionPrepareAfterReview){permissionPrepareAfterReview=false;prepareGlobalPermissions();return;}
+            if(permissionShowReportAfterJob){permissionShowReportAfterJob=false;showPermissionReport(0);return;}
             if("shizuku".equals(currentPage)){if(permissionPackage.isEmpty())renderPermissionApps(permissionQuery,permissionOffset);else openPermissions(permissionPackage,"",0);}
         },2000);
     }

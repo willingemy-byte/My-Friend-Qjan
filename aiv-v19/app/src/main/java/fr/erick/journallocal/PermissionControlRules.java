@@ -45,13 +45,14 @@ final class PermissionControlRules {
         return out;
     }
     static String runtimeReason(int protection,boolean granted,Grant shell,String targetReason){
-        if(!targetReason.isEmpty())return targetReason;
         if(!granted)return "Déjà refusée";
         if(protection<0)return "Type de permission inconnu";
+        if((protection&32)!=0)return "Permission de développement : relevé spécifique non pris en charge par AIV";
         if((protection&15)!=1)return "Permission d’installation, de signature ou interne : pm revoke non applicable";
         if(shell==null)return "État Shell non vérifié : autoriser Shizuku puis actualiser";
         if(shell.granted!=granted)return "État Android/Shell différent : actualiser";
         if(shell.fixed())return "Verrouillée par Android ou une politique (SYSTEM_FIXED / POLICY_FIXED)";
+        if(!targetReason.isEmpty())return targetReason;
         return "";
     }
     static String appOp(String permission){
