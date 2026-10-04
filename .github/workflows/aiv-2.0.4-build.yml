@@ -51,4 +51,5 @@ jobs:
           path: |
             aiv-v19/build/AIV-2.0.4-unsigned.apk
             aiv-v19/build/AIV-2.0.4-unsigned.apk.sha256
+            aiv-v19/.toolchain/sdk/build-tools/35.0.0/lib/apksigner.jar
           retention-days: 14
