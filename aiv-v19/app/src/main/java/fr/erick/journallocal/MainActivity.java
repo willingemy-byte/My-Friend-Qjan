@@ -468,8 +468,8 @@ public final class MainActivity extends Activity {
                     page.removeView(loading);
                     page.addView(text(data.optLong("matched")+" résultat(s) · "+data.optLong("total")+" événement(s)",14,MUTED,true));
                     if(rows==null)return;
-                    String[] headers={"Niv.","Heure","Application","UID","Action","Destination","Détail"};
-                    int[] widths={64,120,190,90,220,280,100};
+                    String[] headers={"Niv.","Heure","Application","UID","Action","Destination","Sens","↑","↓","Flux","Détail"};
+                    int[] widths={64,120,190,90,220,280,100,100,100,170,100};
                     TableLayout table=dataTable(headers,widths);
                     for(int i=0;i<rows.length();i++){
                         JSONObject e=rows.optJSONObject(i);if(e==null)continue;
@@ -481,8 +481,13 @@ public final class MainActivity extends Activity {
                         String action=e.optString("action","—");
                         String destination=e.optString("destination","—");
                         String uidText=uid<0?"—":String.valueOf(uid);
-                        String[] values={levelShort(level),shortTime(e.optLong("timestamp_ms")),app,uidText,action,destination};
-                        String[] filters={null,null,app,uid<0?null:uidText,action,destination};
+                        String direction=d==null?"—":d.optString("direction","—");
+                        String tx=d==null||d.optLong("tx_bytes",0)==0?"—":formatBytes(d.optLong("tx_bytes"));
+                        String rx=d==null||d.optLong("rx_bytes",0)==0?"—":formatBytes(d.optLong("rx_bytes"));
+                        String flow=d==null?"":d.optString("flow_correlation_id","");
+                        String flowText=flow.isEmpty()?"—":(flow.length()>14?flow.substring(0,14)+"…":flow);
+                        String[] values={levelShort(level),shortTime(e.optLong("timestamp_ms")),app,uidText,action,destination,direction,tx,rx,flowText};
+                        String[] filters={null,null,app,uid<0?null:uidText,action,destination,direction,null,null,flow.isEmpty()?null:flow};
                         addTableRow(table,values,filters,widths,level,search,()->renderJournal(search.getText().toString()),
                             v->showEventPedigree("Journal · "+app,e,pkg));
                     }
