@@ -737,11 +737,19 @@ public final class MainActivity extends Activity {
                 null,widths,0,null,null,v->showJsonDetail("Supabase · segments",s,null));
 
             String active=w.optLong("segment",0)>0?"#"+w.optLong("segment"):"récent";
-            String activeDetail=(w.isNull("event_count")?"indexation en cours":w.optLong("event_count")+" événement(s)")+" · scellé : "+yesNo(w.optBoolean("sealed"));
+            long segmentCount=w.isNull("event_count")?Math.max(0,w.optLong("latest")-w.optLong("first_id")+1):w.optLong("event_count");
+            int segmentSize=s.optInt("segment_size",50000);
+            int pct=segmentSize<=0?0:(int)Math.min(100,Math.round(segmentCount*100.0/segmentSize));
+            String activeDetail=segmentCount+" / "+segmentSize+" événement(s) · "+pct+" % · scellé : "+yesNo(w.optBoolean("sealed"));
             addTableRow(table,new String[]{"Segment local actif",active,activeDetail},
                 null,widths,0,null,null,v->showJsonDetail("Journal · segment actif",w,null));
 
-            addTableRow(table,new String[]{"Taille de segment",String.valueOf(s.optInt("segment_size",50000)),"L’envoi automatique commence lorsqu’un segment est scellé. Les données locales ne sont pas supprimées par cette synchronisation."},
+            String nextState=w.optBoolean("sealed")?"PRÊT À ENVOYER":(segmentCount>=segmentSize?"FERMETURE":"EN COLLECTE");
+            addTableRow(table,new String[]{"Prochain envoi",nextState,
+                w.optBoolean("sealed")?"Le segment est scellé; la synchronisation peut l’envoyer.":"Encore "+Math.max(0,segmentSize-segmentCount)+" événement(s) avant la fermeture automatique du segment."},
+                null,widths,0,null,null,v->showJsonDetail("Supabase · progression locale",w,null));
+
+            addTableRow(table,new String[]{"Taille de segment",String.valueOf(segmentSize),"L’envoi automatique commence lorsqu’un segment est scellé. Les données locales ne sont pas supprimées par cette synchronisation."},
                 null,widths,0,null,null,v->showJsonDetail("Supabase · politique d’archive",s,null));
 
             page.addView(tableScroller(table));
