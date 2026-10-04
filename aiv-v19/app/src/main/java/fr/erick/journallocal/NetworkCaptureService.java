@@ -17,6 +17,8 @@ import org.json.*;
 public final class NetworkCaptureService extends VpnService {
     public static volatile boolean running=false, starting=false;
     public static volatile String lastError="", stateText="Arrêté";
+    public static volatile long lastCoverageGapMs=0,lastHealthyFlowMs=0,lastCoverageGapCount=0;
+    public static volatile String lastCoverageGapLabel="";
     private static final String STOP="stop-network";
     private static final SecureRandom FLOW_RANDOM=new SecureRandom();
     private static final String[] STATES={"nouveau","connexion en cours","connecté","fermé","erreur","erreur de socket","erreur côté interface","réinitialisé","injoignable","erreur de relais"};
@@ -258,10 +260,11 @@ public final class NetworkCaptureService extends VpnService {
             "security_context",f.security,"tls_sni",f.tlsName,"tls_observation",f.protocol==6?f.tlsStatus:"Non analysé (UDP/QUIC et autres protocoles)","ech_extension_present",f.ech,"sni_scope",f.ech?"Nom externe possible; ECH ou GREASE, nom interne non observable":"Nom annoncé dans le ClientHello; service ou contenu non prouvé","transport",current==null?"Inconnu":current.transport,
             "scope","Métadonnées du flux IP; aucun contenu de message conservé, aucune frontière de message déduite");
     }
+    public static boolean coverageGapActive(){return lastCoverageGapMs>0&&lastCoverageGapMs>lastHealthyFlowMs;}
     private String destination(Flow f){return(f.version==6?"["+f.remote+"]":f.remote)+":"+f.remotePort;}
     public void onFlowOpen(long id,int version,int protocol,String local,int localPort,String remote,int remotePort){
         Flow f=new Flow();f.version=version;f.protocol=protocol;f.local=local;f.localPort=localPort;f.remote=remote;f.remotePort=remotePort;
-        identify(f);flows.put(id,f);record("trafic",f.actor,"Flux réseau observé",destination(f),details(id,f));
+        identify(f);flows.put(id,f);lastHealthyFlowMs=System.currentTimeMillis();record("trafic",f.actor,"Flux réseau observé",destination(f),details(id,f));
     }
     public void onFlowDirection(long id,boolean outgoing,long packetBytes,long observedMs){
         Flow f=flows.get(id);if(f==null)return;identify(f);
@@ -274,7 +277,7 @@ public final class NetworkCaptureService extends VpnService {
         record("trafic",f.actor,outgoing?"Premier paquet sortant du flux":"Premier paquet entrant relié au même flux",destination(f),d);
     }
     public void onFlowUpdate(long id,long tx,long rx,long txPackets,long rxPackets,int status,int error,boolean closed,long lastMs){
-        Flow f=flows.get(id);if(f==null)return;identify(f);
+        Flow f=flows.get(id);if(f==null)return;identify(f);lastHealthyFlowMs=System.currentTimeMillis();
         JSONObject d=details(id,f);
         try{d.put("tx_bytes",tx).put("rx_bytes",rx).put("tx_packets",txPackets).put("rx_packets",rxPackets).put("bytes",tx+rx)
             .put("counter_mode","Cumul du flux; ne pas additionner les instantanés").put("direction","bidirectionnel")
@@ -298,7 +301,10 @@ public final class NetworkCaptureService extends VpnService {
         catch(Exception e){try{d.put("tracker_error",e.getClass().getSimpleName());}catch(JSONException ignored){}}
         return d;
     }
-    public void onNativeProblem(String label,long count){record("collecteur","All In Visible",label,"Relais local",EventStore.object("count",count,"coverage_gap",true));}
+    public void onNativeProblem(String label,long count){
+        lastCoverageGapMs=System.currentTimeMillis();lastCoverageGapLabel=label;lastCoverageGapCount=count;
+        record("collecteur","All In Visible",label,"Relais local",EventStore.object("count",count,"coverage_gap",true,"coverage_status","INCOMPLETE","health_source","journalrelay"));
+    }
     @Override public void onRevoke(){Continuous.prefs(this).edit().putBoolean("vpn_enabled",false).apply();stopped=true;main.post(()->stopSelf());}
     @Override public void onDestroy(){
         stopped=true;if(callback!=null)try{connectivity.unregisterNetworkCallback(callback);}catch(Exception ignored){}
