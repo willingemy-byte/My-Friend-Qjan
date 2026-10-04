@@ -14,12 +14,14 @@ def extract(source,signature):
     return source[start:end]
 
 source=(JAVA/'NetworkCaptureService.java').read_text()
-signatures=['private static final class Flow','public boolean shouldStopNative()',
+signatures=['private static final class Flow',
     'private void pumpIdentity()','private void queueIdentity(','private void identify(',
-    'private JSONObject details(','private String destination(', 'public void onFlowOpen(',
-    'public void onFlowDirection(','public void onFlowUpdate(','public void onDnsQuestion(',
-    'public void onTlsHello(']
+    'private JSONObject details(','private String destination(', 'private void consumeFlowOpen(',
+    'private void consumeFlowDirection(','private void consumeFlowUpdate(','private void consumeDnsQuestion(',
+    'private void consumeTlsHello(']
 methods='\n'.join(extract(source,x) for x in signatures)
+for old,new in [('consumeFlowOpen','onFlowOpen'),('consumeFlowDirection','onFlowDirection'),('consumeFlowUpdate','onFlowUpdate'),('consumeDnsQuestion','onDnsQuestion'),('consumeTlsHello','onTlsHello')]:
+    methods=methods.replace('private void '+old+'(','public void '+new+'(')
 template=r'''
 package fr.erick.journallocal;
 import java.util.*;import java.net.*;import java.io.*;import org.json.*;
@@ -40,13 +42,16 @@ public class ObservationProbe {
  }
  private static final String[] STATES={"nouveau","connexion en cours","connecté","fermé"};
  static String newFlowCorrelationId(){return UUID.randomUUID().toString();}
- String session="synthetic";Config current=new Config();boolean stopped,reconfigure;
+ String session="synthetic",observedSession="synthetic",observedTransport="fixture";Config current=new Config();boolean stopped,reconfigure;
  static long lastHealthyFlowMs;
  Connectivity connectivity=new Connectivity();Packages packages=new Packages();
  HashMap<Long,Flow> flows=new HashMap<>();ArrayDeque<Long> pendingIdentity=new ArrayDeque<>();long lastIdentityPump;
  List<String> events=new ArrayList<>();Packages getPackageManager(){return packages;}
  JSONObject vpnIdentity(long id,Flow f){return EventStore.object("status","UNAVAILABLE");}
  JSONObject trackerDetails(JSONObject d,String name,String type){return d;}
+ long capturedTimestamp(){return 1000+SystemClock.now;}long capturedElapsed(){return SystemClock.now;}
+ boolean isFlowLive(Flow f){return !f.closed;}
+ void recordIdentity(Flow f){JSONObject d=details(f.nativeId,f);d.put("observation_type","IDENTITY_ENRICHMENT");record("trafic",f.actor,"Enrichissement de l’identité du flux",destination(f),d);}
  void record(String category,String actor,String action,String destination,JSONObject d){events.add(EventStore.object("id",events.size()+1,"timestamp_ms",1000+events.size(),"category",category,"app",actor,"action",action,"destination",destination,"details",d).toString());}
  __METHODS__
  void open(){onFlowOpen(1,4,6,"10.203.0.1",45000,"192.0.2.1",443);}
@@ -63,7 +68,7 @@ public class ObservationProbe {
    JSONObject result=JournalRecovery.recover(new StringReader(out.toString()),raw->{check(new JSONObject(raw).similar(new JSONObject(p.events.get(count[0]++))),"Export mutated a raw observation");});
    check(result.getBoolean("document_complete")&&"verifiee".equals(result.getString("source_integrity"))&&count[0]==p.events.size(),"Export integrity/count");
    JSONObject header=jsonl?new JSONObject(out.toString().split("\n")[0]):new JSONObject(out.toString());
-   check("2.0.6".equals(header.getString("application_version"))&&header.getInt("application_version_code")==206&&header.has("build"),"Build/version metadata");
+   check(BuildMetadata.VERSION_NAME.equals(header.getString("application_version"))&&header.getInt("application_version_code")==BuildMetadata.VERSION_CODE&&header.has("build"),"Build/version metadata");
    JSONObject footer=jsonl?new JSONObject(out.toString().trim().substring(out.toString().trim().lastIndexOf('\n')+1)):header;
    check(footer.has("quality"),"Quality metrics absent");
   }
@@ -120,7 +125,7 @@ public class ObservationProbe {
 '''
 event_stub='''package fr.erick.journallocal;import org.json.*;final class EventStore {static JSONObject object(Object... kv){JSONObject o=new JSONObject();try{for(int i=0;i<kv.length;i+=2)o.put((String)kv[i],kv[i+1]);return o;}catch(JSONException e){throw new IllegalArgumentException(e);}}}'''
 with tempfile.TemporaryDirectory() as tmp:
-    tmp=Path(tmp);(tmp/'ObservationProbe.java').write_text(template.replace('__METHODS__',methods));(tmp/'EventStore.java').write_text(event_stub)
+    tmp=Path(tmp);(tmp/'ObservationProbe.java').write_text(template.replace('__METHODS__',methods).replace('p.shouldStopNative()','p.pumpIdentity()'));(tmp/'EventStore.java').write_text(event_stub)
     src=[JAVA/(name+'.java') for name in ['IdentityRetry','ObservationValues','NetworkQuality','ExportMetadata','SnapshotExporter','JournalRecovery','JsonSyntax']]
     src+=[ROOT/'build/generated/fr/erick/journallocal/BuildMetadata.java',tmp/'ObservationProbe.java',tmp/'EventStore.java']
     subprocess.run(['javac','-encoding','UTF-8','-cp',str(jar),'-d',str(tmp),*map(str,src)],check=True)

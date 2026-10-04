@@ -119,7 +119,7 @@ public class SQLiteProbe{
   try(SQLiteDatabase export=SQLiteDatabase.openOrCreateDatabase(file,null)){
    check(scalar(export,"SELECT COUNT(*) FROM events")==503,"SQLite export count");
    try(Cursor c=export.rawQuery("SELECT payload FROM events ORDER BY id",null)){int n=0;while(c.moveToNext())check(c.getString(0).equals(raw.get(n++)),"SQLite export mutated observation");}
-   try(Cursor c=export.rawQuery("SELECT payload FROM metadata WHERE key='snapshot'",null)){c.moveToFirst();JSONObject meta=new JSONObject(c.getString(0));check(meta.getJSONObject("integrity").getBoolean("complete")&&meta.getJSONObject("quality").getLong("unknown_events")==503&&"2.0.6".equals(meta.getString("application_version")),"SQLite export metadata/quality");}
+   try(Cursor c=export.rawQuery("SELECT payload FROM metadata WHERE key='snapshot'",null)){c.moveToFirst();JSONObject meta=new JSONObject(c.getString(0));check(meta.getJSONObject("integrity").getBoolean("complete")&&meta.getJSONObject("quality").getLong("unknown_events")==503&&BuildMetadata.VERSION_NAME.equals(meta.getString("application_version")),"SQLite export metadata/quality");}
   }
   boolean rejected=false;try{SQLiteSnapshot.write(new File(root,"incomplete.sqlite"),new SnapshotExporter.Source(){public long[] snapshot(){return new long[]{503,504};}public List<String> page(long a,long ceiling)throws Exception{return source.page(a,ceiling);}});}catch(IOException expected){rejected=true;}
   check(rejected,"Incomplete SQLite export certified complete");
