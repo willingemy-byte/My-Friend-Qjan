@@ -8,7 +8,7 @@ Starting with the clean AIV 2.x baseline, every installable APK in the 2.x line 
 
 Expected APK signing certificate SHA-256:
 
-`4a14b9e2cf3869fa9faf2317cba96e948145e4dba32240f9547380c040deba7b`
+`3c6b7dbdaecd823b512408d6442328cde2464c8d0b074ec714858e64f5bf08ff`
 
 Rules:
 
@@ -19,8 +19,10 @@ Rules:
 5. If the installed APK has another signing identity, it must be uninstalled once before installing this clean 2.x baseline. That uninstall removes local app data and Android special-access grants must then be re-enabled by the user.
 6. Android Keystore keys used inside AIV for journal/export identity are separate from the APK signing identity.
 
-Current clean baseline candidate:
+Current installed 2.0.4 baseline and compatible 2.0.5 update:
 
 - package: `com.allinvisible.aiv`
-- versionCode: `201`
-- versionName: `2.0.1`
+- versionCode: `205`
+- versionName: `2.0.5`
+
+Certificate verified against the user-supplied signed 2.0.4 APK and its private signing backup. The former 4a14b9e2… pin referred to the older signing line and is not the certificate of this installed APK.

@@ -21,6 +21,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowInsets;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
@@ -46,6 +47,8 @@ public final class MainActivity extends Activity {
     private static final int NOTIFICATION_REQUEST=1202;
     private static final int EXPORT_REQUEST=1203;
     private static final int ANALYSIS_EXPORT_REQUEST=1204;
+    private static final int SHIZUKU_PERMISSION_REQUEST=1205;
+    private static final int PERMISSION_EXPORT_REQUEST=1206;
     private static final int BG=0xff04102f;
     private static final int PANEL=0xff081827;
     private static final int PANEL_2=0xff0c2233;
@@ -70,6 +73,20 @@ public final class MainActivity extends Activity {
     private static final int TIER_IT=3;
     private int previewTier=TIER_FREE;
     private String currentPage="presentation";
+    private String permissionPackage="",permissionQuery="";
+    private int permissionOffset;
+    private final java.util.Set<String> permissionSelection=new java.util.LinkedHashSet<>();
+    private TextView permissionStatusView;
+    private final rikka.shizuku.Shizuku.OnRequestPermissionResultListener permissionAuthListener=(code,result)->{
+        if(code!=SHIZUKU_PERMISSION_REQUEST)return;
+        main.post(()->{
+            if(result!=PackageManager.PERMISSION_GRANTED){toast("AIV n’est pas autorisée dans Shizuku");return;}
+            if("shizuku".equals(currentPage)){
+                if(permissionPackage.isEmpty())renderPermissionApps(permissionQuery,permissionOffset);
+                else openPermissions(permissionPackage,"",0);
+            }
+        });
+    };
     private final Runnable headerStatusPulse=new Runnable(){@Override public void run(){
         if(statusRow!=null)refreshHeaderStatus();
         main.postDelayed(this,2000);
@@ -88,6 +105,7 @@ public final class MainActivity extends Activity {
         }catch(Throwable ignored){}
         try{DefenseMonitor.start(this);}catch(Throwable ignored){}
         try{ShizukuCleanup.attach(this);}catch(Throwable ignored){}
+        try{rikka.shizuku.Shizuku.addRequestPermissionResultListener(permissionAuthListener);}catch(Throwable ignored){}
         previewTier=ProductAccess.demoTier(this);
         buildShell();
         prepareLocalData();
@@ -127,7 +145,7 @@ public final class MainActivity extends Activity {
         brandText.setOrientation(LinearLayout.VERTICAL);
         TextView title=text("ALL IN VISIBLE",24,TEXT,true);
         title.setLetterSpacing(.09f);
-        TextView sub=text("AIV 2.0.4 · interface Android native",13,MUTED,false);
+        TextView sub=text("AIV 2.0.5 · interface Android native",13,MUTED,false);
         TextView nativeTag=text("●  NATIF · WebView absent",13,GREEN,true);
         nativeTag.setPadding(0,dp(4),0,0);
         brandText.addView(title);brandText.addView(sub);brandText.addView(nativeTag);
@@ -241,7 +259,7 @@ public final class MainActivity extends Activity {
     private void renderPresentation(){
         page.removeAllViews();
         page.addView(sectionTitle("Présentation"));
-        page.addView(note("Interface Android native. Build propriétaire 2.0.4 : niveau TI local déverrouillé, VPN AIV désactivé par défaut pendant le diagnostic, journal et export locaux disponibles sans VPN."));
+        page.addView(note("Interface Android native. Build propriétaire 2.0.5 : niveau TI local déverrouillé, VPN AIV désactivé par défaut pendant le diagnostic, journal et export locaux disponibles sans VPN."));
 
         page.addView(sectionTitle("Mode d’utilisation"));
         tierFooter=new LinearLayout(this);
@@ -662,7 +680,7 @@ public final class MainActivity extends Activity {
                         String[] values={levelShort(level),label,pkg,uid,type,count};
                         String[] filters={null,label,pkg,null,null,null};
                         addTableRow(table,values,filters,widths,level,search,()->renderApplications(search.getText().toString()),
-                            v->showJsonDetail("Application · "+label,a,pkg));
+                            v->{permissionSelection.clear();showPage("shizuku");openPermissions(pkg,"",0);});
                     }
                     page.addView(tableScroller(table));
                     if(matches.length()>shown)page.addView(note((matches.length()-shown)+" autre(s) résultat(s) non affiché(s) dans cette vue bornée."));
@@ -772,36 +790,189 @@ public final class MainActivity extends Activity {
     }
 
     private void renderShizuku(){
-        page.removeAllViews();
-        page.addView(sectionTitle("Shizuku"));
-        page.addView(note("Build propriétaire 2.0.4 · contrôle local déverrouillé au niveau TI. AIV prépare d'abord un plan lisible, exclut les rôles essentiels, les UID partagés et les paquets système, puis applique uniquement des retraits vérifiables avec restauration."));
-        try{
-            JSONObject s=ShizukuCleanup.state(this);
-            JSONObject last=ShizukuCleanup.lastSnapshot(this);
-            String[] headers={"Élément","État","Détail","Ouvrir"};
-            int[] widths={220,170,430,100};
-            TableLayout table=dataTable(headers,widths);
-            addTableRow(table,new String[]{"Binder",yesNo(s.optBoolean("binder")),"Connexion au service Shizuku."},null,widths,0,null,null,
-                v->showJsonDetail("Shizuku · état complet",s,null));
-            addTableRow(table,new String[]{"Autorisation",yesNo(s.optBoolean("authorized")),"Autorisation accordée à AIV via Shizuku."},null,widths,0,null,null,
-                v->showJsonDetail("Shizuku · autorisation",s,null));
-            addTableRow(table,new String[]{"UID serveur",String.valueOf(s.optInt("server_uid",-1)),"UID rapporté par le serveur Shizuku. 2000 correspond à l'identité shell, pas à root."},null,widths,0,null,null,
-                v->showJsonDetail("Shizuku · serveur",s,null));
-            addTableRow(table,new String[]{"Candidats actuels",String.valueOf(s.optInt("candidates",-1)),"Applications non-système, UID unique, profil courant, admissibles à un examen de permissions."},null,widths,0,null,null,
-                v->showJsonDetail("Shizuku · candidats",s,null));
-            addTableRow(table,new String[]{"Dernier nettoyage",last.optBoolean("exists")?"DISPONIBLE":"AUCUN",
-                last.optBoolean("exists")?last.optInt("changed")+" changement(s) · "+last.optInt("failed")+" échec(s) · "+last.optInt("skipped")+" ignoré(s)":"Aucun snapshot de restauration conservé."},
-                null,widths,0,null,null,v->showJsonDetail("Shizuku · dernier snapshot",last,null));
-            addTableRow(table,new String[]{"Statut",s.optString("status","—"),"État brut du module Shizuku."},null,widths,0,null,null,
-                v->showDetail("Shizuku",s.optString("status","—"),"Ouvrir Shizuku",()->openPackage("moe.shizuku.privileged.api")));
-            page.addView(tableScroller(table));
-        }catch(Exception e){page.addView(card("État Shizuku","Indisponible : "+e.getClass().getSimpleName()));}
+        renderPermissionApps("",0);
+    }
 
-        page.addView(action("Préparer le plan de ménage",v->showShizukuPlan()));
-        page.addView(action("Appliquer le plan contrôlé",v->confirmShizukuCleanup()));
-        page.addView(action("Restaurer le dernier nettoyage",v->restoreShizukuCleanup()));
-        page.addView(action("Actualiser",v->renderShizuku()));
-        page.addView(action("Ouvrir Shizuku",v->openPackage("moe.shizuku.privileged.api")));
+    private void permissionControls(){
+        TextView state=text((PermissionControl.authorized()?"Shizuku autorisé":"Shizuku à autoriser")+" · "+PermissionControl.status(),15,BLUE,true);
+        permissionStatusView=state;
+        page.addView(state);
+        page.addView(action("Autoriser AIV dans Shizuku",v->{
+            try{
+                if(!rikka.shizuku.Shizuku.pingBinder()){showDetail("Shizuku","Démarre Shizuku, puis reviens autoriser AIV.","Ouvrir Shizuku",()->openPackage("moe.shizuku.privileged.api"));return;}
+                if(PermissionControl.authorized()){toast("AIV est déjà autorisée");return;}
+                if(rikka.shizuku.Shizuku.shouldShowRequestPermissionRationale()){showDetail("Shizuku","Active AIV dans les applications autorisées de Shizuku.","Ouvrir Shizuku",()->openPackage("moe.shizuku.privileged.api"));return;}
+                rikka.shizuku.Shizuku.requestPermission(SHIZUKU_PERMISSION_REQUEST);
+            }catch(Exception e){showDetail("Shizuku",String.valueOf(e.getMessage()),null,null);}
+        }));
+        page.addView(action("Rapport des retraits / restauration",v->new Thread(()->{
+            try{JSONObject result=PermissionControl.lastReport(this);main.post(()->showJsonDetail("Rapport Shell",result,null));}
+            catch(Exception e){main.post(()->toast("Rapport : "+e.getMessage()));}
+        },"aiv-permission-report-ui").start()));
+        page.addView(action("Restaurer le dernier lot de permissions",v->new AlertDialog.Builder(this)
+            .setTitle("Restaurer les droits du dernier lot ?")
+            .setMessage("AIV restaure uniquement les retraits confirmés et refuse d’écraser un état modifié depuis l’intervention.")
+            .setNegativeButton("Annuler",null).setPositiveButton("Restaurer",(dialog,which)->permissionJob(()->PermissionControl.restore(this))).show()));
+        page.addView(action("Exporter les rapports Shell",v->requestPermissionExport()));
+        if(PermissionControl.running())pollPermissionOperation();
+    }
+
+    private void renderPermissionApps(String query,int offset){
+        int ticket=generation.incrementAndGet();currentPage="shizuku";permissionPackage="";permissionQuery=query;permissionOffset=offset;
+        page.removeAllViews();page.addView(sectionTitle("Applications · permissions · Shell"));
+        page.addView(note("Toutes les applications du profil courant, y compris préinstallées et désactivées. Choisis l’usage d’une application pour examiner les droits hors usage. Exodus fournit les signatures de traqueurs et Bayton les descriptions; les états accordés et les verrous viennent du téléphone."));
+        permissionControls();EditText search=searchBox("Nom, package ou usage",query);page.addView(search);
+        page.addView(action("Rechercher / actualiser",v->renderPermissionApps(search.getText().toString(),0)));
+        page.addView(action("Préparer le retrait pour mes usages enregistrés",v->preparePermissionPlan(null)));
+        TextView loading=text("Lecture complète des applications…",16,BLUE,true);page.addView(loading);
+        new Thread(()->{
+            try{
+                JSONObject data=PermissionControl.inventory(this,query,offset);JSONArray rows=data.getJSONArray("rows");
+                main.post(()->{
+                    if(ticket!=generation.get())return;page.removeView(loading);
+                    page.addView(text(data.optInt("total")+" applications · "+data.optInt("matched")+" résultat(s) · profil "+data.optInt("user"),18,TEXT,true));
+                    String[] headers={"Application","Package","UID","Type","Déclarées","Accordées","Runtime accordées","Usage","Hors usage","Exodus","Permissions"};
+                    int[] widths={190,270,100,130,105,105,130,230,110,180,110};TableLayout table=dataTable(headers,widths);
+                    for(int i=0;i<rows.length();i++){
+                        JSONObject row=rows.optJSONObject(i);if(row==null)continue;String pkg=row.optString("package"),label=row.optString("label",pkg);
+                        String trackerStatus=row.optString("tracker_status");String trackers="PENDING".equals(trackerStatus)?"En attente":row.optInt("tracker_count")+" signature(s) · "+("PARTIAL".equals(trackerStatus)?"partiel":"analysé");
+                        String type=row.optInt("uid")%100000<10000?"Android":row.optBoolean("system")?"Système":"Utilisateur";
+                        addTableRow(table,new String[]{label,pkg,String.valueOf(row.optInt("uid")),type,String.valueOf(row.optInt("declared")),String.valueOf(row.optInt("granted")),String.valueOf(row.optInt("runtime_granted")),row.optString("profile_label"),String.valueOf(row.optInt("outside_profile")),trackers},
+                            new String[]{label,pkg},widths,0,search,()->renderPermissionApps(search.getText().toString(),0),v->{permissionSelection.clear();openPermissions(pkg,"",0);});
+                    }
+                    page.addView(tableScroller(table));
+                    page.addView(note("Runtime accordées indique un type de droit; les verrous et la révocation effective sont vérifiés dans le détail. Hors usage compte les droits déclarés exclus par l’usage choisi. "+data.optString("scope")));
+                    if(offset>0)page.addView(action("Applications précédentes",v->renderPermissionApps(query,Math.max(0,offset-data.optInt("limit")))));
+                    if(offset+rows.length()<data.optInt("matched"))page.addView(action("Applications suivantes",v->renderPermissionApps(query,offset+data.optInt("limit"))));
+                });
+            }catch(Exception e){main.post(()->{if(ticket==generation.get()){page.removeView(loading);page.addView(note("Inventaire : "+e.getMessage()));}});}
+        },"aiv-permission-apps-ui").start();
+    }
+
+    private void openPermissions(String pkg,String query,int offset){
+        int ticket=generation.incrementAndGet();currentPage="shizuku";permissionPackage=pkg;
+        page.removeAllViews();page.addView(sectionTitle("Permissions de l’application"));
+        page.addView(action("Toutes les applications",v->renderPermissionApps(permissionQuery,permissionOffset)));
+        permissionControls();TextView loading=text("Lecture Android et vérification Shell…",16,BLUE,true);page.addView(loading);
+        new Thread(()->{
+            try{
+                JSONObject d=PermissionControl.detail(this,pkg,true);JSONArray all=d.getJSONArray("permissions"),rows=new JSONArray();
+                String needle=query==null?"":query.trim().toLowerCase(Locale.ROOT);java.util.Set<String> eligible=new java.util.HashSet<>();
+                for(int i=0;i<all.length();i++){
+                    JSONObject row=all.getJSONObject(i);if(row.optBoolean("can_revoke"))eligible.add(row.getString("name"));
+                    if(needle.isEmpty()||(row.optString("name")+" "+row.optString("label")+" "+row.optString("assessment")+" "+row.optString("blocked_reason")).toLowerCase(Locale.ROOT).contains(needle))rows.put(row);
+                }
+                main.post(()->{
+                    if(ticket!=generation.get())return;page.removeView(loading);permissionSelection.retainAll(eligible);
+                    page.addView(text(d.optString("label")+" · "+all.length()+" permissions déclarées",23,TEXT,true));
+                    page.addView(note(pkg+" · UID "+d.optInt("uid")+" · "+d.optInt("can_revoke")+" retrait(s) admissible(s)\nUsage : "+d.optString("profile_label")+"\n"+
+                        (!d.optString("target_reason").isEmpty()?d.optString("target_reason")+"\n":"")+(d.optBoolean("shell_observed")?"État Shell collecté":"État Shell indisponible : "+d.optString("shell_error"))));
+                    page.addView(action("Choisir l’usage de cette application",v->choosePermissionProfile(pkg)));
+                    page.addView(action("Traqueurs Exodus / APK et catalogues",v->showJsonDetail("Exodus et Bayton · "+d.optString("label"),d,pkg)));
+                    EditText search=searchBox("Permission, état ou raison",query);page.addView(search);
+                    page.addView(action("Filtrer / actualiser les permissions",v->openPermissions(pkg,search.getText().toString(),0)));
+                    TextView selected=text(permissionSelection.size()+" droit(s) sélectionné(s)",18,BLUE,true);page.addView(selected);
+                    page.addView(action("Sélectionner les droits hors usage révocables",v->{
+                        permissionSelection.clear();for(int i=0;i<all.length();i++){JSONObject row=all.optJSONObject(i);if(row!=null&&row.optBoolean("outside_profile")&&row.optBoolean("can_revoke"))permissionSelection.add(row.optString("name"));}
+                        openPermissions(pkg,query,offset);
+                    }));
+                    page.addView(action("Effacer la sélection",v->{permissionSelection.clear();openPermissions(pkg,query,offset);}));
+                    page.addView(action("Préparer le retrait de la sélection",v->{
+                        if(permissionSelection.isEmpty()){toast("Sélectionne au moins un droit révocable");return;}
+                        JSONArray requests=new JSONArray().put(EventStore.object("package",pkg,"permissions",new JSONArray(new java.util.TreeSet<>(permissionSelection))));preparePermissionPlan(requests);
+                    }));
+                    String[] headers={"Retirer","Permission","État Android","Type","Shell / verrou","Usage","Détail"};int[] widths={100,330,130,140,330,230,100};TableLayout table=dataTable(headers,widths);
+                    int end=Math.min(rows.length(),offset+50);
+                    for(int i=offset;i<end;i++){
+                        JSONObject row=rows.optJSONObject(i);if(row==null)continue;String name=row.optString("name");boolean can=row.optBoolean("can_revoke");
+                        TableRow tr=new TableRow(this);tr.setBackgroundColor((i&1)==0?PANEL_2:PANEL);
+                        CheckBox check=new CheckBox(this);check.setButtonTintList(android.content.res.ColorStateList.valueOf(BLUE));check.setChecked(permissionSelection.contains(name));check.setEnabled(can);
+                        check.setContentDescription("Retirer "+name);check.setOnCheckedChangeListener((button,checked)->{if(checked)permissionSelection.add(name);else permissionSelection.remove(name);selected.setText(permissionSelection.size()+" droit(s) sélectionné(s)");});
+                        tr.addView(check,new TableRow.LayoutParams(dp(100),dp(52)));
+                        String state=row.optBoolean("granted")?"Accordée":"Refusée";JSONObject appOp=row.optJSONObject("appop");
+                        if(appOp!=null)state+="\nOp : "+(appOp.optString("mode").isEmpty()?"inconnue":appOp.optString("mode"));
+                        String shell=can?("appop".equals(row.optString("kind"))?"Bloquer l’opération via Shell":"Retirer via Shell"):row.optString("blocked_reason");
+                        String[] values={name,state,row.optString("protection"),shell,row.optString("assessment")};
+                        for(int j=0;j<values.length;j++){TextView cell=tableCell(values[j],widths[j+1],false,TEXT);if(j==0)cell.setMaxLines(10);tr.addView(cell);}
+                        Button detail=button("Ouvrir");detail.setOnClickListener(v->showJsonDetail("Permission · "+name,row,pkg));tr.addView(detail,new TableRow.LayoutParams(dp(100),dp(48)));table.addView(tr);
+                    }
+                    page.addView(tableScroller(table));page.addView(text(rows.length()+" résultat(s) · lignes "+(rows.length()==0?0:offset+1)+" à "+end,15,MUTED,false));
+                    if(offset>0)page.addView(action("Permissions précédentes",v->openPermissions(pkg,query,Math.max(0,offset-50))));
+                    if(end<rows.length())page.addView(action("Permissions suivantes",v->openPermissions(pkg,query,offset+50)));
+                    page.addView(note("La sélection peut couvrir plusieurs pages. Une commande Shell n’ouvre pas une demande de permission Android pour chaque application. Elle reste soumise aux droits de Shell et aux verrous du système. Les retraits choisis peuvent désactiver la fonction correspondante de l’application."));
+                });
+            }catch(Exception e){main.post(()->{if(ticket==generation.get()){page.removeView(loading);page.addView(note("Permissions : "+e.getMessage()));}});}
+        },"aiv-permission-detail-ui").start();
+    }
+
+    private void choosePermissionProfile(String pkg){
+        try{
+            JSONObject profiles=PermissionControl.profileChoices(this);java.util.List<String> keys=new java.util.ArrayList<>();keys.add("");
+            java.util.List<String> labels=new java.util.ArrayList<>();labels.add("Examen manuel — aucun droit présélectionné");
+            java.util.TreeSet<String> ordered=new java.util.TreeSet<>();java.util.Iterator<String> iterator=profiles.keys();while(iterator.hasNext())ordered.add(iterator.next());
+            for(String key:ordered){keys.add(key);labels.add(profiles.getJSONObject(key).getString("label"));}
+            new AlertDialog.Builder(this).setTitle("Usage réel de cette application").setItems(labels.toArray(new String[0]),(dialog,which)->{
+                try{PermissionControl.setProfile(this,pkg,keys.get(which));permissionSelection.clear();openPermissions(pkg,"",0);}catch(Exception e){toast(e.getMessage());}
+            }).setNegativeButton("Annuler",null).show();
+        }catch(Exception e){toast("Usages : "+e.getMessage());}
+    }
+
+    private void preparePermissionPlan(JSONArray requests){
+        toast("Vérification du plan Shell en cours");
+        new Thread(()->{
+            try{
+                JSONObject plan=requests==null?PermissionControl.previewProfiles(this):PermissionControl.preview(this,requests);
+                main.post(()->{
+                    JSONArray rows=plan.optJSONArray("changes");int count=rows==null?0:rows.length();
+                    if(count==0){showDetail("Plan de retrait","Aucun droit hors usage admissible. Choisis l’usage des applications ou sélectionne leurs permissions dans le tableau.",null,null);return;}
+                    LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);body.setPadding(dp(12),dp(12),dp(12),dp(12));
+                    body.addView(text(count+" droit(s) · "+plan.optJSONObject("identities").length()+" application(s)",19,TEXT,true));
+                    String[] headers={"Application","Droit","Action Shell","Avant","Détail"};int[] widths={200,300,440,190,100};TableLayout table=dataTable(headers,widths);
+                    for(int i=0;i<rows.length();i++){
+                        JSONObject row=rows.optJSONObject(i);if(row==null)continue;
+                        addTableRow(table,new String[]{row.optString("label"),row.optString("name"),row.optString("command"),row.optJSONObject("before").optString("state_key")},null,widths,0,null,null,v->showJsonDetail("Retrait proposé",row,row.optString("package")));
+                    }
+                    body.addView(tableScroller(table));body.addView(note("L’état avant est conservé. Les commandes sont vérifiées après exécution et restaurables tant que l’APK et le droit restent identiques. Appliquer peut couper les fonctions correspondantes."));
+                    ScrollView scroll=new ScrollView(this);scroll.addView(body);
+                    new AlertDialog.Builder(this).setTitle("Plan de retrait Shell").setView(scroll).setNegativeButton("Annuler",null)
+                        .setPositiveButton("Appliquer les "+count+" retraits",(dialog,which)->permissionJob(()->PermissionControl.apply(this,plan.optString("stamp")))).show();
+                });
+            }catch(Exception e){main.post(()->showDetail("Plan Shell",String.valueOf(e.getMessage()),null,null));}
+        },"aiv-permission-plan-ui").start();
+    }
+
+    private interface PermissionJob {JSONObject run()throws Exception;}
+    private void permissionJob(PermissionJob job){
+        toast("Vérification avant intervention…");new Thread(()->{
+            try{job.run();main.post(this::pollPermissionOperation);}
+            catch(Exception e){main.post(()->showDetail("Contrôle Shell",String.valueOf(e.getMessage()),null,null));}
+        },"aiv-permission-request-ui").start();
+    }
+    private boolean permissionPollScheduled;
+    private void pollPermissionOperation(){
+        if(permissionPollScheduled||isFinishing()||isDestroyed())return;permissionPollScheduled=true;
+        main.postDelayed(()->{
+            permissionPollScheduled=false;if(isFinishing()||isDestroyed())return;
+            if(PermissionControl.running()){
+                if("shizuku".equals(currentPage)&&permissionStatusView!=null)permissionStatusView.setText(PermissionControl.status());
+                pollPermissionOperation();return;
+            }
+            toast(PermissionControl.status());permissionSelection.clear();
+            if("shizuku".equals(currentPage)){if(permissionPackage.isEmpty())renderPermissionApps(permissionQuery,permissionOffset);else openPermissions(permissionPackage,"",0);}
+        },2000);
+    }
+
+    private void requestPermissionExport(){
+        try{
+            Intent intent=new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("application/json");
+            intent.putExtra(Intent.EXTRA_TITLE,"AIV-permissions-shell-"+System.currentTimeMillis()+".json");startActivityForResult(intent,PERMISSION_EXPORT_REQUEST);
+        }catch(Exception e){toast("Export : "+e.getMessage());}
+    }
+    private void exportPermissionsTo(Uri destination){
+        new Thread(()->{
+            try{java.io.File ready=ExportFiles.stage(this,writer->PermissionControl.export(this,writer));String result=ExportFiles.copy(this,ready,destination);main.post(()->toast(result));}
+            catch(Exception e){main.post(()->showDetail("Export Shell",String.valueOf(e.getMessage()),null,null));}
+        },"aiv-permission-export-ui").start();
     }
 
     private void showShizukuPlan(){
@@ -980,6 +1151,8 @@ public final class MainActivity extends Activity {
             exportJournalTo(data.getData());
         }else if(requestCode==ANALYSIS_EXPORT_REQUEST&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){
             exportAnalysisTo(data.getData());
+        }else if(requestCode==PERMISSION_EXPORT_REQUEST&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){
+            exportPermissionsTo(data.getData());
         }
     }
 
@@ -993,7 +1166,7 @@ public final class MainActivity extends Activity {
         main.removeCallbacks(headerStatusPulse);
         super.onPause();
     }
-    @Override public void onDestroy(){generation.incrementAndGet();try{ShizukuCleanup.detach();}catch(Throwable ignored){}super.onDestroy();}
+    @Override public void onDestroy(){generation.incrementAndGet();try{ShizukuCleanup.detach();rikka.shizuku.Shizuku.removeRequestPermissionResultListener(permissionAuthListener);}catch(Throwable ignored){}super.onDestroy();}
 
     private void openSetting(String action){try{startActivity(new Intent(action));}catch(Exception e){toast("Réglage Android indisponible");}}
     private void openPackage(String pkg){

@@ -20,10 +20,16 @@ import android.content.pm.PackageManager;
 final class ControlShell {
     static final class Result {
         final int code;final String out,err;
-        Result(int code,String out,String err){this.code=code;this.out=out;this.err=err;}
+        final boolean complete;
+        Result(int code,String out,String err,boolean complete){this.code=code;this.out=out;this.err=err;this.complete=complete;}
     }
 
     static Result run(String command)throws Exception{
+        return run(command,AivConfig.CONTROL_OUTPUT_MAX_BYTES);
+    }
+
+    static Result run(String command,int outputLimit)throws Exception{
+        if(outputLimit<1||outputLimit>1024*1024)throw new IllegalArgumentException("Limite de sortie invalide");
         if(!AccessPolicy.allows("shizuku.control",AccessPolicy.DISTRIBUTION_TIER))
             throw new SecurityException("Contrôle indisponible dans cette édition");
         if(!Shizuku.pingBinder()||Shizuku.checkSelfPermission()!=PackageManager.PERMISSION_GRANTED)
@@ -33,7 +39,7 @@ final class ControlShell {
         method.setAccessible(true);
         Process process=(Process)method.invoke(null,new Object[]{new String[]{"/system/bin/sh","-c",command},null,null});
 
-        Collector out=new Collector(process.getInputStream()),err=new Collector(process.getErrorStream());
+        Collector out=new Collector(process.getInputStream(),outputLimit),err=new Collector(process.getErrorStream(),AivConfig.CONTROL_OUTPUT_MAX_BYTES);
         Thread stdout=new Thread(out,"aiv-control-stdout"),stderr=new Thread(err,"aiv-control-stderr");
         stdout.setDaemon(true);stderr.setDaemon(true);stdout.start();stderr.start();
 
@@ -63,7 +69,7 @@ final class ControlShell {
             stdout.join(1000);stderr.join(1000);
             int code=exitCode.get();
             if(code==Integer.MIN_VALUE)throw new IOException("Processus Shizuku terminé sans code de sortie");
-            return new Result(code,out.text(),err.text());
+            return new Result(code,out.text(),err.text(),out.complete()&&err.complete());
         }finally{
             try{process.destroy();}catch(Throwable ignored){}
             try{process.getInputStream().close();}catch(IOException ignored){}
@@ -74,18 +80,22 @@ final class ControlShell {
 
     private static final class Collector implements Runnable{
         private final InputStream in;private final ByteArrayOutputStream bytes=new ByteArrayOutputStream();
-        Collector(InputStream in){this.in=in;}
+        private final int limit;
+        private volatile boolean done,truncated,failed;
+        Collector(InputStream in,int limit){this.in=in;this.limit=limit;}
         public void run(){
             try{
                 byte[] buffer=new byte[4096];int n;
                 while((n=in.read(buffer))!=-1){
                     synchronized(bytes){
-                        int keep=Math.min(n,AivConfig.CONTROL_OUTPUT_MAX_BYTES-bytes.size());
+                        int keep=Math.min(n,limit-bytes.size());
+                        if(keep<n)truncated=true;
                         if(keep>0)bytes.write(buffer,0,keep);
                     }
                 }
-            }catch(IOException ignored){}
+            }catch(IOException ignored){failed=true;}finally{done=true;}
         }
         String text(){synchronized(bytes){return new String(bytes.toByteArray(),StandardCharsets.UTF_8);}}
+        boolean complete(){return done&&!failed&&!truncated;}
     }
 }

@@ -75,6 +75,17 @@ public final class DeveloperControl {
         JSONArray peers=s.optJSONArray("shared_packages");if(peers!=null)for(int i=0;i<peers.length();i++)if(core.contains(peers.optString(i)))return "Identité partagée avec un composant essentiel";
         return "";
     }
+    /** Permission review includes preinstalled apps; essential roles and shared UIDs remain visible. */
+    static String permissionTargetReason(Context c,String pkg)throws Exception{
+        JSONObject target=snapshot(c,pkg);
+        Set<String> core=essential(c);
+        String sms=android.provider.Telephony.Sms.getDefaultSmsPackage(c);if(sms!=null)core.add(sms);
+        String services=Settings.Secure.getString(c.getContentResolver(),Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+        if(services!=null)for(String service:services.split(":")){ComponentName name=ComponentName.unflattenFromString(service);if(name!=null)core.add(name.getPackageName());}
+        String reason=reserved(target,core);if(!reason.isEmpty())return reason;
+        if(target.getJSONArray("shared_packages").length()!=1)return "UID partagé : retrait individuel non isolable";
+        return "";
+    }
     public static JSONObject targets(Context c)throws Exception{
         JSONArray out=new JSONArray();Set<String> core=essential(c);PackageManager pm=c.getPackageManager();
         for(ApplicationInfo a:pm.getInstalledApplications(PackageManager.MATCH_DISABLED_COMPONENTS)){
