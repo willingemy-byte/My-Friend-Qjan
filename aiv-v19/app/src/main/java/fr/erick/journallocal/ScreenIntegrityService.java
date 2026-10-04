@@ -41,6 +41,7 @@ public final class ScreenIntegrityService extends AccessibilityService {
     private static volatile boolean overlayVisible;
     private static volatile boolean coreActive;
     private static volatile boolean anomalyActive;
+    private static volatile boolean coverageGapActive;
     private static volatile long unreadAnomalies;
     private static volatile boolean collectorActive;
     private static volatile boolean correlationActive;
@@ -147,7 +148,8 @@ public final class ScreenIntegrityService extends AccessibilityService {
                     JSONObject summary=AnomalyMonitor.get(this).summary();
                     unreadAnomalies=summary.optLong("unread",0);
                 }catch(Throwable ignored){}
-                anomalyActive=unreadAnomalies>0;
+                coverageGapActive=NetworkCaptureService.coverageGapActive();
+                anomalyActive=unreadAnomalies>0||coverageGapActive;
 
                 coreActive=connected
                     && collectorActive
@@ -176,7 +178,8 @@ public final class ScreenIntegrityService extends AccessibilityService {
 
         StringBuilder desc=new StringBuilder("All In Visible. ");
         desc.append(coreActive?"Surveillance attendue active. ":"Un ou plusieurs modules attendus sont inactifs. ");
-        desc.append(anomalyActive?unreadAnomalies+" anomalie(s) à examiner.":"Aucune anomalie non lue.");
+        if(coverageGapActive)desc.append("Couverture réseau incomplète détectée par le relais AIV. ");
+        desc.append(unreadAnomalies>0?unreadAnomalies+" anomalie(s) à examiner.":"Aucune autre anomalie non lue.");
         badge.setContentDescription(desc.toString());
     }
 
@@ -220,6 +223,10 @@ public final class ScreenIntegrityService extends AccessibilityService {
             "shizuku_expected",shizukuExpected,
             "shizuku_active",shizukuActive,
             "anomaly_active",anomalyActive,
+            "coverage_gap_active",coverageGapActive,
+            "coverage_gap_label",NetworkCaptureService.lastCoverageGapLabel,
+            "coverage_gap_count",NetworkCaptureService.lastCoverageGapCount,
+            "coverage_gap_ms",NetworkCaptureService.lastCoverageGapMs,
             "unread_anomalies",unreadAnomalies,
             "comparison_status","SEMANTIC_ONLY",
             "comparison_mode","ONE_PASS",
