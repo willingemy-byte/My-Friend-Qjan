@@ -41,7 +41,7 @@ public final class NetworkCaptureService extends VpnService {
         final String correlationId=newFlowCorrelationId();
         long firstMs=System.currentTimeMillis(),firstOutboundMs=0,firstInboundMs=0;
         int version,protocol,localPort,remotePort,uid=-1,lookupAttempts=0;
-        String local,remote,actor="Application non identifiée",attribution="UID non disponible",journalGroup="android";
+        String local,remote,actor="Application non identifiée",attribution="UID non disponible",journalGroup="unknown";
         boolean systemApp=false,updatedSystemApp=false;
         JSONArray packages=new JSONArray(),security=new JSONArray();
         String tlsName="",tlsStatus="non_observe";boolean ech=false;
@@ -156,7 +156,12 @@ public final class NetworkCaptureService extends VpnService {
             f.uid=connectivity.getConnectionOwnerUid(f.protocol,new InetSocketAddress(InetAddress.getByName(f.local),f.localPort),new InetSocketAddress(InetAddress.getByName(f.remote),f.remotePort));
             if(f.uid<0){f.attribution="Android n’a pas identifié le propriétaire de cette connexion";return;}
             String[] packages=getPackageManager().getPackagesForUid(f.uid);
-            if(packages==null||packages.length==0){f.actor="Android · UID "+f.uid;f.journalGroup="android";f.attribution="UID Android observé; nom du paquet non accessible";return;}
+            if(packages==null||packages.length==0){
+                boolean reserved=f.uid%100000<10000;
+                f.actor=(reserved?"Android":"Application non identifiée")+" · UID "+f.uid;
+                f.journalGroup=reserved?"android":"unknown";
+                f.attribution="UID observé; nom du paquet non accessible";return;
+            }
             for(String name:packages)f.packages.put(name);
             f.security=SecurityContext.forPackages(this,f.packages);
             // Android reserves appId values below 10000 for framework/system
@@ -167,7 +172,11 @@ public final class NetworkCaptureService extends VpnService {
             f.actor=packages[0];
             try{ApplicationInfo app=getPackageManager().getApplicationInfo(packages[0],0);f.systemApp=(app.flags&(ApplicationInfo.FLAG_SYSTEM|ApplicationInfo.FLAG_UPDATED_SYSTEM_APP))!=0;f.updatedSystemApp=(app.flags&ApplicationInfo.FLAG_UPDATED_SYSTEM_APP)!=0;f.journalGroup=f.systemApp?"system":"user";f.actor=getPackageManager().getApplicationLabel(app).toString();}catch(PackageManager.NameNotFoundException ignored){f.journalGroup="user";}
             f.attribution="Propriétaire du flux identifié par l’API Android du VPN actif";
-        }catch(Exception e){f.uid=-1;f.attribution="Identification non disponible : "+e.getClass().getSimpleName();}
+        }catch(Exception e){
+            // A package/label failure must not discard an owner UID already returned by Android.
+            f.actor="Application non identifiée";f.journalGroup=f.uid>=0&&f.uid%100000<10000?"android":"unknown";
+            f.attribution="Identification non disponible : "+e.getClass().getSimpleName();
+        }
     }
     private JSONObject details(long id,Flow f){
         return EventStore.object("flow_id",session+":"+id,"flow_correlation_id",f.correlationId,"native_flow_id",id,
@@ -175,6 +184,11 @@ public final class NetworkCaptureService extends VpnService {
             "first_observed_ms",f.firstMs,"first_outbound_ms",f.firstOutboundMs==0?JSONObject.NULL:f.firstOutboundMs,"first_inbound_ms",f.firstInboundMs==0?JSONObject.NULL:f.firstInboundMs,
             "outbound_observed",f.firstOutboundMs!=0,"inbound_observed",f.firstInboundMs!=0,
             "flow_linkage","Les deux directions partagent le même état de connexion du relais local; cela relie le retour réseau au flux sans déchiffrer TLS et sans résoudre un UID partagé en paquet individuel",
+            "observation_confidence","OBSERVÉ","connection_owner_confidence",f.uid>=0?"ATTRIBUÉ":"INCONNU",
+            "application_attribution_confidence",f.uid>=0&&f.uid%100000>=10000&&f.packages.length()==1?"ATTRIBUÉ":"INCONNU",
+            "identity_lookup_attempts",f.lookupAttempts,"identity_attempt_limit",3,
+            "volume_confidence","INCONNU","counter_semantics","CUMULATIVE_FLOW_SNAPSHOT","volume_unit","IP_BYTES_WITH_HEADERS",
+            "tx_bytes",JSONObject.NULL,"rx_bytes",JSONObject.NULL,"bytes",JSONObject.NULL,"tx_packets",JSONObject.NULL,"rx_packets",JSONObject.NULL,
             "ip_version",f.version,
             "protocol",f.protocol==6?"TCP":f.protocol==17?"UDP":f.protocol==1?"ICMP":f.protocol==58?"ICMPv6":String.valueOf(f.protocol),
             "local_ip",f.local,"local_port",f.localPort,"remote_ip",f.remote,"port",f.remotePort,"uid",f.uid,"packages",f.packages,"package_list_scope","Paquets retournés par Android; visibilité éventuellement limitée",
@@ -195,6 +209,7 @@ public final class NetworkCaptureService extends VpnService {
         else{if(f.firstInboundMs!=0)return;f.firstInboundMs=observedMs;}
         JSONObject d=details(id,f);
         try{d.put("direction",outgoing?"sortant":"entrant").put("first_packet_bytes",packetBytes)
+            .put("packet_volume_confidence",packetBytes>=0?"OBSERVÉ":"INCONNU")
             .put("same_native_flow",true).put("network_return_on_same_flow",!outgoing);}
         catch(JSONException e){throw new IllegalStateException(e);}
         record("trafic",f.actor,outgoing?"Premier paquet sortant du flux":"Premier paquet entrant relié au même flux",destination(f),d);
@@ -202,11 +217,17 @@ public final class NetworkCaptureService extends VpnService {
     public void onFlowUpdate(long id,long tx,long rx,long txPackets,long rxPackets,int status,int error,boolean closed,long lastMs){
         Flow f=flows.get(id);if(f==null)return;identify(f);
         JSONObject d=details(id,f);
-        try{d.put("tx_bytes",tx).put("rx_bytes",rx).put("tx_packets",txPackets).put("rx_packets",rxPackets).put("bytes",tx+rx)
+        boolean valid=tx>=0&&rx>=0&&txPackets>=0&&rxPackets>=0&&tx<=Long.MAX_VALUE-rx;
+        try{d.put("volume_confidence",valid?"OBSERVÉ":"INCONNU")
+            .put("tx_bytes",valid?tx:JSONObject.NULL).put("rx_bytes",valid?rx:JSONObject.NULL)
+            .put("tx_packets",valid?txPackets:JSONObject.NULL).put("rx_packets",valid?rxPackets:JSONObject.NULL)
+            .put("bytes",valid?tx+rx:JSONObject.NULL)
+            .put("counter_validation",valid?"VALID":"INVALID")
             .put("counter_mode","Cumul du flux; ne pas additionner les instantanés").put("direction","bidirectionnel")
             .put("result",status>=0&&status<STATES.length?STATES[status]:String.valueOf(status)).put("error_code",error).put("closed",closed).put("last_packet_ms",lastMs);
+            if(!valid)d.put("raw_counters",EventStore.object("tx_bytes",tx,"rx_bytes",rx,"tx_packets",txPackets,"rx_packets",rxPackets));
         }catch(JSONException e){throw new IllegalStateException(e);}
-        record("trafic",f.actor,(closed?"Flux fermé":"Trafic observé")+" · ↑ "+tx+" o / ↓ "+rx+" o",destination(f),d);
+        record("trafic",f.actor,(closed?"Flux fermé":"Trafic observé")+(valid?" · ↑ "+tx+" o / ↓ "+rx+" o":" · compteurs invalides"),destination(f),d);
         if(closed)flows.remove(id);
     }
     public void onTlsHello(long id,String name,int status,boolean ech){

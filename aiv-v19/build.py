@@ -55,7 +55,7 @@ for abi,target in [('arm64-v8a','aarch64-linux-android26'),('x86_64','x86_64-lin
                 (out/lib).write_bytes(data)
         continue
     common=[
-        clang,'--target='+target,'-O2','-fPIC','-ffunction-sections','-fdata-sections',
+        clang,'--target='+target,'-Wall','-Wextra','-O2','-fPIC','-ffunction-sections','-fdata-sections',
         '-fstack-protector-strong','-D_FORTIFY_SOURCE=2','-D_LITTLE_ENDIAN','-DNO_DEBUG',
         '-shared','-Wl,-z,relro,-z,now,-z,max-page-size=16384','-Wl,--gc-sections',
         '-Wl,--no-undefined','-I'+str(vendor)
@@ -83,7 +83,7 @@ if not annotation.is_file(): raise SystemExit('Missing AndroidX annotation depen
 compile_cp=os.pathsep.join(str(x) for x in dep_jars+[annotation])
 bootclasspath=os.pathsep.join([str(a.android_jar),str(a.build_tools/'core-lambda-stubs.jar')])
 run('javac','-encoding','UTF-8','-source','8','-target','8','-bootclasspath',bootclasspath,
-    '-classpath',compile_cp,'-Xlint:-deprecation','-d',classes,*sources)
+    '-classpath',compile_cp,'-Xlint:all','-d',classes,*sources)
 
 run('java','-cp',a.build_tools/'lib/d8.jar','com.android.tools.r8.D8',
     '--min-api','26','--lib',a.android_jar,'--output',dex,*sorted(classes.rglob('*.class')),*dep_jars)
