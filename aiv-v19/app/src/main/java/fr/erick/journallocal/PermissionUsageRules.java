@@ -118,10 +118,14 @@ final class PermissionUsageRules {
         for(String line:raw.split("\\r?\\n")){
             String s=line.trim();if(s.isEmpty())continue;
             if(s.equals("No operations.")||s.equals("No operations")){out.recognized=true;continue;}
-            if(s.startsWith("Uid mode:")){out.recognized=true;unknown(out,s);continue;}
+            boolean uidMode=s.startsWith("Uid mode:");if(uidMode)s=s.substring(9).trim();
             if(s.startsWith("Attribution tag:")){tag=s.substring(16).trim();continue;}
             Matcher m=row.matcher(s);if(!m.matches()){unknown(out,s);continue;}
-            String op=m.group(1).toUpperCase(Locale.ROOT);if(!OPERATIONS.containsKey(op)){unknown(out,s);continue;}
+            String op=m.group(1).toUpperCase(Locale.ROOT);
+            boolean modeOnly=m.group(3).trim().isEmpty()&&Arrays.asList("allow","ignore","deny","default","foreground","errored","ask").contains(m.group(2));
+            boolean knownMode=OPERATIONS.containsKey(op)||Arrays.asList("CALL_PHONE","RECEIVE_MMS","RECEIVE_WAP_PUSH","ADD_VOICEMAIL","USE_SIP","PROCESS_OUTGOING_CALLS","BODY_SENSORS").contains(op);
+            if(modeOnly&&knownMode){out.recognized=true;continue;}
+            if(uidMode||!OPERATIONS.containsKey(op)){unknown(out,s);continue;}
             out.recognized=true;
             String tail=m.group(3);Matcher a=time.matcher(tail),r=reject.matcher(tail);
             boolean access=false;

@@ -18,7 +18,7 @@ signatures=['private static final class Flow',
     'private void pumpIdentity()','private void queueIdentity(','private void identify(',
     'private JSONObject details(','private String destination(', 'private void consumeFlowOpen(',
     'private void consumeFlowDirection(','private void consumeFlowUpdate(','private void consumeDnsQuestion(',
-    'private void consumeTlsHello(']
+    'private void consumeTlsHello(', 'public static boolean coverageGapActive(']
 methods='\n'.join(extract(source,x) for x in signatures)
 for old,new in [('consumeFlowDirection','onFlowDirection'),('consumeDnsQuestion','onDnsQuestion'),('consumeTlsHello','onTlsHello')]:
     methods=methods.replace('private void '+old+'(','public void '+new+'(')
@@ -43,7 +43,7 @@ public class ObservationProbe {
  private static final String[] STATES={"nouveau","connexion en cours","connecté","fermé"};
  static String newFlowCorrelationId(){return UUID.randomUUID().toString();}
  String session="synthetic",observedSession="synthetic",observedTransport="fixture";Config current=new Config();boolean stopped,reconfigure;
- static long lastHealthyFlowMs;
+ static long lastHealthyFlowMs,lastCoverageGapMs;
  Connectivity connectivity=new Connectivity();Packages packages=new Packages();
  HashMap<Long,Flow> flows=new HashMap<>();ArrayDeque<Flow> pendingIdentity=new ArrayDeque<>();long lastIdentityPump;
  UidProbe owners=new UidProbe(2048,new UidProbe.Clock(){public long elapsed(){return SystemClock.now;}public long wall(){return 1000+SystemClock.now;}},t->connectivity.getConnectionOwnerUid(t.protocol,new InetSocketAddress(t.local,t.localPort),new InetSocketAddress(t.remote,t.remotePort)),false);
@@ -62,7 +62,7 @@ public class ObservationProbe {
  void open(){onFlowOpen(1,4,6,"10.203.0.1",45000,"192.0.2.1",443);}
  JSONObject d(){return new JSONObject(events.get(events.size()-1)).getJSONObject("details");}
  static void check(boolean condition,String message){if(!condition)throw new AssertionError(message);}
- static ObservationProbe fresh(){SystemClock.now=0;Build.VERSION.SDK_INT=35;AppIdentity.fail=false;return new ObservationProbe();}
+ static ObservationProbe fresh(){lastCoverageGapMs=0;lastHealthyFlowMs=0;SystemClock.now=0;Build.VERSION.SDK_INT=35;AppIdentity.fail=false;return new ObservationProbe();}
  static void verifyExport(ObservationProbe p)throws Exception{
   SnapshotExporter.Source source=new SnapshotExporter.Source(){
    public long[] snapshot(){return new long[]{p.events.size(),p.events.size()};}
@@ -129,6 +129,8 @@ public class ObservationProbe {
   ObservationValues.putCounters(counters,120,50,3,1);ObservationValues.mergeCounters(f,counters);ObservationValues.mergeCounters(f,EventStore.object());
   JSONObject quality=NetworkQuality.flows(new JSONArray().put(f));check(quality.getLong("tx_bytes_observed")==120&&quality.getDouble("unknown_rate")==1&&quality.getDouble("volume_coverage")==1,"Projection summed snapshots or excluded UNKNOWN");
   check(NetworkQuality.flows(new JSONArray()).isNull("attribution_rate"),"Empty denominator fabricated rate");
+  p=fresh();p.connectivity.uid=12345;p.open();lastCoverageGapMs=1;p.onFlowUpdate(1,120,40,2,1,2,0,false,2000);check(lastHealthyFlowMs==2000&&coverageGapActive(),"successful flow cleared unsupported protocol coverage");lastCoverageGapMs=0;check(!coverageGapActive(),"fresh-session coverage did not reset");
+  System.out.println("PASS healthy flow does not erase VPN coverage gap");
   System.out.println("PASS cumulative maximum, UNKNOWN denominator, volume coverage and empty rates");
  }
 }
@@ -136,7 +138,7 @@ public class ObservationProbe {
 event_stub='''package fr.erick.journallocal;import org.json.*;final class EventStore {static JSONObject object(Object... kv){JSONObject o=new JSONObject();try{for(int i=0;i<kv.length;i+=2)o.put((String)kv[i],kv[i+1]);return o;}catch(JSONException e){throw new IllegalArgumentException(e);}}}'''
 with tempfile.TemporaryDirectory() as tmp:
     tmp=Path(tmp);(tmp/'ObservationProbe.java').write_text(template.replace('__METHODS__',methods).replace('p.shouldStopNative()','p.tickIdentity()'));(tmp/'EventStore.java').write_text(event_stub)
-    src=[JAVA/(name+'.java') for name in ['UidProbe','IdentityRetry','ObservationValues','NetworkQuality','ExportMetadata','SnapshotExporter','JournalRecovery','JsonSyntax']]
+    src=[JAVA/(name+'.java') for name in ['OverlayRules','UidProbe','IdentityRetry','ObservationValues','NetworkQuality','ExportMetadata','SnapshotExporter','JournalRecovery','JsonSyntax']]
     src+=[ROOT/'build/generated/fr/erick/journallocal/BuildMetadata.java',tmp/'ObservationProbe.java',tmp/'EventStore.java']
     subprocess.run(['javac','-encoding','UTF-8','-cp',str(jar),'-d',str(tmp),*map(str,src)],check=True)
     subprocess.run(['java','-Xmx256m','-cp',str(tmp)+os.pathsep+str(jar),'fr.erick.journallocal.ObservationProbe'],check=True)

@@ -138,7 +138,7 @@ public final class NetworkCaptureService extends VpnService {
     private long capturedTimestamp(){return observations==null?System.currentTimeMillis():observations.timestampMs();}
     private long capturedElapsed(){long elapsed=observations==null?-1:observations.elapsedMs();return elapsed<0?SystemClock.elapsedRealtime():elapsed;}
     private void beginObservationSession(String id,String transport){
-        observe(()->{flows.clear();observedSession=id;observedTransport=transport;});
+        observe(()->{flows.clear();observedSession=id;observedTransport=transport;lastCoverageGapMs=0;lastCoverageGapCount=0;lastCoverageGapLabel="";lastHealthyFlowMs=0;});
     }
     private Notification notification(String text){
         PendingIntent open=PendingIntent.getActivity(this,30,new Intent(this,MainActivity.class),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
@@ -394,7 +394,7 @@ public final class NetworkCaptureService extends VpnService {
         }catch(JSONException e){throw new IllegalStateException(e);}
         return out;
     }
-    public static boolean coverageGapActive(){return lastCoverageGapMs>0&&lastCoverageGapMs>lastHealthyFlowMs;}
+    public static boolean coverageGapActive(){return OverlayRules.coverageIncomplete(lastCoverageGapMs);}
     private String destination(Flow f){return(f.version==6?"["+f.remote+"]":f.remote)+":"+f.remotePort;}
     public void onFlowOpen(long id,int version,int protocol,String local,int localPort,String remote,int remotePort){
         String key=session+":"+id;UidProbe.Ticket previous=liveFlows.remove(key);if(previous!=null)previous.close();

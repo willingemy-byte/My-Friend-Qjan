@@ -7,6 +7,7 @@ cd "$(dirname "$0")/../.."
 python3 aiv-v19/tests/permission-usage.py
 python3 aiv-v19/tests/convergence-host.py
 python3 aiv-v19/tests/accessibility-snapshots.py
+python3 aiv-v19/tests/overlay-highlight.py
 bash aiv-v19/tests/run-endpoint-context.sh
 python3 aiv-v19/tests/network-report.py
 python3 aiv-v19/tests/journal-sqlite.py

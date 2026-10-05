@@ -1,4 +1,4 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.allinvisible.aiv" android:versionCode="218" android:versionName="2.0.18">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.allinvisible.aiv" android:versionCode="219" android:versionName="2.0.19">
     <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="35" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />

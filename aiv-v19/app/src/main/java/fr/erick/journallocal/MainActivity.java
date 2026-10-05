@@ -80,6 +80,7 @@ public final class MainActivity extends Activity {
     private final java.util.Set<String> permissionSelection=new java.util.LinkedHashSet<>();
     private TextView permissionStatusView;
     private TextView maintenanceStatusView;
+    private TableLayout integrityTable;
     private ApplicationOverview applicationOverview;
     private String overviewCategory="";
     private LinearLayout overviewGroups,overviewApplications;
@@ -99,6 +100,7 @@ public final class MainActivity extends Activity {
     };
     private final Runnable headerStatusPulse=new Runnable(){@Override public void run(){
         if(statusRow!=null)refreshHeaderStatus();
+        if("integrity".equals(currentPage))updateIntegrityStatus();
         if("shizuku".equals(currentPage)&&maintenanceStatusView!=null)maintenanceStatusView.setText(maintenanceSummary());
         main.postDelayed(this,2000);
     }};
@@ -676,7 +678,9 @@ public final class MainActivity extends Activity {
         page.addView(search);
         page.addView(action("Actualiser",v->{AnomalyMonitor.request(this);renderAnomalies(search.getText().toString());}));
         page.addView(action("Exporter les anomalies",v->beginAnalysisExport()));
-        page.addView(action(anomaliesUnreadOnly?"Afficher tous les findings":"Afficher les non consultés",v->{anomalyOffset=0;anomaliesUnreadOnly=!anomaliesUnreadOnly;renderAnomalies(search.getText().toString());}));
+        page.addView(action("Remettre le compteur d’alertes à zéro",v->resetAlertCounter()));
+        page.addView(note("Le compteur en haut concerne les alertes temps réel non consultées. Les signalements historiques restent dans cette liste, sans déclencher une nouvelle pastille."));
+        page.addView(action(anomaliesUnreadOnly?"Afficher tous les findings":"Afficher les alertes non consultées",v->{anomalyOffset=0;anomaliesUnreadOnly=!anomaliesUnreadOnly;renderAnomalies(search.getText().toString());}));
         page.addView(action("coverage".equals(anomalyKind)?"Comportements des applications":"Santé et limites du capteur AIV",v->{anomalyOffset=0;anomalyKind="coverage".equals(anomalyKind)?"anomaly":"coverage";renderAnomalies(search.getText().toString());}));
         page.addView(note("Double-tape une valeur utile pour filtrer. Ouvrir affiche le détail complet de l'anomalie."));
         TextView loading=text("Lecture de l'analyse…",14,MUTED,false);page.addView(loading);
@@ -705,7 +709,7 @@ public final class MainActivity extends Activity {
                         JSONObject facts=x.optJSONObject("facts");
                         String destination=facts==null?"":facts.optString("Destination contactée","");
                         if(destination.isEmpty())destination=x.optString("subject","—");
-                        String rule=x.optString("rule",title);
+                        String rule=x.optString("rule",title)+("HISTORICAL_REPLAY".equals(x.optString("origin"))?" · historique":"");
                         String[] values={levelShort(level),shortTime(x.optLong("last_ms")),actor,rule,PermissionUsage.brief(x),destination,String.valueOf(x.optLong("occurrences",1)),severity};
                         String[] filters={null,null,actor,rule,null,destination,null,severity};
                         final int rowLevel=level;
@@ -727,28 +731,28 @@ public final class MainActivity extends Activity {
         page.addView(note("Fonction gratuite. AIV observe la couche sémantique Android quand le service d’accessibilité est activé. Le mode visé est une passe : aucune seconde visite de la page n’est requise. Pour déclarer « affichage ≠ sémantique », AIV doit toutefois comparer la sémantique avec une observation visuelle indépendante prise au même moment."));
         String[] headers={"Élément","État","Détail","Ouvrir"};
         int[] widths={220,170,430,100};
-        TableLayout table=dataTable(headers,widths);
+        TableLayout table=dataTable(headers,widths);integrityTable=table;
         String service=s.optBoolean("connected")?"ACTIF":"INACTIF";
         addTableRow(table,new String[]{"Service d'intégrité",service,s.optString("status","—")},null,widths,0,null,null,
             v->showDetail("Service d'intégrité","Service : "+service+"\nÉtat : "+s.optString("status","—"),
                 "Réglages accessibilité",()->openSetting(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
         addTableRow(table,new String[]{"Badge AIV",s.optBoolean("overlay_visible")?"ACTIF":"INACTIF","Le badge en haut à droite confirme que le service d’accessibilité AIV est connecté."},null,widths,0,null,null,
-            v->showJsonDetail("Intégrité · badge AIV",s,null));
+            v->showJsonDetail("Intégrité · badge AIV",ScreenIntegrityService.state(),null));
         addTableRow(table,new String[]{"État global",s.optBoolean("core_active")?"CAPTEURS OPÉRATIONNELS":"COUVERTURE PARTIELLE",
             "Collecte "+yesNo(s.optBoolean("collector_active"))+
             " · Corrélation "+yesNo(s.optBoolean("correlation_active"))+
             " · VPN "+(s.optBoolean("vpn_expected")?yesNo(s.optBoolean("vpn_active")):"OPTIONNEL")+
             " · Shizuku "+(s.optBoolean("shizuku_expected")?yesNo(s.optBoolean("shizuku_active")):"NON REQUIS")+
             " · Anomalies "+s.optLong("unread_anomalies",0)},null,widths,0,null,null,
-            v->showJsonDetail("Intégrité · état global",s,null));
+            v->showJsonDetail("Intégrité · état global",ScreenIntegrityService.state(),null));
         addTableRow(table,new String[]{"Disponibilité","FREE","Détection d’intégrité d’affichage incluse pour tous les utilisateurs."},null,widths,0,null,null,
             v->showDetail("Intégrité d’affichage · Free","Cette fonction reste disponible dans le niveau Free. Aucune fonction de contrôle Shizuku n’est requise pour l’observation.",null,null));
-        addTableRow(table,new String[]{"Application observée",s.optString("observed_package","—"),"Package actuellement exposé par le service."},null,widths,0,null,null,
-            v->showJsonDetail("Intégrité · état complet",s,null));
+        addTableRow(table,new String[]{"Dernière application observée",s.optString("observed_package","—"),"Dernier package tiers exposé par le service ; AIV lui-même n’est pas journalisé par ce capteur."},null,widths,0,null,null,
+            v->showJsonDetail("Intégrité · état complet",ScreenIntegrityService.state(),null));
         addTableRow(table,new String[]{"Arbre sémantique",s.optInt("node_count")+" nœuds",s.optInt("text_node_count")+" nœuds texte"},null,widths,0,null,null,
-            v->showJsonDetail("Intégrité · arbre sémantique",s,null));
+            v->showJsonDetail("Intégrité · arbre sémantique",ScreenIntegrityService.state(),null));
         addTableRow(table,new String[]{"Canal visuel",s.optString("comparison_status","—"),s.optString("scope")+" · "+s.optString("visual_reason")},null,widths,0,null,null,
-            v->showJsonDetail("Intégrité · comparaison",s,null));
+            v->showJsonDetail("Intégrité · comparaison",ScreenIntegrityService.state(),null));
         addTableRow(table,new String[]{"AppOps",s.optBoolean("appops_active")?"OBSERVÉ":"NON DISPONIBLE",String.valueOf(s.optJSONObject("appops"))},null,widths,0,null,null,v->showJsonDetail("AppOps · état réel",PermissionUsage.get(this).status(),null));
         page.addView(tableScroller(table));
         page.addView(action("Actualiser l'état",v->renderIntegrity()));
@@ -756,6 +760,14 @@ public final class MainActivity extends Activity {
         page.addView(action("Lire AppOps maintenant",v->{PermissionUsage.requestPriority(this);toast("Lecture AppOps demandée; consulte son état après le relevé.");}));
         page.addView(action("Rétention des preuves visuelles",v->new AlertDialog.Builder(this).setTitle("Crops liés aux findings")
             .setItems(new String[]{"Ne conserver aucune image","24 heures","7 jours"},(d,which)->{long retention=which==0?0:which==1?86400000L:VisualEvidencePolicy.RETENTION_MS;Continuous.prefs(this).edit().putLong("visual_retention_ms",retention).apply();VisualEvidencePolicy.prune(new java.io.File(getFilesDir(),"finding-visual"),System.currentTimeMillis(),retention,VisualEvidencePolicy.MAX_BYTES,VisualEvidencePolicy.MAX_FILES);toast("Rétention enregistrée");}).setNegativeButton("Fermer",null).show()));
+    }
+    private void resetAlertCounter(){new Thread(()->{try{AnomalyMonitor monitor=AnomalyMonitor.get(this);long ceiling=monitor.summary().optLong("alert_ceiling_id");monitor.change("review-all",String.valueOf(ceiling));main.post(()->{toast("Alertes consultées ; dossiers conservés");if("anomalies".equals(currentPage))renderAnomalies(anomalyQuery);});}catch(Exception e){main.post(()->toast("Remise à zéro indisponible : "+e.getClass().getSimpleName()));}},"aiv-review-alerts").start();}
+    private static String findingLines(JSONArray values){if(values==null||values.length()==0)return "—";StringBuilder out=new StringBuilder();for(int i=0;i<values.length();i++){if(i>0)out.append("\n");out.append(values.optString(i));}return out.toString();}
+    private void integrityCell(int row,int cell,String value){if(integrityTable==null||row>=integrityTable.getChildCount())return;View v=integrityTable.getChildAt(row);if(v instanceof TableRow){View c=((TableRow)v).getChildAt(cell);if(c instanceof TextView)((TextView)c).setText(value);}}
+    private void updateIntegrityStatus(){JSONObject s=ScreenIntegrityService.state(),op=s.optJSONObject("appops"),analysis=s.optJSONObject("anomaly_engine");
+        integrityCell(1,1,s.optBoolean("connected")?"ACTIF":"INACTIF");integrityCell(1,2,s.optString("status"));integrityCell(2,1,s.optBoolean("overlay_visible")?"ACTIF":"INACTIF");
+        integrityCell(3,1,s.optBoolean("core_active")?"CAPTEURS OPÉRATIONNELS":"COUVERTURE PARTIELLE");integrityCell(3,2,"Collecte "+yesNo(s.optBoolean("collector_active"))+" · Corrélation "+yesNo(s.optBoolean("correlation_active"))+" · VPN "+(s.optBoolean("vpn_expected")?yesNo(s.optBoolean("vpn_active")):"OPTIONNEL")+" · Shizuku "+yesNo(s.optBoolean("shizuku_active"))+" · Alertes "+s.optLong("unread_anomalies")+" · Historique "+(analysis==null?0:analysis.optLong("historical_unread")));
+        integrityCell(5,1,s.optString("observed_package","—"));integrityCell(6,1,s.optInt("node_count")+" nœuds");integrityCell(6,2,s.optInt("text_node_count")+" nœuds texte");integrityCell(7,1,s.optString("comparison_status"));integrityCell(7,2,s.optString("scope")+" · "+s.optString("visual_reason"));integrityCell(8,1,(s.optBoolean("appops_active")?"OBSERVÉ":"NON DISPONIBLE")+(op==null?"":" · "+op.optString("state")));integrityCell(8,2,String.valueOf(op));
     }
     private void authorizeShizukuObservation(){try{
         if(!rikka.shizuku.Shizuku.pingBinder()){showDetail("Observation AppOps","Démarre Shizuku puis autorise AIV pour lire AppOps.","Ouvrir Shizuku",()->openPackage("moe.shizuku.privileged.api"));return;}
@@ -1705,8 +1717,9 @@ public final class MainActivity extends Activity {
             body.addView(text(anomaly.optString("title","Anomalie"),16,TEXT,true));
             body.addView(text(anomaly.optString("explanation",""),13,MUTED,false));
             body.addView(text("Occurrences : "+anomaly.optLong("occurrences",1)+" · "+anomaly.optString("severity","—"),13,MUTED,false));
-            body.addView(note("Services et accès rapprochés : "+PermissionUsage.brief(anomaly)));
-            JSONObject conclusion=anomaly.optJSONObject("conclusion");if(conclusion!=null)body.addView(note("ÉTABLI : "+conclusion.optJSONArray("established")+"\nCORRÉLÉ : "+conclusion.optJSONArray("correlated")+"\nINCONNU : "+conclusion.optJSONArray("unknown")));
+            if("HISTORICAL_REPLAY".equals(anomaly.optString("origin")))body.addView(note("Historique recalculé · aucun déclenchement de pastille à la relecture."));
+            if(!"coverage".equals(anomaly.optString("kind")))body.addView(note("Services et accès rapprochés : "+PermissionUsage.brief(anomaly)));
+            JSONObject conclusion=anomaly.optJSONObject("conclusion");if(conclusion!=null)body.addView(note("ÉTABLI : "+findingLines(conclusion.optJSONArray("established"))+"\nCORRÉLÉ : "+findingLines(conclusion.optJSONArray("correlated"))+"\nINCONNU : "+findingLines(conclusion.optJSONArray("unknown"))));
             if(anomaly.has("timeline"))body.addView(action("Dossier de preuve et ligne du temps",v->showJsonDetail("Finding #"+anomaly.optLong("id"),anomaly,null)));
             JSONObject visual=anomaly.optJSONObject("visual");if(visual!=null&&!visual.optString("crop_path").isEmpty())try{
                 java.io.File file=new java.io.File(visual.optString("crop_path"));java.io.File folder=new java.io.File(getFilesDir(),"finding-visual");if(file.getCanonicalFile().getParentFile().equals(folder.getCanonicalFile())&&file.isFile()){
@@ -1733,7 +1746,7 @@ public final class MainActivity extends Activity {
             }
 
             ScrollView scroll=new ScrollView(this);scroll.addView(body);
-            AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Anomalie · détail").setView(scroll).setPositiveButton("Fermer",null).show();
+            AlertDialog dialog=new AlertDialog.Builder(this).setTitle("coverage".equals(anomaly.optString("kind"))?"Santé AIV · détail":"Anomalie · détail").setView(scroll).setPositiveButton("Fermer",null).show();
             if(id>0)AnomalyMonitor.get(this).change("review",String.valueOf(id));
             dialog.setOnDismissListener(d->{if("anomalies".equals(currentPage))renderAnomalies(anomalyQuery);});
         }catch(Exception e){

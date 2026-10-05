@@ -34,7 +34,7 @@ public final class AnomalyMonitor extends SQLiteOpenHelper {
         if(m.pendingLive.get()>256&&"trafic".equals(event.optString("category"))){droppedLive++;return;}
         try{JSONObject copy=new JSONObject(event.toString());m.pendingLive.incrementAndGet();m.worker.post(()->{
             try{NetworkReport.enrich(m.context,copy);m.pedigree(copy,true);for(JSONObject finding:m.convergence.accept(copy))m.saveLive(finding);
-                AnomalyRules.Settings settings=m.parseSettings(m.settingsJson());m.liveRules.accept(event(copy),settings,f->{f.key="live:rules:"+copy.optString("clock_scope_id")+":"+f.key;m.saveFinding(m.getWritableDatabase(),f);});
+                AnomalyRules.Settings settings=m.parseSettings(m.settingsJson());m.liveRules.accept(event(copy),settings,f->{f.key="live:rules:"+copy.optString("clock_scope_id")+":"+f.key;m.saveFinding(m.getWritableDatabase(),f,copy);});
                 lastLiveMs=System.currentTimeMillis();liveError="";ScreenIntegrityService.findingsChanged();}
             catch(Exception e){liveError="Corrélation temps réel : "+e.getClass().getSimpleName();}
             finally{m.pendingLive.decrementAndGet();}
@@ -104,11 +104,14 @@ public final class AnomalyMonitor extends SQLiteOpenHelper {
         e.problem=d.optString("error");e.coverageGap=d.optBoolean("coverage_gap");e.interval=d.optLong("interval_ms");e.query=d.optString("question");if(e.query.isEmpty()&&!d.optBoolean("ech_extension_present")&&"Nom TLS observé".equals(e.action))e.query=d.optString("tls_sni");if(d.has("dns_resolvers"))e.resolvers=strings(d.optJSONArray("dns_resolvers"));return e;
     }
     private void saveFinding(SQLiteDatabase db,AnomalyRules.Finding f){
+        saveFinding(db,f,null);
+    }
+    private void saveFinding(SQLiteDatabase db,AnomalyRules.Finding f,JSONObject source){
         try{
             if(!f.key.startsWith("live:"))f.key=settingsRevision+":"+f.key;
-            long id=0,first=f.wall,occurrences=0;JSONObject old=null;
-            try(Cursor c=db.rawQuery("SELECT id,first_ms,occurrences,payload FROM findings WHERE group_key=?",new String[]{f.key})){
-                if(c.moveToFirst()){id=c.getLong(0);first=c.getLong(1);occurrences=c.getLong(2);old=new JSONObject(c.getString(3));}
+            long id=0,first=f.wall,occurrences=0;boolean reviewed=false;JSONObject old=null;
+            try(Cursor c=db.rawQuery("SELECT id,first_ms,occurrences,payload,reviewed FROM findings WHERE group_key=?",new String[]{f.key})){
+                if(c.moveToFirst()){id=c.getLong(0);first=c.getLong(1);occurrences=c.getLong(2);old=new JSONObject(c.getString(3));reviewed=c.getInt(4)!=0;}
             }
             LinkedHashSet<Long> ids=new LinkedHashSet<>();
             if(old!=null){JSONArray previous=old.optJSONArray("evidence_ids");if(previous!=null)for(int i=0;i<previous.length();i++)ids.add(previous.getLong(i));}
@@ -118,8 +121,16 @@ public final class AnomalyMonitor extends SQLiteOpenHelper {
             JSONObject facts=new JSONObject();for(Map.Entry<String,String> part:f.facts.entrySet())facts.put(part.getKey(),part.getValue());
             JSONObject payload=EventStore.object("rule",f.rule,"kind",f.type,"severity",f.severity,"title",f.title,"actor",f.actor,"subject",f.subject,"explanation",f.explanation,"advice",f.advice,"facts",facts,"evidence_ids",new JSONArray(bounded),"criteria_version","journal-local/snapshots-1","settings_revision",settingsRevision);
             payload.put("correlation_id",old==null?java.util.UUID.randomUUID().toString():old.optString("correlation_id",java.util.UUID.randomUUID().toString())).put("category","coverage".equals(f.type)?"SENSOR_HEALTH":"APPLICATION_BEHAVIOR").put("conclusion",EventStore.object("established",new JSONArray().put(f.explanation),"correlated",new JSONArray().put("Règle déterministe portant sur les événements sources"),"unknown",new JSONArray().put("Contenu et causalité applicative"),"confidence","METADATA_RULE"));
+            payload.put("origin",source==null?"HISTORICAL_REPLAY":"LIVE_OBSERVATION").put("overlay_eligible",source!=null&&"anomaly".equals(f.type));
+            JSONObject click=source!=null&&"anomaly".equals(f.type)?convergence.interactionFor(source):null;
+            if(click!=null){JSONObject frontend=new JSONObject(ConvergenceRules.details(click).toString()).put("clock_scope_id",click.optString("clock_scope_id")).put("relation","TEMPORAL_NOT_CAUSAL");
+                payload.put("frontend",frontend).put("visual",EventStore.object("status","SEMANTIC_ONLY","comparison_confirmed",false));
+                JSONArray evidence=payload.getJSONArray("evidence_ids");boolean present=false;for(int i=0;i<evidence.length();i++)if(evidence.optLong(i)==click.optLong("id"))present=true;if(!present)evidence.put(click.optLong("id"));
+                payload.getJSONObject("conclusion").getJSONArray("correlated").put("Clic récent de la même identité sur la même horloge ; aucune causalité du clic démontrée");
+            }
             ContentValues values=new ContentValues();values.put("group_key",f.key);values.put("kind",f.type);values.put("rule",f.rule);values.put("first_ms",first);values.put("last_ms",f.wall);values.put("last_event_id",f.eventId);values.put("occurrences",occurrences+1);values.put("payload",payload.toString());
-            if(id==0)db.insertOrThrow("findings",null,values);else db.update("findings",values,"id=?",new String[]{String.valueOf(id)});
+            if(id==0)id=db.insertOrThrow("findings",null,values);else db.update("findings",values,"id=?",new String[]{String.valueOf(id)});
+            if(source!=null&&"anomaly".equals(f.type)&&!reviewed)ScreenIntegrityService.findingCommitted(id,payload.put("id",id).put("anomaly_id",id));
         }catch(Exception e){throw new IllegalStateException("Signalement non enregistré",e);}
     }
     private long persistedRevision(SQLiteDatabase db){try(Cursor c=db.rawQuery("SELECT settings_revision FROM state WHERE id=1",null)){return c.moveToFirst()?c.getLong(0):-1;}}
@@ -149,15 +160,22 @@ public final class AnomalyMonitor extends SQLiteOpenHelper {
             // Reviewed groups remain reviewed if more repetitions arrive; new time groups are unread.
             ContentValues values=new ContentValues();values.put("reviewed",1);getWritableDatabase().update("findings",values,"id=?",new String[]{String.valueOf(id)});ScreenIntegrityService.findingsChanged();return EventStore.object("ok",true);
         }
+        if("review-all".equals(action)){
+            long ceiling=Long.parseLong(value);if(ceiling<0)throw new IllegalArgumentException("Limite invalide");
+            ContentValues values=new ContentValues();values.put("reviewed",1);
+            getWritableDatabase().update("findings",values,"group_key LIKE 'live:%' AND kind='anomaly' AND reviewed=0 AND id<=?",new String[]{String.valueOf(ceiling)});
+            ScreenIntegrityService.findingsChanged();return EventStore.object("ok",true,"through_id",ceiling,"scope","Alertes marquées consultées ; dossiers conservés ; nouveaux IDs après la limite inchangés.");
+        }
         if("retry".equals(action)){kick();return EventStore.object("ok",true);}
         throw new IllegalArgumentException("Action inconnue.");
     }
     public synchronized JSONObject summary()throws Exception{
-        long checkpoint=0,processed=0,unread=0,traces=0,total=0,unknown=0,uncertain=0,coverage=0;
+        long checkpoint=0,processed=0,unread=0,historicalUnread=0,alertCeiling=0,traces=0,total=0,unknown=0,uncertain=0,coverage=0;
         SQLiteDatabase db=getReadableDatabase();JSONObject config=settingsJson();long revision=config.optLong("revision");
         try(Cursor c=db.rawQuery("SELECT checkpoint,processed,unknown_count,uncertain_count FROM state WHERE id=1 AND settings_revision=?",new String[]{""+revision})){if(c.moveToFirst()){checkpoint=c.getLong(0);processed=c.getLong(1);unknown=c.getLong(2);uncertain=c.getLong(3);}}
-        try(Cursor c=db.rawQuery("SELECT kind,reviewed,COUNT(*) FROM findings WHERE (group_key LIKE ? OR group_key LIKE 'live:%') GROUP BY kind,reviewed",new String[]{revision+":%"})){while(c.moveToNext()){if(c.getString(0).equals("trace"))traces+=c.getLong(2);else if(c.getString(0).equals("coverage"))coverage+=c.getLong(2);else {total+=c.getLong(2);if(c.getInt(1)==0)unread+=c.getLong(2);}}}
-        return EventStore.object("revision",revision,"replay_target",config.optLong("replay_target",0),"recalculating",persistedRevision(db)!=revision||checkpoint<config.optLong("replay_target",0),"processed",processed,"checkpoint",checkpoint,"latest",EventStore.get(context).latestId(),"busy",busy||scheduled.get(),"unread",unread,"anomalies",total,"coverage_findings",coverage,"traces",traces,"unknown_attribution",unknown,"uncertain_counters",uncertain,"last_live_ms",lastLiveMs,"pending_live",pendingLive.get(),"dropped_live",droppedLive,"live_error",liveError,"history_error",lastError,"error",liveError.isEmpty()?lastError:liveError,"settings",settingsJson());
+        try(Cursor c=db.rawQuery("SELECT kind,reviewed,COUNT(*),CASE WHEN group_key LIKE 'live:%' THEN 1 ELSE 0 END FROM findings WHERE (group_key LIKE ? OR group_key LIKE 'live:%') GROUP BY kind,reviewed,CASE WHEN group_key LIKE 'live:%' THEN 1 ELSE 0 END",new String[]{revision+":%"})){while(c.moveToNext()){if(c.getString(0).equals("trace"))traces+=c.getLong(2);else if(c.getString(0).equals("coverage"))coverage+=c.getLong(2);else {total+=c.getLong(2);if(c.getInt(1)==0){if(c.getInt(3)==1)unread+=c.getLong(2);else historicalUnread+=c.getLong(2);}}}}
+        try(Cursor c=db.rawQuery("SELECT COALESCE(MAX(id),0) FROM findings WHERE group_key LIKE 'live:%' AND kind='anomaly' AND reviewed=0",null)){c.moveToFirst();alertCeiling=c.getLong(0);}
+        return EventStore.object("revision",revision,"replay_target",config.optLong("replay_target",0),"recalculating",persistedRevision(db)!=revision||checkpoint<config.optLong("replay_target",0),"processed",processed,"checkpoint",checkpoint,"latest",EventStore.get(context).latestId(),"busy",busy||scheduled.get(),"unread",unread,"historical_unread",historicalUnread,"alert_ceiling_id",alertCeiling,"unread_scope","Alertes temps réel non consultées ; historique et santé séparés","anomalies",total,"coverage_findings",coverage,"traces",traces,"unknown_attribution",unknown,"uncertain_counters",uncertain,"last_live_ms",lastLiveMs,"pending_live",pendingLive.get(),"dropped_live",droppedLive,"live_error",liveError,"history_error",lastError,"error",liveError.isEmpty()?lastError:liveError,"settings",settingsJson());
     }
     public synchronized JSONObject page(String kind,boolean unread,int offset)throws Exception{
         return page(kind,unread,offset,15,"");
@@ -167,14 +185,14 @@ public final class AnomalyMonitor extends SQLiteOpenHelper {
         JSONObject status=summary();
         String revision=status.getLong("revision")+":%";
         offset=Math.max(0,offset);limit=Math.max(1,Math.min(500,limit));
-        String where="(group_key LIKE ? OR group_key LIKE 'live:%') AND kind=?"+(unread?" AND reviewed=0":"");ArrayList<String> args=new ArrayList<>();args.add(revision);args.add(kind);
+        String where="(group_key LIKE ? OR group_key LIKE 'live:%') AND kind=?"+(unread?" AND reviewed=0"+("anomaly".equals(kind)?" AND group_key LIKE 'live:%'":""):"");ArrayList<String> args=new ArrayList<>();args.add(revision);args.add(kind);
         String term=search==null?"":search.trim().toLowerCase(Locale.ROOT);
         if(!term.isEmpty()){String escaped=term.replace("\\","\\\\").replace("%","\\%").replace("_","\\_");where+=" AND (LOWER(payload) LIKE ? ESCAPE '\\' OR CAST(id AS TEXT)=?)";args.add("%"+escaped+"%");args.add(term);}
         SQLiteDatabase db=getReadableDatabase();long count;
         try(Cursor c=db.rawQuery("SELECT COUNT(*) FROM findings WHERE "+where,args.toArray(new String[0]))){c.moveToFirst();count=c.getLong(0);}
         ArrayList<String> pageArgs=new ArrayList<>(args);pageArgs.add(String.valueOf(limit));pageArgs.add(String.valueOf(offset));
-        JSONArray rows=new JSONArray();try(Cursor c=db.rawQuery("SELECT id,first_ms,last_ms,occurrences,reviewed,payload FROM findings WHERE "+where+" ORDER BY id DESC LIMIT ? OFFSET ?",pageArgs.toArray(new String[0]))){
-            while(c.moveToNext()){JSONObject row=new JSONObject(c.getString(5));row.put("id",c.getLong(0));row.put("first_ms",c.getLong(1));row.put("last_ms",c.getLong(2));row.put("occurrences",c.getLong(3));row.put("reviewed",c.getInt(4)!=0);rows.put(row);}
+        JSONArray rows=new JSONArray();try(Cursor c=db.rawQuery("SELECT id,first_ms,last_ms,occurrences,reviewed,payload,group_key FROM findings WHERE "+where+" ORDER BY id DESC LIMIT ? OFFSET ?",pageArgs.toArray(new String[0]))){
+            while(c.moveToNext()){JSONObject row=new JSONObject(c.getString(5));row.put("id",c.getLong(0));row.put("first_ms",c.getLong(1));row.put("last_ms",c.getLong(2));row.put("occurrences",c.getLong(3));row.put("reviewed",c.getInt(4)!=0).put("origin",c.getString(6).startsWith("live:")?"LIVE_OBSERVATION":"HISTORICAL_REPLAY").put("overlay_eligible",c.getString(6).startsWith("live:")&&"anomaly".equals(row.optString("kind")));rows.put(row);}
         }
         for(int i=0;i<rows.length();i++){
             JSONObject item=rows.getJSONObject(i);JSONArray ids=item.optJSONArray("evidence_ids");
@@ -191,15 +209,16 @@ public final class AnomalyMonitor extends SQLiteOpenHelper {
     private synchronized void saveLive(JSONObject f)throws Exception{
         SQLiteDatabase db=getWritableDatabase();String key=f.getString("group_key");
         try(Cursor existing=db.rawQuery("SELECT id FROM findings WHERE group_key=?",new String[]{key})){if(existing.moveToFirst())return;}
+        f.put("origin","LIVE_OBSERVATION").put("overlay_eligible","anomaly".equals(f.optString("kind","anomaly")));
         ContentValues v=new ContentValues();v.put("group_key",key);v.put("kind",f.optString("kind","anomaly"));v.put("rule",f.optString("rule"));v.put("last_event_id",f.optLong("last_event_id"));v.put("first_ms",f.optLong("first_ms"));v.put("last_ms",f.optLong("last_ms"));v.put("occurrences",1);v.put("payload",f.toString());
-        long id=db.insertOrThrow("findings",null,v);f.put("id",id).put("anomaly_id",id);ScreenIntegrityService.findingCommitted(id,f);ScreenIntegrityService.findingsChanged();
+        long id=db.insertOrThrow("findings",null,v);f.put("id",id).put("anomaly_id",id);if("anomaly".equals(f.optString("kind","anomaly")))ScreenIntegrityService.findingCommitted(id,f);ScreenIntegrityService.findingsChanged();
     }
     public synchronized JSONObject finding(long id)throws Exception{
-        try(Cursor c=getReadableDatabase().rawQuery("SELECT payload,first_ms,last_ms,occurrences,reviewed FROM findings WHERE id=?",new String[]{String.valueOf(id)})){if(c.moveToFirst())return new JSONObject(c.getString(0)).put("id",id).put("anomaly_id",id).put("first_ms",c.getLong(1)).put("last_ms",c.getLong(2)).put("occurrences",c.getLong(3)).put("reviewed",c.getInt(4)!=0);}
+        try(Cursor c=getReadableDatabase().rawQuery("SELECT payload,first_ms,last_ms,occurrences,reviewed,group_key,kind FROM findings WHERE id=?",new String[]{String.valueOf(id)})){if(c.moveToFirst())return new JSONObject(c.getString(0)).put("id",id).put("anomaly_id",id).put("first_ms",c.getLong(1)).put("last_ms",c.getLong(2)).put("occurrences",c.getLong(3)).put("reviewed",c.getInt(4)!=0).put("origin",c.getString(5).startsWith("live:")?"LIVE_OBSERVATION":"HISTORICAL_REPLAY").put("overlay_eligible",c.getString(5).startsWith("live:")&&"anomaly".equals(c.getString(6)));}
         throw new IllegalArgumentException("Finding absent");
     }
     synchronized JSONArray alerts()throws Exception{
-        JSONArray rows=new JSONArray();try(Cursor c=getReadableDatabase().rawQuery("SELECT id,payload FROM findings WHERE (group_key LIKE ? OR group_key LIKE 'live:%') AND kind='anomaly' AND reviewed=0 ORDER BY id DESC LIMIT 2",new String[]{settingsJson().optLong("revision")+":%"})){while(c.moveToNext()){JSONObject f=new JSONObject(c.getString(1));rows.put(EventStore.object("id",c.getLong(0),"severity",f.optString("severity"),"title",f.optString("title")));}}return rows;
+        JSONArray rows=new JSONArray();try(Cursor c=getReadableDatabase().rawQuery("SELECT id,payload FROM findings WHERE group_key LIKE 'live:%' AND kind='anomaly' AND reviewed=0 ORDER BY id DESC LIMIT 2",null)){while(c.moveToNext()){JSONObject f=new JSONObject(c.getString(1));rows.put(EventStore.object("id",c.getLong(0),"severity",f.optString("severity"),"title",f.optString("title")));}}return rows;
     }
     synchronized void visual(long id,JSONObject visual)throws Exception{JSONObject f=finding(id);f.put("visual",visual);ContentValues v=new ContentValues();v.put("payload",f.toString());getWritableDatabase().update("findings",v,"id=?",new String[]{String.valueOf(id)});}
     synchronized JSONObject pedigree(JSONObject e,boolean record)throws Exception{
@@ -227,9 +246,9 @@ public final class AnomalyMonitor extends SQLiteOpenHelper {
     public void export(Writer out)throws Exception{
         JSONObject info=summary();info.remove("settings");out.write("{\"schema\":\"journal-local-analysis/1\",\"permission_usage_status\":"+PermissionUsage.get(context).status()+",\"summary\":"+info+",\"settings\":"+settingsJson()+",\"findings\":[");
         SQLiteDatabase db=getReadableDatabase();long ceiling;try(Cursor c=db.rawQuery("SELECT COALESCE(MAX(id),0) FROM findings",null)){c.moveToFirst();ceiling=c.getLong(0);}
-        long after=0;boolean first=true;
-        while(after<ceiling){boolean any=false;try(Cursor c=db.rawQuery("SELECT id,payload,first_ms,last_ms,occurrences,reviewed FROM findings WHERE id>? AND id<=? ORDER BY id LIMIT 100",new String[]{String.valueOf(after),String.valueOf(ceiling)})){
-            while(c.moveToNext()){any=true;after=c.getLong(0);JSONObject row=new JSONObject(c.getString(1));row.put("id",after);row.put("first_ms",c.getLong(2));row.put("last_ms",c.getLong(3));row.put("occurrences",c.getLong(4));row.put("reviewed",c.getInt(5)!=0);JSONArray ids=row.optJSONArray("evidence_ids");if(ids!=null){JSONArray events=EventStore.get(context).evidence(ids);row.put("permission_context",PermissionUsage.anomalyContext(context,events)).put("network_context",NetworkReport.anomalyContext(events));}if(!first)out.write(",");out.write(row.toString());first=false;}
+        long revision=info.optLong("revision");long after=0;boolean first=true;
+        while(after<ceiling){boolean any=false;try(Cursor c=db.rawQuery("SELECT id,payload,first_ms,last_ms,occurrences,reviewed,group_key FROM findings WHERE id>? AND id<=? AND (group_key LIKE ? OR group_key LIKE 'live:%') ORDER BY id LIMIT 100",new String[]{String.valueOf(after),String.valueOf(ceiling),revision+":%"})){
+            while(c.moveToNext()){any=true;after=c.getLong(0);JSONObject row=new JSONObject(c.getString(1));row.put("id",after);row.put("first_ms",c.getLong(2));row.put("last_ms",c.getLong(3));row.put("occurrences",c.getLong(4));row.put("reviewed",c.getInt(5)!=0).put("origin",c.getString(6).startsWith("live:")?"LIVE_OBSERVATION":"HISTORICAL_REPLAY").put("overlay_eligible",c.getString(6).startsWith("live:")&&"anomaly".equals(row.optString("kind")));JSONArray ids=row.optJSONArray("evidence_ids");if(ids!=null){JSONArray events=EventStore.get(context).evidence(ids);row.put("permission_context",PermissionUsage.anomalyContext(context,events)).put("network_context",NetworkReport.anomalyContext(events));}if(!first)out.write(",");out.write(row.toString());first=false;}
         }if(!any)break;}out.write("]}");out.flush();
     }
 }

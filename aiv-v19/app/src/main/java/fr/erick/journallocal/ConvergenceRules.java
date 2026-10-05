@@ -8,6 +8,7 @@ final class ConvergenceRules {
     private final ArrayDeque<JSONObject> recent=new ArrayDeque<>();
     private final LinkedHashSet<String> emitted=new LinkedHashSet<>();
     static JSONObject details(JSONObject e){JSONObject d=e.optJSONObject("details");return d==null?e:d;}
+    static JSONObject frontend(JSONObject e){try{return new JSONObject(details(e).toString()).put("clock_scope_id",e.optString("clock_scope_id"));}catch(JSONException error){throw new IllegalArgumentException("Snapshot frontend invalide",error);}}
     static String actorKey(JSONObject e){
         JSONObject d=details(e),id=d.optJSONObject("app_identity");JSONArray pkgs=d.optJSONArray("packages");int uid=d.optInt("uid",-1);
         if(id==null||uid<0||uid%100000<10000||pkgs==null||pkgs.length()!=1||d.optBoolean("identity_conflict")||id.optInt("uid",-1)!=uid||!pkgs.optString(0).equals(id.optString("package_name"))||id.optString("app_identity_id").isEmpty()||id.optJSONArray("current_signer_sha256")==null||id.optJSONArray("current_signer_sha256").length()==0||id.optLong("first_install_ms")<=0||id.optLong("version_code",-1)<0||id.has("network_attribution_unique")&&!id.optBoolean("network_attribution_unique"))return "";
@@ -18,6 +19,13 @@ final class ConvergenceRules {
         return !scope.isEmpty()&&scope.equals(b.optString("clock_scope_id"))&&x>=0&&y>=0?x-y:Long.MAX_VALUE;
     }
     static boolean sameNear(JSONObject a,JSONObject b,long window){String k=actorKey(a);long d=delta(a,b);return !k.isEmpty()&&k.equals(actorKey(b))&&d!=Long.MAX_VALUE&&Math.abs(d)<=window;}
+    JSONObject interactionFor(JSONObject event){
+        for(Iterator<JSONObject> it=recent.descendingIterator();it.hasNext();){JSONObject click=it.next();JSONObject d=details(click);long age=delta(event,click);
+            if(!"frontend".equals(click.optString("category"))||!"CLICK".equals(d.optString("event_kind"))||!"EVENT_NODE".equals(d.optString("element_source"))||age<0||age>3000||!sameNear(event,click,3000))continue;
+            JSONObject element=d.optJSONObject("element");JSONArray b=element==null?null:element.optJSONArray("bounds");
+            if(b!=null&&b.length()==4&&element.optBoolean("visible")&&b.optInt(2)>b.optInt(0)&&b.optInt(3)>b.optInt(1))return click;
+        }return null;
+    }
     static JSONObject profile(JSONObject e,boolean known,boolean official){
         JSONObject d=details(e);String host=AnomalyRules.domain(d.optString("tls_sni"));boolean dns="dns".equals(e.optString("category"));
         if(dns)host=AnomalyRules.domain(d.optString("question"));String owner=actorKey(e);boolean outer=d.optBoolean("ech_extension_present");
@@ -62,7 +70,7 @@ final class ConvergenceRules {
         String key=rule+":"+click.optLong("id")+":"+(op==null?event.optLong("id"):details(op).optString("usage_observation_id"));if(!emitted.add(key))return;while(emitted.size()>512)emitted.remove(emitted.iterator().next());
         JSONArray timeline=new JSONArray();List<JSONObject> ordered=new ArrayList<>(Arrays.asList(click,event));if(op!=null)ordered.add(op);ordered.sort(Comparator.comparingLong(e->e.optLong("elapsed_ms")));
         JSONArray ids=new JSONArray();for(JSONObject e:ordered){ids.put(e.optLong("id"));timeline.put(EventStore.object("event_id",e.optLong("id"),"wall_ms",e.optLong("timestamp_ms"),"elapsed_ms",e.optLong("elapsed_ms"),"clock_scope_id",e.optString("clock_scope_id"),"source",e.optString("source"),"action",e.optString("action")));}
-        JSONObject d=details(click);String correlation=java.util.UUID.randomUUID().toString();
+        JSONObject d=frontend(click);String correlation=java.util.UUID.randomUUID().toString();
         result.add(EventStore.object("group_key","live:"+key,"rule",rule,"kind","anomaly","category","APPLICATION_BEHAVIOR","severity","attention","title",title,"actor",click.optString("app"),"subject",event.optString("destination"),"explanation",explanation,"correlation_id",correlation,"evidence_ids",ids,"identity",EventStore.object("app",click.optString("app"),"details",d),"frontend",d,"appops",op==null?JSONObject.NULL:details(op),"network",details(event),"timeline",timeline,"conclusion",EventStore.object("established",new JSONArray().put("Observations Android conservées dans les événements sources"),"correlated",new JSONArray().put("Proximité sur la même horloge monotone; identité vérifiée pour le rapprochement AppOps/réseau"),"unknown",new JSONArray().put("Contenu transmis").put("Causalité du clic").put("Livraison à une application derrière un service"),"confidence","OBSERVED_AND_TEMPORALLY_CORRELATED"),"visual",EventStore.object("status","SEMANTIC_ONLY","comparison_confirmed",false),"first_ms",click.optLong("timestamp_ms"),"last_ms",event.optLong("timestamp_ms"),"last_event_id",event.optLong("id")));
     }
 }
