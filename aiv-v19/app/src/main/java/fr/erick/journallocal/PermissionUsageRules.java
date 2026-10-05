@@ -35,6 +35,7 @@ final class PermissionUsageRules {
         OPERATIONS.put("READ_CLIPBOARD",new Operation("","Lecture du presse-papiers"));
     }
     private static void op(String name,String permission,String label){OPERATIONS.put(name,new Operation("android.permission."+permission,label));}
+    static Operation operation(String name){Operation op=OPERATIONS.get(name);return op!=null?op:new Operation("","AppOps · "+name);}
     static final class Entry {
         int uid,proxyUid=-1;String pkg,op,tag="",key="",kind,proxyPackage="",mode="",source="DUMPSYS_APPOPS";
         long at,end,runningSince,durationMs=-1,uncertaintyMs;boolean running;
@@ -124,13 +125,15 @@ final class PermissionUsageRules {
             String op=m.group(1).toUpperCase(Locale.ROOT);
             boolean modeOnly=m.group(3).trim().isEmpty()&&Arrays.asList("allow","ignore","deny","default","foreground","errored","ask").contains(m.group(2));
             if(modeOnly){out.recognized=true;continue;}
-            if(uidMode||!OPERATIONS.containsKey(op)){unknown(out,s);continue;}
-            out.recognized=true;
+            if(uidMode){unknown(out,s);continue;}
             String tail=m.group(3);Matcher a=time.matcher(tail),r=reject.matcher(tail);
-            boolean access=false;
+            boolean access=false,rejected=false,running=tail.contains("running=true")||tail.contains("(running)");
             if(a.find()){access=true;relative(out,pkg,uid,op,tag,m.group(2),"ACCESS",a.group(1),tail,captured);}
-            if(r.find())relative(out,pkg,uid,op,tag,m.group(2),"REJECT",r.group(1),tail,captured);
-            if(!access&&(tail.contains("running=true")||tail.contains("(running)"))){Entry e=new Entry();e.source="CMD_APPOPS_GET";e.pkg=pkg;e.uid=uid;e.op=op;e.tag=tag;e.mode=m.group(2);e.kind="ACCESS";e.key="RUNNING";e.at=captured;e.end=captured;e.runningSince=captured;e.running=true;out.entries.add(e);}
+            if(r.find()){rejected=true;relative(out,pkg,uid,op,tag,m.group(2),"REJECT",r.group(1),tail,captured);}
+            if(!access&&running){Entry e=new Entry();e.source="CMD_APPOPS_GET";e.pkg=pkg;e.uid=uid;e.op=op;e.tag=tag;e.mode=m.group(2);e.kind="ACCESS";e.key="RUNNING";e.at=captured;e.end=captured;e.runningSince=captured;e.running=true;out.entries.add(e);}
+            if(OPERATIONS.containsKey(op)||access||rejected||running)out.recognized=true;
+            else{unknown(out,s);continue;}
+            // A syntactically valid AppOps row can be evidence even when AIV has no Android permission mapping for that op.
             // Mode-only rows intentionally produce no access observation.
         }
         return out;
