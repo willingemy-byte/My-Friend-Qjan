@@ -36,6 +36,7 @@ public final class WatcherService extends Service {
             }else if(analysisActive){
                 if(cycle++%2==0){int n=new MainEngine(WatcherService.this).drain(WorkBudget.EVENTS,budget(WorkBudget.EVENTS));operation=n>0?"Analyse progressive : "+n+" événements traités":"Analyse AIV : en attente d’événements";}
                 else{AivStats.advance(db,budget(WorkBudget.STATS_ROWS));operation="Analyse AIV : statistiques progressives";}
+                JournalPurge.request(WatcherService.this);
                 AivStore.error="";
             }
         }catch(CancellationException e){return;}
