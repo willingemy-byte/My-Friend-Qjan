@@ -59,7 +59,8 @@ public final class ArchiveSync {
                 int failures=Math.min(6,saved.getInt("failures",0)+1);
                 delay=Math.min(RETRY_MAX_MS,RETRY_MIN_MS*(1L<<(failures-1)));
                 saved.edit().putString("last_error",lastError).putInt("failures",failures).putLong("next_attempt_ms",System.currentTimeMillis()+delay).commit();
-                try{EventStore.get(app).getWritableDatabase().execSQL("UPDATE journal_archive_state SET remote_state='PENDING',error=? WHERE segment=? AND remote_state!='VERIFIED'",new Object[]{lastError,currentSegment});}catch(Exception ignored){}
+                String failureState="VERIFY".equals(phase)||"FINALIZE".equals(phase)?"VERIFY_FAILED":"UPLOAD_FAILED";
+                try{EventStore.get(app).getWritableDatabase().execSQL("UPDATE journal_archive_state SET remote_state=?,error=? WHERE segment=? AND remote_state!='VERIFIED'",new Object[]{failureState,lastError,currentSegment});}catch(Exception ignored){}
             }finally{
                 phase=lastError.isEmpty()?"IDLE":"RETRY";
                 running.set(false);
@@ -167,7 +168,7 @@ public final class ArchiveSync {
                 phase="UPLOAD";uploadEvents(db,identity,s,through,transport);
             }
 
-            phase="VERIFY";
+            phase="FINALIZE";
             JSONObject finalizeReply=transport.send(identity,EventStore.object(
                 "schema","aiv-journal/1",
                 "action","finalize",
