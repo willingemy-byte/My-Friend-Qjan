@@ -67,6 +67,7 @@ public final class ArchiveSync {
                 // One segment per pass. Retry also works when collection is paused.
                 try{
                     if(nextSegment(EventStore.get(app).getReadableDatabase())!=null){
+                        ArchiveReconcileJob.schedule(app);
                         long wait=delay==0?1000:delay;
                         new Handler(Looper.getMainLooper()).postDelayed(()->requestAutomatic(app),wait);
                     }
