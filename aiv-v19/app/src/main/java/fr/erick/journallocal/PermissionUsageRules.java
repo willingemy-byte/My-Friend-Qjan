@@ -122,7 +122,8 @@ final class PermissionUsageRules {
             if(s.startsWith("Attribution tag:")){tag=s.substring(16).trim();continue;}
             Matcher m=row.matcher(s);if(!m.matches()){unknown(out,s);continue;}
             String op=m.group(1).toUpperCase(Locale.ROOT);
-            boolean modeOnly=m.group(3).trim().isEmpty()&&Arrays.asList("allow","ignore","deny","default","foreground","errored","ask").contains(m.group(2));\n            if(modeOnly){out.recognized=true;continue;}
+            boolean modeOnly=m.group(3).trim().isEmpty()&&Arrays.asList("allow","ignore","deny","default","foreground","errored","ask").contains(m.group(2));
+            if(modeOnly){out.recognized=true;continue;}
             if(uidMode||!OPERATIONS.containsKey(op)){unknown(out,s);continue;}
             out.recognized=true;
             String tail=m.group(3);Matcher a=time.matcher(tail),r=reject.matcher(tail);
