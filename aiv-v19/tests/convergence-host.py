@@ -90,6 +90,6 @@ with tempfile.TemporaryDirectory() as folder:
  for name,body in stubs.items():
   p=src/name;p.parent.mkdir(parents=True,exist_ok=True);p.write_text(body)
  (src/'fr/erick/journallocal/ConvergenceProbe.java').write_text(probe)
- files=list(src.rglob('*.java'))+[JAVA/(n+'.java') for n in ('AivConfig','TrackerMatcher','AnomalyRules','ConvergenceRules','AnomalyMonitor','EndpointContextRules','OverlayRules','VisualEvidencePolicy')]
+ files=list(src.rglob('*.java'))+[JAVA/(n+'.java') for n in ('AivConfig','TrackerMatcher','AnomalyRules','WatcherContextRules','ConvergenceRules','AnomalyMonitor','EndpointContextRules','OverlayRules','VisualEvidencePolicy')]
  subprocess.run(['javac','-encoding','UTF-8','-cp',cp,'-d',str(classes),*map(str,files)],check=True,timeout=40)
  subprocess.run(['java','-cp',str(classes)+os.pathsep+cp,'fr.erick.journallocal.ConvergenceProbe',str(root/'data')],check=True,timeout=40)
