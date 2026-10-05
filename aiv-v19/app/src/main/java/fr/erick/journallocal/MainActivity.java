@@ -745,7 +745,12 @@ public final class MainActivity extends Activity {
             addTableRow(table,new String[]{"Watcher",aiv.optBoolean("watcher_running")?"ACTIF":"INACTIF",
                 aiv.optString("operation","—")+" · retard "+Math.max(0,latest-checkpoint)+" événement(s)"},null,widths,0,null,null,v->showJsonDetail("Watcher · état AIV",aiv,null));
             addTableRow(table,new String[]{"Intégrité chaîne",aiv.optString("verification","NOT_CHECKED"),
-                "Checkpoint "+checkpoint+" / événement "+latest},null,widths,0,null,null,v->new Thread(()->{try{JSONObject verified=AivStore.verify(this);main.post(()->showJsonDetail("Watcher · intégrité",verified,null));}catch(Exception e){main.post(()->toast("Vérification : "+e.getMessage()));}},"aiv-verify-ui").start()));
+                "Checkpoint "+checkpoint+" / événement "+latest},null,widths,0,null,null,v->{
+                    new Thread(()->{
+                        try{JSONObject verified=AivStore.verify(this);main.post(()->showJsonDetail("Watcher · intégrité",verified,null));}
+                        catch(Exception e){main.post(()->toast("Vérification : "+e.getMessage()));}
+                    },"aiv-verify-ui").start();
+                });
             addTableRow(table,new String[]{"AnomalyMonitor",anomalies.optBoolean("busy")?"ANALYSE":"PRÊT",
                 anomalies.optLong("anomalies")+" anomalie(s) · "+anomalies.optLong("coverage_findings")+" couverture · pending "+anomalies.optLong("pending_live")+" · dropped "+anomalies.optLong("dropped_live")},null,widths,0,null,null,v->showJsonDetail("Watcher · anomalies",anomalies,null));
             addTableRow(table,new String[]{"AppOps",appops.optString("state","—"),
