@@ -127,7 +127,7 @@ final class PermissionUsage extends SQLiteOpenHelper {
         try(Cursor c=db.rawQuery("SELECT at_ms,end_ms FROM seen WHERE dimension=?",new String[]{dimension})){if(c.moveToFirst()){oldAt=c.getLong(0);oldEnd=c.getLong(1);}}
         if(e.at<=oldAt&&e.end<=oldEnd)return;
         if(PermissionUsageRules.fresh(e,oldAt,oldEnd,baseline)){
-            PermissionUsageRules.Operation op=PermissionUsageRules.OPERATIONS.get(e.op);
+            PermissionUsageRules.Operation op=PermissionUsageRules.operation(e.op);
             String token=java.util.UUID.randomUUID().toString();
             JSONObject observation=EventStore.object("schema","aiv-permission-usage/1","usage_observation_id",token,"uid",e.uid,"packages",new JSONArray().put(e.pkg),"package_name",e.pkg,"app_identity",identity,"first_install_ms",installed,"uid_packages",peers==null?new JSONArray():new JSONArray(Arrays.asList(peers)),"operation",e.op,"permission",op.permission,"label",op.label,"access_result",e.kind,"access_ms",e.at,"access_end_ms",e.end,"running",e.running,"captured_ms",captured,"attribution_tag",e.tag.isEmpty()||"null".equals(e.tag)?JSONObject.NULL:e.tag,"appops_key",e.key,"source","Android AppOps / "+e.source+" (Shizuku, lecture seule)","scope",SCOPE,"content_observed",false,"sent_content_observed",false);
             long ageAt=captured-(e.running?e.runningSince:e.at),ageEnd=captured-e.end;
