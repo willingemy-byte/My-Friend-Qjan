@@ -49,6 +49,7 @@ public final class MainActivity extends Activity {
     private static final int JSONL_EXPORT_REQUEST=1207,SQLITE_EXPORT_REQUEST=1208;
     private static final int ANALYSIS_EXPORT_REQUEST=1204;
     private static final int NETWORK_REPORT_REQUEST=1209;
+    private static final int WATCHER_EXPORT_REQUEST=1210;
     private static final int SHIZUKU_PERMISSION_REQUEST=1205;
     private static final int PERMISSION_EXPORT_REQUEST=1206;
     private static final int BG=0xff04102f;
@@ -770,6 +771,25 @@ public final class MainActivity extends Activity {
             page.addView(sectionTitle("A1 → A5 · lecture des autorisations"));
             String[][] levels={{"A1","Visible dans les autorisations"},{"A2","Visible dans Toutes les autorisations"},{"A3","Action possible sans intervention immédiate"},{"A4","Avertissement de vigilance Android / AOSP"},{"A5","Portée système ou inter-applications"}};
             for(int i=0;i<levels.length;i++)page.addView(card(levels[i][0],levels[i][1]+" · classement calculé depuis l’inventaire et les références; ce niveau ne prouve pas l’usage effectif."));
+
+            page.addView(sectionTitle("Ce que Watcher voit"));
+            JSONObject watcherRows=AnomalyMonitor.get(this).page("trace",false,0,30,"watcher-context");
+            JSONArray watcherList=watcherRows.optJSONArray("rows");
+            String[] wh={"Heure","Application","État","Observation","Écart","Ouvrir"};int[] ww={150,180,190,280,120,100};
+            TableLayout watcherTable=dataTable(wh,ww);
+            if(watcherList!=null)for(int i=0;i<watcherList.length();i++){
+                JSONObject row=watcherList.optJSONObject(i);if(row==null)continue;
+                JSONObject facts=row.optJSONObject("facts");
+                String state=facts==null?"—":facts.optString("watcher_state","—");
+                Object delta=facts==null?null:facts.opt("delta_ms");
+                String deltaText=delta==null||JSONObject.NULL.equals(delta)?"—":String.valueOf(delta)+" ms";
+                long findingId=row.optLong("id");
+                addTableRow(watcherTable,new String[]{shortTime(row.optLong("last_ms")),row.optString("actor","—"),state,row.optString("subject",row.optString("title","—")),deltaText,"Détail"},
+                    null,ww,0,null,null,v->{try{showJsonDetail("Watcher · corrélation #"+findingId,AnomalyMonitor.get(this).finding(findingId),null);}catch(Exception e){toast("Corrélation indisponible");}});
+            }
+            page.addView(tableScroller(watcherTable));
+            page.addView(note("USER_CORROBORATED = le backend et une interaction du même acteur concordent sur l’horloge monotone. UNEXPLAINED = accès observé sans contexte utilisateur correspondant. CONTRADICTORY = interaction proche dans une autre application pour une opération sensible. UNKNOWN = preuve temporelle insuffisante."));
+            page.addView(action("Exporter le rapport Watcher",v->beginWatcherExport()));
 
             page.addView(sectionTitle("R1 → R6 · règles du MainEngine"));
             JSONArray rules=aiv.optJSONArray("rules");
@@ -1535,6 +1555,16 @@ public final class MainActivity extends Activity {
         }catch(Exception e){toast("Export indisponible : "+e.getClass().getSimpleName());}
     }
 
+    private void beginWatcherExport(){
+        try{
+            Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);
+            i.addCategory(Intent.CATEGORY_OPENABLE);
+            i.setType("application/json");
+            i.putExtra(Intent.EXTRA_TITLE,"AIV-watcher-"+System.currentTimeMillis()+".json");
+            startActivityForResult(i,WATCHER_EXPORT_REQUEST);
+        }catch(Exception e){toast("Export Watcher indisponible : "+e.getClass().getSimpleName());}
+    }
+
     private void beginAnalysisExport(){
         try{
             Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);
@@ -1556,6 +1586,18 @@ public final class MainActivity extends Activity {
             try{java.io.File ready=ExportFiles.stage(this,writer->TrackerIndex.get(this).exportReport(writer));String result=ExportFiles.copy(this,ready,destination);main.post(()->showDetail("Rapport des échanges",result,null,null));}
             catch(Exception e){main.post(()->showDetail("Rapport des échanges","Échec : "+e.getClass().getSimpleName()+" · "+String.valueOf(e.getMessage()),null,null));}
         },"aiv-network-report-export").start();
+    }
+
+    private void exportWatcherTo(Uri destination){
+        new Thread(()->{
+            try{
+                java.io.File ready=ExportFiles.stage(this,writer->AnomalyMonitor.get(this).exportWatcher(writer));
+                String result=ExportFiles.copy(this,ready,destination);
+                main.post(()->toast(result));
+            }catch(Exception e){
+                main.post(()->showDetail("Export Watcher","Échec : "+e.getClass().getSimpleName()+" · "+String.valueOf(e.getMessage()),null,null));
+            }
+        },"aiv-watcher-export").start();
     }
 
     private void exportAnalysisTo(Uri destination){
@@ -1593,6 +1635,8 @@ public final class MainActivity extends Activity {
             exportAnalysisTo(data.getData());
         }else if(requestCode==NETWORK_REPORT_REQUEST&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){
             exportNetworkReportTo(data.getData());
+        }else if(requestCode==WATCHER_EXPORT_REQUEST&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){
+            exportWatcherTo(data.getData());
         }else if(requestCode==PERMISSION_EXPORT_REQUEST&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){
             exportPermissionsTo(data.getData());
         }
