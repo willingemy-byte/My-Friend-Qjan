@@ -55,7 +55,8 @@ public final class AivStore {
         try(Cursor c=db.rawQuery("SELECT * FROM events WHERE id=?",new String[]{""+eventId})){if(c.moveToFirst())event=row(c);}
         try(Cursor c=db.rawQuery("SELECT * FROM decisions WHERE event_id=?",new String[]{""+eventId})){if(c.moveToFirst())decision=row(c);}
         try(Cursor c=db.rawQuery("SELECT * FROM journal_chain WHERE event_id=? ORDER BY id",new String[]{""+eventId})){while(c.moveToNext())chain.put(row(c));}
-        return EventStore.object("event",event==null?JSONObject.NULL:event,"decision",decision==null?JSONObject.NULL:decision,"chain",chain,"verification",verification,"signature_scope","Aucune signature individuelle; export signé séparément");
+        JSONObject archived=event==null?JournalPurge.receiptForEvent(ctx,eventId):null;
+        return EventStore.object("event",event==null?JSONObject.NULL:event,"decision",decision==null?JSONObject.NULL:decision,"chain",chain,"archive_receipt",archived==null?JSONObject.NULL:archived,"verification",verification,"signature_scope","Aucune signature individuelle; export signé séparément");
     }
     public static JSONObject summary(Context ctx)throws Exception{
         SQLiteDatabase db=EventStore.get(ctx).getReadableDatabase();JSONArray apps=new JSONArray(),sources=new JSONArray(),rules=new JSONArray();
@@ -70,8 +71,9 @@ public final class AivStore {
     /** Full check in one snapshot. Never repair or reseal a broken chain. */
     public static JSONObject verify(Context ctx)throws Exception{
         SQLiteDatabase db=EventStore.get(ctx).getWritableDatabase();db.beginTransaction();try{
-            long n=0;String prev=ChainStore.GENESIS;String failure="";
-            try(Cursor c=db.rawQuery("SELECT * FROM journal_chain ORDER BY id",null)){while(c.moveToNext()){
+            JSONObject anchor=JournalPurge.anchor(db);long anchorCount=anchor.optLong("chain_count",0);
+            long n=anchorCount;String prev=anchor.optString("chain_head",ChainStore.GENESIS);String failure="";
+            try(Cursor c=db.rawQuery("SELECT * FROM journal_chain WHERE id>? ORDER BY id",new String[]{String.valueOf(anchorCount)})){while(c.moveToNext()){
                 JSONObject r=row(c);long seq=r.getLong("id"),eventId=r.getLong("event_id"),ts=r.getLong("timestamp_ms");String p=r.getString("payload");
                 if(seq!=++n||!prev.equals(r.getString("hash_prev"))||!ChainStore.hash(prev,p,ts,seq).equals(r.getString("hash_self"))){failure="Chaîne altérée à "+seq;break;}
                 String expected=null,projectionPrev=null,projectionSelf=null;
@@ -81,9 +83,12 @@ public final class AivStore {
                 try(Cursor e=db.rawQuery("SELECT hash_prev,hash_self FROM "+table+" WHERE "+(table.equals("events")?"id":"event_id")+"=?",new String[]{""+eventId})){if(e.moveToFirst()){projectionPrev=e.getString(0);projectionSelf=e.getString(1);}}
                 if(!p.equals(expected)||!prev.equals(projectionPrev)||!r.getString("hash_self").equals(projectionSelf)){failure="Projection altérée à "+seq;break;}prev=r.getString("hash_self");
             }}
-            try(Cursor c=db.rawQuery("SELECT chain_count,chain_head,checkpoint FROM aiv_state WHERE id=1",null)){c.moveToFirst();if(failure.isEmpty()&&(n!=c.getLong(0)||!prev.equals(c.getString(1))||number(db,"SELECT COUNT(*) FROM decisions")*2!=n||number(db,"SELECT COUNT(*) FROM events WHERE id<="+c.getLong(2))*2!=n))failure="Tête, cardinalité ou reprise incohérente";}
+            try(Cursor c=db.rawQuery("SELECT chain_count,chain_head,checkpoint FROM aiv_state WHERE id=1",null)){
+                c.moveToFirst();long total=c.getLong(0),events=number(db,"SELECT COUNT(*) FROM events WHERE id<="+c.getLong(2)),decisions=number(db,"SELECT COUNT(*) FROM decisions");
+                if(failure.isEmpty()&&(n!=total||!prev.equals(c.getString(1))||events!=decisions||events+decisions!=total-anchorCount))failure="Tête, cardinalité ou reprise incohérente";
+            }
             verification=failure.isEmpty()?"VALID_AT_"+n:"BROKEN: "+failure;
-            return EventStore.object("valid",failure.isEmpty(),"count",n,"head",prev,"status",verification,"scope","Cohérence locale; comparer à une tête signée conservée séparément pour détecter une réécriture ou troncature complète");
+            return EventStore.object("valid",failure.isEmpty(),"count",n,"head",prev,"status",verification,"archived_prefix_chain_count",anchorCount,"archived_through_event_id",anchor.optLong("last_event_id",0),"scope","Cohérence locale vérifiée depuis l’ancre du préfixe archivé; les reçus Supabase VERIFIED conservent la preuve de purge des segments précédents.");
         }finally{db.endTransaction();}
     }
 }
