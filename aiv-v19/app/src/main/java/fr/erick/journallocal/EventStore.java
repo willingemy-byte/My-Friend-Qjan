@@ -36,7 +36,7 @@ public final class EventStore extends SQLiteOpenHelper {
     private volatile JSONObject transparencyCache=null;
     @Override public void onOpen(SQLiteDatabase db){
         super.onOpen(db);
-        AivStore.install(context,db);JournalSegments.install(db);
+        AivStore.install(context,db);JournalSegments.install(db);JournalPurge.install(db);
         db.execSQL("CREATE TABLE IF NOT EXISTS event_audit(event_id INTEGER PRIMARY KEY, package_name TEXT, uid INTEGER)");
         db.execSQL("CREATE INDEX IF NOT EXISTS event_audit_package ON event_audit(package_name,event_id)");
         db.execSQL("CREATE TABLE IF NOT EXISTS audit_appmap(package_name TEXT PRIMARY KEY, system_app INTEGER)");
