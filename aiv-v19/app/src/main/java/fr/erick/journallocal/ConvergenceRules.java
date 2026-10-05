@@ -53,6 +53,23 @@ final class ConvergenceRules {
                 }
             }
         }
+        if("acces".equals(category)){
+            JSONObject od=details(event);String operation=od.optString("operation");
+            if("ACCESS".equals(od.optString("access_result"))&&WatcherContextRules.sensitive(operation)){
+                JSONObject nearest=null;long nearestAbs=Long.MAX_VALUE;boolean sameActor=false,userInteraction=false,sameClock=false;
+                for(Iterator<JSONObject> it=recent.descendingIterator();it.hasNext();){
+                    JSONObject front=it.next();if(!"frontend".equals(front.optString("category")))continue;
+                    long d=delta(event,front);if(d==Long.MAX_VALUE||Math.abs(d)>5000)continue;
+                    JSONObject fd=details(front);String kind=fd.optString("event_kind");
+                    boolean interaction=WatcherContextRules.userEvent(kind);
+                    if(!interaction&&!"WINDOW_CHANGE".equals(kind)&&!"PACKAGE_CHANGE".equals(kind))continue;
+                    long abs=Math.abs(d);if(abs<nearestAbs){nearest=front;nearestAbs=abs;sameClock=true;userInteraction=interaction;sameActor=!actorKey(event).isEmpty()&&actorKey(event).equals(actorKey(front));}
+                }
+                WatcherContextRules.State state=WatcherContextRules.classify(operation,sameClock,nearest!=null,sameActor,userInteraction);
+                emitWatcher(found,event,nearest,state,operation);
+            }
+        }
+
         // Do not report a mere permission grant, a rejection, or an unidentified/shared socket.
         for(JSONObject network:recent){if(!"trafic".equals(network.optString("category"))||actorKey(network).isEmpty())continue;
             JSONObject nd=details(network);if(!nd.optBoolean("outbound_observed")&&!nd.optBoolean("inbound_observed"))continue;
@@ -66,6 +83,62 @@ final class ConvergenceRules {
         }
         return found;
     }
+    private void emitWatcher(List<JSONObject> result,JSONObject access,JSONObject frontend,WatcherContextRules.State state,String operation){
+        JSONObject ad=details(access),fd=frontend==null?null:details(frontend);
+        long delta=frontend==null?Long.MAX_VALUE:delta(access,frontend);
+        String actor=access.optString("app"),title,explanation,severity="information",kind="trace";
+        switch(state){
+            case USER_CORROBORATED:
+                title="Action utilisateur corroborée";
+                explanation=ad.optString("label",operation)+" est observé pour "+actor+" près d’une interaction du même acteur sur la même horloge monotone.";
+                break;
+            case CONTRADICTORY:
+                title="Action backend incohérente avec l’écran";
+                explanation=ad.optString("label",operation)+" est observé pour "+actor+" alors qu’une interaction utilisateur proche concerne une autre application.";
+                severity="attention";kind="anomaly";break;
+            case UNEXPLAINED:
+                title="Action backend non expliquée";
+                explanation=ad.optString("label",operation)+" est observé sans interaction utilisateur correspondante dans la fenêtre de corrélation.";
+                severity="attention";break;
+            case UNKNOWN:
+                title="Contexte utilisateur inconnu";
+                explanation=ad.optString("label",operation)+" est observé mais l’horloge ou le contexte frontend ne permet pas une corrélation fiable.";
+                break;
+            default:
+                title="Action backend attendue";
+                explanation=ad.optString("label",operation)+" est observé sans exigence d’interaction utilisateur explicite.";
+        }
+        JSONArray ids=new JSONArray().put(access.optLong("id"));if(frontend!=null)ids.put(frontend.optLong("id"));
+        JSONObject facts=EventStore.object(
+            "operation",operation,
+            "watcher_state",state.name(),
+            "same_actor",frontend!=null&&!actorKey(access).isEmpty()&&actorKey(access).equals(actorKey(frontend)),
+            "frontend_event_kind",fd==null?JSONObject.NULL:fd.optString("event_kind"),
+            "delta_ms",delta==Long.MAX_VALUE?JSONObject.NULL:delta,
+            "time_basis","ANDROID_MONOTONIC",
+            "content_observed",ad.optBoolean("content_observed",false),
+            "sent_content_observed",ad.optBoolean("sent_content_observed",false)
+        );
+        String key="watcher:"+operation+":"+access.optLong("id");
+        JSONObject out=EventStore.object(
+            "group_key","live:"+key,"rule","watcher-context","kind",kind,"category","WATCHER_DECISION","severity",severity,
+            "title",title,"actor",actor,"subject",ad.optString("label",operation),"explanation",explanation,
+            "advice",state==WatcherContextRules.State.CONTRADICTORY?"Examiner le contexte frontend et l’accès AppOps avant toute action.":"Aucune action automatique; conserver la corrélation comme preuve.",
+            "facts",facts,"evidence_ids",ids,"first_ms",frontend==null?access.optLong("timestamp_ms"):Math.min(frontend.optLong("timestamp_ms"),access.optLong("timestamp_ms")),
+            "last_ms",access.optLong("timestamp_ms"),"last_event_id",access.optLong("id"),
+            "conclusion",EventStore.object("established",new JSONArray().put("Accès AppOps observé"),"correlated",frontend==null?new JSONArray():new JSONArray().put("Événement frontend rapproché sur horloge monotone"),"unknown",new JSONArray().put("Contenu de l’accès").put("Causalité fonctionnelle exacte"),"confidence",frontend==null?"OBSERVED_ONLY":"OBSERVED_AND_TEMPORALLY_CORRELATED")
+        );
+        if(frontend!=null)out.put("frontend",frontend(access,frontend)).put("timeline",new JSONArray()
+            .put(EventStore.object("event_id",frontend.optLong("id"),"elapsed_ms",frontend.optLong("elapsed_ms"),"action",frontend.optString("action"),"source",frontend.optString("source")))
+            .put(EventStore.object("event_id",access.optLong("id"),"elapsed_ms",access.optLong("elapsed_ms"),"action",access.optString("action"),"source",access.optString("source"))));
+        result.add(out);
+    }
+
+    private static JSONObject frontend(JSONObject access,JSONObject front){
+        try{return new JSONObject(details(front).toString()).put("clock_scope_id",front.optString("clock_scope_id")).put("relation","TEMPORAL_CONTEXT").put("delta_ms",delta(access,front));}
+        catch(Exception e){return new JSONObject();}
+    }
+
     private void emit(List<JSONObject> result,String rule,JSONObject click,JSONObject event,JSONObject op,String title,String explanation){
         String key=rule+":"+click.optLong("id")+":"+(op==null?event.optLong("id"):details(op).optString("usage_observation_id"));if(!emitted.add(key))return;while(emitted.size()>512)emitted.remove(emitted.iterator().next());
         JSONArray timeline=new JSONArray();List<JSONObject> ordered=new ArrayList<>(Arrays.asList(click,event));if(op!=null)ordered.add(op);ordered.sort(Comparator.comparingLong(e->e.optLong("elapsed_ms")));
