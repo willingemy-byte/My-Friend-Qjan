@@ -179,12 +179,12 @@ public final class ArchiveSync {
             markVerified(context,db,s,manifest,finalizeReply);
     }
     private static void requireReceipt(JSONObject reply,Segment s,String manifest)throws IOException{
-        if(!"VERIFIED".equals(reply.optString("state"))
-            ||reply.optLong("received_count",-1)!=s.count
-            ||!manifest.equalsIgnoreCase(reply.optString("server_segment_sha256"))
-            ||reply.optLong("first_event_id",-1)!=s.firstId
-            ||reply.optLong("last_event_id",-1)!=s.lastId)
-            throw new IOException("Reçu distant incomplet, plage ou SHA différent pour segment "+s.segment);
+        String mismatch=ArchiveReceiptRules.mismatch(
+            reply.optString("state"),reply.optLong("received_count",-1),s.count,
+            reply.optString("server_segment_sha256",null),manifest,
+            reply.optLong("first_event_id",-1),s.firstId,
+            reply.optLong("last_event_id",-1),s.lastId);
+        if(!mismatch.isEmpty())throw new IOException("Reçu distant invalide ("+mismatch+") pour segment "+s.segment);
     }
 
     private static Segment nextSegment(SQLiteDatabase db){
