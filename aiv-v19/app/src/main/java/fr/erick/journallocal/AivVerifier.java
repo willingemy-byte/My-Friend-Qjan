@@ -5,13 +5,18 @@ import org.json.JSONObject;
 
 /** Checks an immutable captured prefix in bounded pages without a writer transaction. */
 public final class AivVerifier {
-    private final long checkpoint,ceiling,decisionCeiling;private final String head;
-    private long at;private String previous=ChainStore.GENESIS,failure="";private boolean done;
+    private final long checkpoint,ceiling,decisionCeiling,anchorCount;private final String head;
+    private long at;private String previous,failure="";private boolean done;
     public AivVerifier(SQLiteDatabase db){
         try(Cursor c=db.rawQuery(AivQueries.PROGRESS,null)){
             if(!c.moveToFirst())throw new IllegalStateException("État AIV absent");
             checkpoint=c.getLong(0);ceiling=c.getLong(1);head=c.getString(2);decisionCeiling=c.getLong(4);
-        }publish();
+        }
+        org.json.JSONObject anchor=JournalPurge.anchor(db);
+        anchorCount=anchor.optLong("chain_count",0);
+        at=anchorCount;
+        previous=anchor.optString("chain_head",ChainStore.GENESIS);
+        publish();
     }
     private void broken(String message){failure=message;done=true;}
     private void publish(){AivStore.verification=done?(failure.isEmpty()?"VALID_AT_"+at:"BROKEN: "+failure):"VERIFYING_"+at+"_OF_"+ceiling;}
@@ -36,9 +41,10 @@ public final class AivVerifier {
         if(!done&&at==ceiling){
             long events=count(db,AivQueries.COUNT_SEALED_EVENTS,checkpoint);budget.checkCancelled();
             long decisions=count(db,AivQueries.COUNT_SNAPSHOT_DECISIONS,decisionCeiling);budget.checkCancelled();
-            if(!previous.equals(head)||events*2!=ceiling||decisions*2!=ceiling)broken("Tête, cardinalité ou reprise incohérente");else done=true;
+            long remaining=ceiling-anchorCount;
+            if(!previous.equals(head)||events!=decisions||events+decisions!=remaining)broken("Tête, cardinalité ou reprise incohérente");else done=true;
         }publish();return done;
     }
     public long processed(){return at;}public long total(){return ceiling;}public boolean valid(){return done&&failure.isEmpty();}
-    public JSONObject result(){return EventStore.object("valid",valid(),"count",at,"head",previous,"status",done?(valid()?"VALID_AT_"+at:"BROKEN: "+failure):"VERIFYING_"+at+"_OF_"+ceiling,"scope","Préfixe local capturé; comparer à une tête signée conservée séparément pour détecter une réécriture ou troncature complète");}
+    public JSONObject result(){return EventStore.object("valid",valid(),"count",at,"head",previous,"status",done?(valid()?"VALID_AT_"+at:"BROKEN: "+failure):"VERIFYING_"+at+"_OF_"+ceiling,"archived_prefix_chain_count",anchorCount,"scope","Chaîne locale vérifiée depuis l’ancre du préfixe archivé; les reçus VERIFIED conservés lient les segments purgés à leur copie distante.");}
 }
