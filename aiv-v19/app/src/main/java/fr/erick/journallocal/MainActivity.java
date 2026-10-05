@@ -737,7 +737,8 @@ public final class MainActivity extends Activity {
             JSONObject integrity=ScreenIntegrityService.state();
             JSONObject shizuku=ShizukuCleanup.state(this);
             JSONObject archive=ArchiveSync.state(this);
-            JSONObject purge=archive.optJSONObject("purge");if(purge==null)purge=JournalPurge.state(this);
+            JSONObject embeddedPurge=archive.optJSONObject("purge");
+            final JSONObject purge=embeddedPurge==null?JournalPurge.state(this):embeddedPurge;
 
             String[] headers={"Moteur","État","Détail","Ouvrir"};int[] widths={190,170,500,100};
             TableLayout table=dataTable(headers,widths);
@@ -990,7 +991,8 @@ public final class MainActivity extends Activity {
         page.addView(note("AIV conserve le segment courant localement. Un segment scellé n’est purgeable qu’après un reçu serveur VERIFIED dont le compte, la plage d’IDs et le SHA-256 correspondent exactement au manifeste local."));
         try{
             JSONObject s=ArchiveSync.state(this);
-            JSONObject purge=s.optJSONObject("purge");if(purge==null)purge=JournalPurge.state(this);
+            JSONObject embeddedPurge=s.optJSONObject("purge");
+            final JSONObject purge=embeddedPurge==null?JournalPurge.state(this):embeddedPurge;
             JSONObject w=JournalSegments.window(this,0);
             String[] headers={"Élément","État","Détail","Ouvrir"};
             int[] widths={220,170,470,100};
