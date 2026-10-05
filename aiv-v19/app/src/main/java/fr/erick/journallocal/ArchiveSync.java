@@ -190,7 +190,7 @@ public final class ArchiveSync {
             "(SELECT MIN(timestamp_ms) FROM events WHERE id BETWEEN s.first_id AND s.last_id),"+
             "(SELECT MAX(timestamp_ms) FROM events WHERE id BETWEEN s.first_id AND s.last_id) "+
             "FROM journal_segments s LEFT JOIN journal_archive_state a ON a.segment=s.segment "+
-            "WHERE s.sealed=1 AND s.event_count>0 AND COALESCE(a.remote_state,'')!='VERIFIED' "+
+            "WHERE s.sealed=1 AND s.event_count>0 AND (COALESCE(a.remote_state,'')!='VERIFIED' OR COALESCE(a.purge_state,'LOCAL')='LOCAL') "+
             "ORDER BY s.segment LIMIT 1";
         try(Cursor c=db.rawQuery(sql,null)){
             if(!c.moveToFirst())return null;
