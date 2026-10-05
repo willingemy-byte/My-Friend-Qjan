@@ -895,9 +895,10 @@ public final class MainActivity extends Activity {
     private void renderSupabase(){
         page.removeAllViews();
         page.addView(sectionTitle("Supabase · archive"));
-        page.addView(note("État de l’archive distante. AIV envoie seulement les segments scellés du journal; un segment contient jusqu’à 50 000 événements. Un segment courant non scellé reste local jusqu’à sa fermeture."));
+        page.addView(note("AIV conserve le segment courant localement. Un segment scellé n’est purgeable qu’après un reçu serveur VERIFIED dont le compte, la plage d’IDs et le SHA-256 correspondent exactement au manifeste local."));
         try{
             JSONObject s=ArchiveSync.state(this);
+            JSONObject purge=s.optJSONObject("purge");if(purge==null)purge=JournalPurge.state(this);
             JSONObject w=JournalSegments.window(this,0);
             String[] headers={"Élément","État","Détail","Ouvrir"};
             int[] widths={220,170,470,100};
@@ -912,6 +913,19 @@ public final class MainActivity extends Activity {
             addTableRow(table,new String[]{"Segments suivis",String.valueOf(tracked),verified+" vérifié(s) à distance · dernier vérifié : "+s.optLong("last_verified_segment",0)},
                 null,widths,0,null,null,v->showJsonDetail("Supabase · segments",s,null));
 
+            String purgeError=purge.optString("last_error","");
+            String purgeState=purge.optBoolean("running")?"PURGE":(purgeError.isEmpty()?"ACTIVE":"BLOQUÉE");
+            addTableRow(table,new String[]{"Purge automatique",purgeState,
+                purge.optLong("purged_events",0)+" événement(s) purgé(s) après preuve distante · "+purge.optLong("ready_to_purge_events",0)+" prêt(s) à purger"+
+                (purgeError.isEmpty()?"":" · "+purgeError)},
+                null,widths,0,null,null,v->showJsonDetail("Supabase · purge vérifiée",purge,null));
+
+            long localEvents=EventStore.get(this).latestId();
+            try(android.database.Cursor count=EventStore.get(this).getReadableDatabase().rawQuery("SELECT COUNT(*) FROM events",null)){if(count.moveToFirst())localEvents=count.getLong(0);}
+            addTableRow(table,new String[]{"Rétention locale",String.valueOf(localEvents),
+                s.optLong("purged_events",purge.optLong("purged_events",0))+" archivé(s) puis purgé(s) · reçus et ancres cryptographiques conservés"},
+                null,widths,0,null,null,v->showJsonDetail("Supabase · rétention",purge,null));
+
             String active=w.optLong("segment",0)>0?"#"+w.optLong("segment"):"récent";
             long segmentCount=w.isNull("event_count")?Math.max(0,w.optLong("latest")-w.optLong("first_id")+1):w.optLong("event_count");
             int segmentSize=s.optInt("segment_size",50000);
@@ -922,23 +936,41 @@ public final class MainActivity extends Activity {
 
             String nextState=w.optBoolean("sealed")?"PRÊT À ENVOYER":(segmentCount>=segmentSize?"FERMETURE":"EN COLLECTE");
             addTableRow(table,new String[]{"Prochain envoi",nextState,
-                w.optBoolean("sealed")?"Le segment est scellé; la synchronisation peut l’envoyer.":"Encore "+Math.max(0,segmentSize-segmentCount)+" événement(s) avant la fermeture automatique du segment."},
+                w.optBoolean("sealed")?"Le segment est scellé; synchronisation, vérification serveur puis purge locale deviennent possibles.":"Encore "+Math.max(0,segmentSize-segmentCount)+" événement(s) avant la fermeture automatique du segment."},
                 null,widths,0,null,null,v->showJsonDetail("Supabase · progression locale",w,null));
 
-            addTableRow(table,new String[]{"Taille de segment",String.valueOf(segmentSize),"L’envoi automatique commence lorsqu’un segment est scellé. Les données locales ne sont pas supprimées par cette synchronisation."},
+            addTableRow(table,new String[]{"Taille de segment",String.valueOf(segmentSize),"Aucune suppression locale n’est autorisée sur simple fin d’upload. VERIFIED + compte + plage + SHA doivent tous correspondre."},
                 null,widths,0,null,null,v->showJsonDetail("Supabase · politique d’archive",s,null));
 
             page.addView(tableScroller(table));
-            page.addView(action("Synchroniser Supabase maintenant",v->{
-                ArchiveSync.request(this);
-                toast("Synchronisation Supabase demandée");
+
+            JSONArray receipts=purge.optJSONArray("segments");
+            if(receipts!=null&&receipts.length()>0){
+                page.addView(sectionTitle("Segments · reçus locaux"));
+                String[] sh={"Segment","État","Plage","SHA","Détail"};int[] sw={100,190,250,130,100};
+                TableLayout segments=dataTable(sh,sw);
+                for(int i=0;i<receipts.length();i++){
+                    JSONObject receipt=receipts.optJSONObject(i);if(receipt==null)continue;
+                    String ps=receipt.optString("purge_state","—");
+                    String sha=receipt.optString("client_segment_sha256","");
+                    boolean match=!sha.isEmpty()&&sha.equalsIgnoreCase(receipt.optString("server_segment_sha256",""));
+                    String range=receipt.optLong("first_event_id")+" → "+receipt.optLong("last_event_id")+" · "+receipt.optLong("expected_count")+" év.";
+                    addTableRow(segments,new String[]{"#"+receipt.optLong("segment_no"),ps,range,match?"SHA MATCH":"SHA ?", "Ouvrir"},
+                        null,sw,0,null,null,v->showJsonDetail("Supabase · reçu segment #"+receipt.optLong("segment_no"),receipt,null));
+                }
+                page.addView(tableScroller(segments));
+            }
+
+            page.addView(action("Synchroniser / réconcilier maintenant",v->{
+                ArchiveSync.request(this);JournalPurge.request(this);
+                toast("Réconciliation Supabase demandée");
                 main.postDelayed(this::renderSupabase,1200);
             }));
             page.addView(action("Exporter le journal local",v->beginJournalExport()));
             page.addView(action("Exporter les anomalies",v->beginAnalysisExport()));
         }catch(Exception e){
             page.addView(card("Supabase","État indisponible : "+e.getClass().getSimpleName()+" · "+String.valueOf(e.getMessage())));
-            page.addView(action("Réessayer la synchronisation",v->{ArchiveSync.request(this);main.postDelayed(this::renderSupabase,1200);}));
+            page.addView(action("Réessayer la synchronisation",v->{ArchiveSync.request(this);JournalPurge.request(this);main.postDelayed(this::renderSupabase,1200);}));
         }
     }
 
