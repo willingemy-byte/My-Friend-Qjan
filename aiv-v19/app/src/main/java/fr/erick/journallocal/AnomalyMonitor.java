@@ -243,6 +243,34 @@ public final class AnomalyMonitor extends SQLiteOpenHelper {
         JSONArray events=EventStore.get(context).evidence(ids);PermissionUsage.enrich(context,events);
         return EventStore.object("events",events);
     }
+    public void exportWatcher(Writer out)throws Exception{
+        JSONObject info=summary();info.remove("settings");
+        out.write("{\"schema\":\"aiv-watcher-report/1\",\"generated_ms\":"+System.currentTimeMillis()+",\"summary\":"+info+",\"watcher\":[");
+        SQLiteDatabase db=getReadableDatabase();long ceiling;
+        try(Cursor c=db.rawQuery("SELECT COALESCE(MAX(id),0) FROM findings",null)){c.moveToFirst();ceiling=c.getLong(0);}
+        long after=0;boolean first=true;
+        while(after<ceiling){
+            boolean any=false;
+            try(Cursor c=db.rawQuery("SELECT id,payload,first_ms,last_ms,occurrences,group_key,kind FROM findings WHERE id>? AND id<=? AND (kind='trace' OR rule='watcher-context') ORDER BY id LIMIT 100",
+                new String[]{String.valueOf(after),String.valueOf(ceiling)})){
+                while(c.moveToNext()){
+                    any=true;after=c.getLong(0);JSONObject row=new JSONObject(c.getString(1));
+                    row.put("id",after).put("first_ms",c.getLong(2)).put("last_ms",c.getLong(3)).put("occurrences",c.getLong(4))
+                        .put("origin",c.getString(5).startsWith("live:")?"LIVE_OBSERVATION":"HISTORICAL_REPLAY").put("kind",c.getString(6));
+                    JSONArray ids=row.optJSONArray("evidence_ids");
+                    if(ids!=null){
+                        JSONArray events=EventStore.get(context).evidence(ids);
+                        row.put("permission_context",PermissionUsage.anomalyContext(context,events))
+                           .put("network_context",NetworkReport.anomalyContext(events));
+                    }
+                    if(!first)out.write(",");out.write(row.toString());first=false;
+                }
+            }
+            if(!any)break;
+        }
+        out.write("]}");out.flush();
+    }
+
     public void export(Writer out)throws Exception{
         JSONObject info=summary();info.remove("settings");out.write("{\"schema\":\"journal-local-analysis/1\",\"permission_usage_status\":"+PermissionUsage.get(context).status()+",\"summary\":"+info+",\"settings\":"+settingsJson()+",\"findings\":[");
         SQLiteDatabase db=getReadableDatabase();long ceiling;try(Cursor c=db.rawQuery("SELECT COALESCE(MAX(id),0) FROM findings",null)){c.moveToFirst();ceiling=c.getLong(0);}
