@@ -56,6 +56,17 @@ jobs:
           chmod +x bootstrap-clean-build.sh
           ./bootstrap-clean-build.sh
 
+      - name: Upload AIV 2.2.2 build output
+        uses: actions/upload-artifact@v4
+        with:
+          name: AIV-2.2.2-build
+          path: |
+            aiv-v19/build/AIV-2.2.2-unsigned.apk
+            aiv-v19/build/AIV-2.2.2-unsigned.apk.sha256
+            aiv-v19/.toolchain/sdk/build-tools/35.0.0/lib/apksigner.jar
+          retention-days: 14
+          include-hidden-files: true
+
       - name: Full convergence regression
         shell: bash
         env:
