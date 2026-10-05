@@ -128,9 +128,11 @@ final class ConvergenceRules {
             "last_ms",access.optLong("timestamp_ms"),"last_event_id",access.optLong("id"),
             "conclusion",EventStore.object("established",new JSONArray().put("Accès AppOps observé"),"correlated",frontend==null?new JSONArray():new JSONArray().put("Événement frontend rapproché sur horloge monotone"),"unknown",new JSONArray().put("Contenu de l’accès").put("Causalité fonctionnelle exacte"),"confidence",frontend==null?"OBSERVED_ONLY":"OBSERVED_AND_TEMPORALLY_CORRELATED")
         );
-        if(frontend!=null)out.put("frontend",frontend(access,frontend)).put("timeline",new JSONArray()
-            .put(EventStore.object("event_id",frontend.optLong("id"),"elapsed_ms",frontend.optLong("elapsed_ms"),"action",frontend.optString("action"),"source",frontend.optString("source")))
-            .put(EventStore.object("event_id",access.optLong("id"),"elapsed_ms",access.optLong("elapsed_ms"),"action",access.optString("action"),"source",access.optString("source"))));
+        if(frontend!=null)try{
+            out.put("frontend",frontend(access,frontend)).put("timeline",new JSONArray()
+                .put(EventStore.object("event_id",frontend.optLong("id"),"elapsed_ms",frontend.optLong("elapsed_ms"),"action",frontend.optString("action"),"source",frontend.optString("source")))
+                .put(EventStore.object("event_id",access.optLong("id"),"elapsed_ms",access.optLong("elapsed_ms"),"action",access.optString("action"),"source",access.optString("source"))));
+        }catch(Exception ignored){}
         result.add(out);
     }
 
