@@ -1,0 +1,83 @@
+name: AIV 2.2.1 AppOps regression and build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - aiv-2.2.1-appops-temporal
+    paths:
+      - "aiv-v19/**"
+      - ".github/workflows/aiv-2.2.1-build.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Cache Android toolchain
+        uses: actions/cache@v4
+        with:
+          path: aiv-v19/.toolchain
+          key: aiv-2.2.1-android35-ndk27d-shizuku-13.1.5
+
+      - name: Host dependency
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/aiv-test-deps
+          curl -fL --retry 5 --retry-delay 2             -o /tmp/aiv-test-deps/json.jar             https://repo1.maven.org/maven2/org/json/json/20240303/json-20240303.jar
+          test -s /tmp/aiv-test-deps/json.jar
+
+      - name: AppOps targeted regression
+        shell: bash
+        env:
+          AIV_JSON_JAR: /tmp/aiv-test-deps/json.jar
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/aiv-permission-rules
+          mkdir -p /tmp/aiv-permission-rules
+          javac -encoding UTF-8             -cp "$AIV_JSON_JAR"             -d /tmp/aiv-permission-rules             aiv-v19/app/src/main/java/fr/erick/journallocal/PermissionUsageRules.java             aiv-v19/tests/PermissionUsageRulesTest.java
+          java -cp "/tmp/aiv-permission-rules:$AIV_JSON_JAR" fr.erick.journallocal.PermissionUsageRulesTest
+
+      - name: Build AIV 2.2.1 unsigned
+        working-directory: aiv-v19
+        env:
+          AIV_BUILD_MODE: unsigned
+        run: |
+          set -euo pipefail
+          chmod +x bootstrap-clean-build.sh
+          ./bootstrap-clean-build.sh
+
+      - name: Verify AIV 2.2.1 artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s aiv-v19/build/AIV-2.2.1-unsigned.apk
+          test -s aiv-v19/build/AIV-2.2.1-unsigned.apk.sha256
+          grep -q 'android:versionCode="221"' aiv-v19/app/src/main/AndroidManifest.xml
+          grep -q 'android:versionName="2.2.1"' aiv-v19/app/src/main/AndroidManifest.xml
+          grep -q 'static Operation operation' aiv-v19/app/src/main/java/fr/erick/journallocal/PermissionUsageRules.java
+          sha256sum -c aiv-v19/build/AIV-2.2.1-unsigned.apk.sha256
+
+      - name: Upload AIV 2.2.1 unsigned APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: AIV-2.2.1-unsigned
+          path: |
+            aiv-v19/build/AIV-2.2.1-unsigned.apk
+            aiv-v19/build/AIV-2.2.1-unsigned.apk.sha256
+            aiv-v19/.toolchain/sdk/build-tools/35.0.0/lib/apksigner.jar
+          retention-days: 14
+          include-hidden-files: true
