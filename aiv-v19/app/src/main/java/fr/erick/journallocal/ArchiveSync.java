@@ -85,13 +85,16 @@ public final class ArchiveSync {
         );
         try{
             SQLiteDatabase db=EventStore.get(context).getReadableDatabase();
-            try(Cursor c=db.rawQuery("SELECT COUNT(*),COALESCE(SUM(CASE WHEN remote_state='VERIFIED' THEN 1 ELSE 0 END),0),COALESCE(MAX(CASE WHEN remote_state='VERIFIED' THEN segment ELSE 0 END),0) FROM journal_archive_state",null)){
+            try(Cursor c=db.rawQuery("SELECT COUNT(*),COALESCE(SUM(CASE WHEN remote_state='VERIFIED' THEN 1 ELSE 0 END),0),COALESCE(MAX(CASE WHEN remote_state='VERIFIED' THEN segment ELSE 0 END),0),COALESCE(SUM(CASE WHEN purge_state='PURGED' THEN expected_count ELSE 0 END),0),COALESCE(SUM(CASE WHEN purge_state!='PURGED' THEN expected_count ELSE 0 END),0) FROM journal_archive_state",null)){
                 if(c.moveToFirst()){
                     out.put("tracked_segments",c.getLong(0));
                     out.put("verified_segments",c.getLong(1));
                     out.put("last_verified_segment",c.getLong(2));
+                    out.put("purged_events",c.getLong(3));
+                    out.put("retained_archived_events",c.getLong(4));
                 }
             }
+            out.put("purge",JournalPurge.state(context));
             try(Cursor c=db.rawQuery("SELECT COUNT(*),COALESCE(SUM(s.event_count),0) FROM journal_segments s LEFT JOIN journal_archive_state a ON a.segment=s.segment WHERE s.sealed=1 AND COALESCE(a.remote_state,'')!='VERIFIED'",null)){
                 if(c.moveToFirst()){out.put("pending_segments",c.getLong(0));out.put("pending_events",c.getLong(1));}
             }
@@ -142,8 +145,15 @@ public final class ArchiveSync {
             phase="BEGIN";
             JSONObject beginReply=transport.send(identity,begin);
             if("VERIFIED".equals(beginReply.optString("state"))){
-                requireReceipt(beginReply,s,manifest);
-                markVerified(db,s.segment,manifest);
+                // A duplicate BEGIN proves the manifest matches the server row, but FINALIZE
+                // is requested again because its receipt includes the full range required before purge.
+                JSONObject verifiedReply=transport.send(identity,EventStore.object(
+                    "schema","aiv-journal/1",
+                    "action","finalize",
+                    "segment_no",s.segment
+                ));
+                requireReceipt(verifiedReply,s,manifest);
+                markVerified(context,db,s,manifest,verifiedReply);
                 return;
             }
 
@@ -164,11 +174,15 @@ public final class ArchiveSync {
                 "segment_no",s.segment
             ));
             requireReceipt(finalizeReply,s,manifest);
-            markVerified(db,s.segment,manifest);
+            markVerified(context,db,s,manifest,finalizeReply);
     }
     private static void requireReceipt(JSONObject reply,Segment s,String manifest)throws IOException{
-        if(!"VERIFIED".equals(reply.optString("state"))||reply.optLong("received_count",-1)!=s.count||!manifest.equalsIgnoreCase(reply.optString("server_segment_sha256")))
-            throw new IOException("Reçu distant incomplet ou SHA différent pour segment "+s.segment);
+        if(!"VERIFIED".equals(reply.optString("state"))
+            ||reply.optLong("received_count",-1)!=s.count
+            ||!manifest.equalsIgnoreCase(reply.optString("server_segment_sha256"))
+            ||reply.optLong("first_event_id",-1)!=s.firstId
+            ||reply.optLong("last_event_id",-1)!=s.lastId)
+            throw new IOException("Reçu distant incomplet, plage ou SHA différent pour segment "+s.segment);
     }
 
     private static Segment nextSegment(SQLiteDatabase db){
@@ -260,11 +274,11 @@ public final class ArchiveSync {
             new Object[]{eventId,segment});
     }
 
-    private static void markVerified(SQLiteDatabase db,long segment,String sha){
+    private static void markVerified(Context context,SQLiteDatabase db,Segment s,String sha,JSONObject receipt)throws Exception{
         long now=System.currentTimeMillis();
-        db.execSQL("UPDATE journal_archive_state SET remote_state='VERIFIED',client_sha256=?,verified_at_ms=?,error=NULL WHERE segment=?",
-            new Object[]{sha,now,segment});
-        lastVerifiedSegment=segment;
+        JournalPurge.recordVerified(db,s.segment,s.firstId,s.lastId,s.count,sha,receipt.getString("server_segment_sha256"),now);
+        lastVerifiedSegment=s.segment;
+        JournalPurge.request(context);
     }
 
     private static JSONObject post(Identity identity,JSONObject body)throws Exception{
