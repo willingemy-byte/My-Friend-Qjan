@@ -1,0 +1,87 @@
+name: AIV 2.2.3 Watcher and verified archive build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - aiv-2.2.3-watcher-archive
+    paths:
+      - "aiv-v19/**"
+      - ".github/workflows/aiv-2.2.3-build.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Cache Android toolchain
+        uses: actions/cache@v4
+        with:
+          path: aiv-v19/.toolchain
+          key: aiv-2.2.3-android35-ndk27d-shizuku-13.1.5
+
+      - name: Build AIV 2.2.3 unsigned
+        working-directory: aiv-v19
+        env:
+          AIV_BUILD_MODE: unsigned
+        run: |
+          set -euo pipefail
+          chmod +x bootstrap-clean-build.sh
+          ./bootstrap-clean-build.sh
+
+      - name: Verify version and purge invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s aiv-v19/build/AIV-2.2.3-unsigned.apk
+          test -s aiv-v19/build/AIV-2.2.3-unsigned.apk.sha256
+          grep -q 'android:versionCode="223"' aiv-v19/app/src/main/AndroidManifest.xml
+          grep -q 'android:versionName="2.2.3"' aiv-v19/app/src/main/AndroidManifest.xml
+          grep -q "state.*VERIFIED" aiv-v19/app/src/main/java/fr/erick/journallocal/ArchiveSync.java
+          grep -q "first_event_id" aiv-v19/app/src/main/java/fr/erick/journallocal/ArchiveSync.java
+          grep -q "last_event_id" aiv-v19/app/src/main/java/fr/erick/journallocal/ArchiveSync.java
+          grep -q "server_sha256" aiv-v19/app/src/main/java/fr/erick/journallocal/JournalPurge.java
+          grep -q "purge_state='PURGED'" aiv-v19/app/src/main/java/fr/erick/journallocal/JournalPurge.java
+          grep -q "journal_purge_anchor" aiv-v19/app/src/main/java/fr/erick/journallocal/JournalPurge.java
+          grep -q 'addTab("Watcher","watcher")' aiv-v19/app/src/main/java/fr/erick/journallocal/MainActivity.java
+          sha256sum -c aiv-v19/build/AIV-2.2.3-unsigned.apk.sha256
+
+      - name: AppOps regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/aiv-test-deps /tmp/aiv-permission-rules
+          curl -fL --retry 5 --retry-delay 2 -o /tmp/aiv-test-deps/json.jar https://repo1.maven.org/maven2/org/json/json/20240303/json-20240303.jar
+          javac -encoding UTF-8 -cp /tmp/aiv-test-deps/json.jar -d /tmp/aiv-permission-rules             aiv-v19/app/src/main/java/fr/erick/journallocal/PermissionUsageRules.java             aiv-v19/tests/PermissionUsageRulesTest.java
+          java -cp "/tmp/aiv-permission-rules:/tmp/aiv-test-deps/json.jar" fr.erick.journallocal.PermissionUsageRulesTest
+
+      - name: Contextual network regression
+        shell: bash
+        env:
+          AIV_JSON_JAR: /tmp/aiv-test-deps/json.jar
+        run: |
+          set -euo pipefail
+          python3 aiv-v19/tests/convergence-host.py
+
+      - name: Upload AIV 2.2.3 unsigned
+        uses: actions/upload-artifact@v4
+        with:
+          name: AIV-2.2.3-unsigned
+          path: |
+            aiv-v19/build/AIV-2.2.3-unsigned.apk
+            aiv-v19/build/AIV-2.2.3-unsigned.apk.sha256
+            aiv-v19/.toolchain/sdk/build-tools/35.0.0/lib/apksigner.jar
+          retention-days: 14
+          include-hidden-files: true
