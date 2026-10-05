@@ -47,6 +47,15 @@ jobs:
           test -s /tmp/aiv-test-deps/sqlite-jdbc.jar
           test -s /tmp/aiv-test-deps/slf4j-api.jar
 
+      - name: Build AIV 2.2.2 unsigned
+        working-directory: aiv-v19
+        env:
+          AIV_BUILD_MODE: unsigned
+        run: |
+          set -euo pipefail
+          chmod +x bootstrap-clean-build.sh
+          ./bootstrap-clean-build.sh
+
       - name: Full convergence regression
         shell: bash
         env:
@@ -67,15 +76,6 @@ jobs:
           mkdir -p /tmp/aiv-permission-rules
           javac -encoding UTF-8             -cp "$AIV_JSON_JAR"             -d /tmp/aiv-permission-rules             aiv-v19/app/src/main/java/fr/erick/journallocal/PermissionUsageRules.java             aiv-v19/tests/PermissionUsageRulesTest.java
           java -cp "/tmp/aiv-permission-rules:$AIV_JSON_JAR" fr.erick.journallocal.PermissionUsageRulesTest
-
-      - name: Build AIV 2.2.2 unsigned
-        working-directory: aiv-v19
-        env:
-          AIV_BUILD_MODE: unsigned
-        run: |
-          set -euo pipefail
-          chmod +x bootstrap-clean-build.sh
-          ./bootstrap-clean-build.sh
 
       - name: Verify AIV 2.2.2 artifact
         shell: bash
