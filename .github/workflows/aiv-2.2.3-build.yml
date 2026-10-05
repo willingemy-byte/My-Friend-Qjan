@@ -70,6 +70,17 @@ jobs:
           test -s /tmp/aiv-test-deps/sqlite-jdbc.jar
           test -s /tmp/aiv-test-deps/slf4j-api.jar
 
+      - name: Verified purge receipt regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/aiv-archive-rules
+          mkdir -p /tmp/aiv-archive-rules
+          javac -encoding UTF-8 -d /tmp/aiv-archive-rules \
+            aiv-v19/app/src/main/java/fr/erick/journallocal/ArchiveReceiptRules.java \
+            aiv-v19/tests/ArchiveReceiptRulesTest.java
+          java -cp /tmp/aiv-archive-rules fr.erick.journallocal.ArchiveReceiptRulesTest
+
       - name: AppOps regression
         shell: bash
         run: |
