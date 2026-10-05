@@ -738,7 +738,8 @@ public final class MainActivity extends Activity {
                 "Réglages accessibilité",()->openSetting(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
         addTableRow(table,new String[]{"Badge AIV",s.optBoolean("overlay_visible")?"ACTIF":"INACTIF","Le badge en haut à droite confirme que le service d’accessibilité AIV est connecté."},null,widths,0,null,null,
             v->showJsonDetail("Intégrité · badge AIV",ScreenIntegrityService.state(),null));
-        addTableRow(table,new String[]{"État global",s.optBoolean("core_active")?"OPÉRATIONNEL":"À VÉRIFIER",\n            "Couverture "+(s.optBoolean("coverage_complete")?"COMPLÈTE":"PARTIELLE")+" · Collecte "+yesNo(s.optBoolean("collector_active"))+
+        addTableRow(table,new String[]{"État global",s.optBoolean("core_active")?"OPÉRATIONNEL":"À VÉRIFIER",
+            "Couverture "+(s.optBoolean("coverage_complete")?"COMPLÈTE":"PARTIELLE")+" · Collecte "+yesNo(s.optBoolean("collector_active"))+
             " · Corrélation "+yesNo(s.optBoolean("correlation_active"))+
             " · VPN "+(s.optBoolean("vpn_expected")?yesNo(s.optBoolean("vpn_active")):"OPTIONNEL")+
             " · Shizuku "+(s.optBoolean("shizuku_expected")?yesNo(s.optBoolean("shizuku_active")):"NON REQUIS")+
