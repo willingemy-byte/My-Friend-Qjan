@@ -51,7 +51,7 @@ public final class JournalSegments {
                 more=read==500;db.setTransactionSuccessful();
             }finally{db.endTransaction();}error="";
         }catch(Exception e){error="Index des segments : "+e.getClass().getSimpleName();}
-        finally{scheduled.set(false);if(error.isEmpty())ArchiveSync.requestAutomatic(context);if(more&&error.isEmpty())worker.postDelayed(()->request(context),250);}
+        finally{scheduled.set(false);if(error.isEmpty()){ArchiveSync.requestAutomatic(context);ArchiveReconcileJob.schedule(context);}if(more&&error.isEmpty())worker.postDelayed(()->request(context),250);}
     }
     public static JSONObject window(Context context,int requested)throws Exception{
         request(context);SQLiteDatabase db=EventStore.get(context).getReadableDatabase();long active=1,checkpoint=0,total=0,latest=EventStore.get(context).latestId();
