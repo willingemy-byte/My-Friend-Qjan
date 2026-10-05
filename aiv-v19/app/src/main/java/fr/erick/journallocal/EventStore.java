@@ -84,10 +84,14 @@ public final class EventStore extends SQLiteOpenHelper {
         return out;
     }
     public synchronized boolean add(String category, String actor, String action, String destination, String transport, String source, JSONObject details) {
+        return addObserved(category,actor,action,destination,transport,source,details,System.currentTimeMillis(),SystemClock.elapsedRealtime());
+    }
+    public synchronized boolean addObserved(String category,String actor,String action,String destination,String transport,String source,JSONObject details,long observedMs,long observedElapsedMs) {
         try {
-            long now = System.currentTimeMillis();
+            long storedMs=System.currentTimeMillis();
+            long now=observedMs>0?observedMs:storedMs;
             JSONObject event = object("event_version",2,"collector_process_session",PROCESS_SESSION,"timestamp", Instant.ofEpochMilli(now).toString(), "timestamp_ms", now,
-                "elapsed_ms", SystemClock.elapsedRealtime(), "app", actor, "action", action,
+                "elapsed_ms",observedElapsedMs>=0?observedElapsedMs:SystemClock.elapsedRealtime(),"persisted_at_ms",storedMs, "app", actor, "action", action,
                 "destination", destination, "transport", transport, "category", category,
                 "source", source, "scope", ("trafic".equals(category)||"dns".equals(category)) ? "Métadonnées réseau observées par le VPN local; contenu des échanges non enregistré" : "Événement ou état fourni par une API Android; aucune capture du contenu des autres applications", "details", details);
             for(String key:new String[]{"protocol","port","bytes","direction","result"}) if(details.has(key)) event.put(key,details.get(key));

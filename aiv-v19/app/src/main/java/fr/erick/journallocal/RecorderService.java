@@ -37,6 +37,9 @@ public final class RecorderService extends Service {
     private NetworkHealth health;private ConnectivityManager.NetworkCallback physicalCallback;
     private final Runnable healthSample=()->{if(!stopping&&health!=null)health.sample();};
     private void sampleSoon(){worker.removeCallbacks(healthSample);worker.postDelayed(healthSample,150);}
+    private final Runnable permissionMaintenance=new Runnable(){@Override public void run(){
+        if(stopping)return;PermissionMaintenance.request(RecorderService.this);worker.postDelayed(this,PermissionMaintenance.INTERVAL_MS);
+    }};
     private final Runnable heartbeat=new Runnable(){@Override public void run(){
         if(stopping)return;
         long elapsed=SystemClock.elapsedRealtime();
@@ -49,6 +52,7 @@ public final class RecorderService extends Service {
         long rx=TrafficStats.getTotalRxBytes(),tx=TrafficStats.getTotalTxBytes();
         if(rx>=0 && tx>=0)record("reseau","All In Visible","Lecture des compteurs réseau Android","Compteurs depuis le démarrage","Global","TrafficStats",EventStore.object("rx_bytes",rx,"tx_bytes",tx,"attribution","Lecture périodique par le collecteur, tout l’appareil; ni applications ni destinations identifiées"));
         JournalSegments.request(RecorderService.this);AnomalyMonitor.request(RecorderService.this);TrackerIndex.get(RecorderService.this).request();ApkEvidence.get(RecorderService.this).request();
+        PermissionUsage.request(RecorderService.this);
         DeveloperControl.tick(RecorderService.this);
         long lastInventory=prefs.getLong("last_inventory_request",0);
         if(System.currentTimeMillis()-lastInventory>AivConfig.COLLECTION_INVENTORY_INTERVAL_MS){prefs.edit().putLong("last_inventory_request",System.currentTimeMillis()).apply();PermissionAudit.get(RecorderService.this).scan();}
@@ -93,7 +97,7 @@ public final class RecorderService extends Service {
         IntentFilter filter=new IntentFilter();
         for(String a:new String[]{Intent.ACTION_BATTERY_CHANGED,Intent.ACTION_POWER_CONNECTED,Intent.ACTION_POWER_DISCONNECTED,Intent.ACTION_SCREEN_ON,Intent.ACTION_SCREEN_OFF,Intent.ACTION_USER_PRESENT,Intent.ACTION_TIME_CHANGED,Intent.ACTION_TIMEZONE_CHANGED,Intent.ACTION_DEVICE_STORAGE_LOW,Intent.ACTION_DEVICE_STORAGE_OK,UsbManager.ACTION_USB_DEVICE_ATTACHED,UsbManager.ACTION_USB_DEVICE_DETACHED})filter.addAction(a);
         if(Build.VERSION.SDK_INT>=33)registerReceiver(systemReceiver,filter,null,worker,Context.RECEIVER_NOT_EXPORTED);else registerReceiver(systemReceiver,filter,null,worker);
-        registerNetwork();refreshBluetooth();worker.post(heartbeat);
+        registerNetwork();refreshBluetooth();worker.post(heartbeat);worker.post(permissionMaintenance);
     }
     private void handleSystem(Intent intent,boolean initial){
         String action=intent.getAction();if(action==null||stopping)return;

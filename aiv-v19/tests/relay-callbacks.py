@@ -13,8 +13,10 @@ sdk=Path(os.environ['AIV_ANDROID_JAR'])
 jars=os.pathsep.join(os.environ[k] for k in ('AIV_JSON_JAR','AIV_SQLITE_JAR'))
 baseline='--baseline' in __import__('sys').argv
 short_flow='--reproduce-short-flow' in __import__('sys').argv
-if baseline and short_flow:
-    raise SystemExit('--reproduce-short-flow requires the 2.0.7 service, without --baseline')
+verify_short='--verify-short-flow' in __import__('sys').argv
+persistent_stall='--persistent-stall' in __import__('sys').argv
+if sum((baseline,short_flow,verify_short,persistent_stall))>1:
+    raise SystemExit('Choose only one reference or focused scenario')
 
 apps={
 'EventStore.java':r'''package fr.erick.journallocal;
@@ -30,7 +32,7 @@ public final class EventStore {
   try(PreparedStatement p=db.prepareStatement("INSERT INTO events(timestamp_ms,payload) VALUES(?,?)")){p.setLong(1,timestamp);p.setString(2,e.toString());p.executeUpdate();events.add(e);return true;}catch(Exception error){throw new IllegalStateException(error);}
  }
 }''',
-'PinVault.java':r'''package fr.erick.journallocal;import java.security.*;final class PinVault{public String securityLevel="HOST_FIXTURE";static int signatures;static PinVault vpnIdentity(){return new PinVault();}String keyId(){return "host-key";}byte[] sign(byte[] b)throws GeneralSecurityException{signatures++;Probe.gate("sign");return new byte[64];}}''',
+'PinVault.java':r'''package fr.erick.journallocal;import java.security.*;final class PinVault{public String securityLevel="HOST_FIXTURE";static int signatures;static final java.util.Set<String> signed=new java.util.HashSet<>();static PinVault vpnIdentity(){return new PinVault();}String keyId(){return "host-key";}byte[] sign(byte[] b)throws GeneralSecurityException{signatures++;signed.add(java.util.Base64.getEncoder().encodeToString(b));Probe.gate("sign");return new byte[64];}}''',
 'ProductAccess.java':r'''package fr.erick.journallocal;import org.json.*;final class ProductAccess{static boolean paidEnabled(Object c){return true;}static JSONObject status(Object c){return EventStore.object("source","HOST_FIXTURE");}}''',
 'AppIdentity.java':r'''package fr.erick.journallocal;import org.json.*;final class AppIdentity{static JSONObject forUid(Object c,int uid,String[] p){return EventStore.object("app_identity_id","host-app-"+uid,"network_actor_identity_id","host-uid-"+uid);}}''',
 'SecurityContext.java':r'''package fr.erick.journallocal;import org.json.*;final class SecurityContext{static JSONArray forPackages(Object c,JSONArray p){return new JSONArray();}}''',
@@ -38,7 +40,7 @@ public final class EventStore {
 'Continuous.java':r'''package fr.erick.journallocal;import android.content.SharedPreferences;import java.lang.reflect.Proxy;final class Continuous{
  static boolean vpnEnabled=true;static boolean enabled(Object c){return true;}
  static SharedPreferences prefs(Object c){
-  Object editor=Proxy.newProxyInstance(Continuous.class.getClassLoader(),new Class<?>[]{SharedPreferences.Editor.class},(p,m,a)->{if(m.getName().equals("putBoolean")){if(a[0].equals("vpn_enabled"))vpnEnabled=(Boolean)a[1];return p;}return null;});
+  Object editor=Proxy.newProxyInstance(Continuous.class.getClassLoader(),new Class<?>[]{SharedPreferences.Editor.class},(p,m,a)->{if(m.getName().startsWith("put")){if(a[0].equals("vpn_enabled"))vpnEnabled=(Boolean)a[1];return p;}return null;});
   return (SharedPreferences)Proxy.newProxyInstance(Continuous.class.getClassLoader(),new Class<?>[]{SharedPreferences.class},(p,m,a)->m.getName().equals("edit")?editor:m.getName().equals("getBoolean")?vpnEnabled:null);
  }
 }''',
@@ -93,7 +95,7 @@ public class Probe {
   check(Arrays.equals(expected,echoed.toByteArray()),"TCP 16 KiB echo changed/lost bytes");return new long[]{tx,rx};
  }
  static void one(String scenario,String path,boolean tcpFlow)throws Exception{
-  mode=scenario;blocked=new CountDownLatch(1);release=new CountDownLatch(1);uidCalls.set(0);PinVault.signatures=0;Continuous.vpnEnabled=true;
+  mode=scenario;blocked=new CountDownLatch(1);release=new CountDownLatch(1);uidCalls.set(0);PinVault.signatures=0;PinVault.signed.clear();Continuous.vpnEnabled=true;
   NetworkCaptureService service=new NetworkCaptureService();EventStore store=new EventStore(path+"-"+scenario+(tcpFlow?"-tcp":"-udp")+".sqlite");set(service,"store",store);set(service,"connectivity",Class.forName("android.net.ConnectivityManager").getConstructor().newInstance());set(service,"session","host-session");
   set(service,"main",Class.forName("android.os.Handler").getConstructor().newInstance());
   Class<?> configClass=Class.forName("fr.erick.journallocal.NetworkCaptureService$Config");Constructor<?> constructor=configClass.getDeclaredConstructor();constructor.setAccessible(true);Object config=constructor.newInstance();
@@ -115,7 +117,11 @@ public class Probe {
   if(!tcpFlow)check(received.length==44&&received[28]==28&&received[43]==43,"relay payload altered");
   if(!baseline&&scenario.equals("watchdog")){
    // This scenario gates the journal (below), while the real native watchdog remains runnable.
-   nativeThread.join(3600);check(!nativeThread.isAlive(),"watchdog left relay active with stale observer");check(NetworkCaptureService.lastError.contains("3 secondes"),"missing stall reason");
+   Thread.sleep(3400);check(nativeThread.isAlive(),"transient 3-second journal delay stopped the VPN");
+   long oldest=(Long)call(service,"observerDelayForTest",new Class<?>[]{});
+   check(oldest>=3000,"transient delay was not measured");release.countDown();Thread.sleep(80);service.onDestroy();nativeThread.join(900);check(!nativeThread.isAlive(),"stop after transient delay");
+  }else if(!baseline&&scenario.equals("persistent-stall")){
+   nativeThread.join(1200);check(!nativeThread.isAlive(),"persistent stall did not stop relay");check(NetworkCaptureService.lastError.contains("30 secondes"),"missing persistent stall reason");
   }else if(!baseline&&scenario.equals("overflow")){
    for(int i=0;i<4200;i++)service.onDnsQuestion(1,"host.example",1);
    nativeThread.join(900);check(!nativeThread.isAlive(),"full observer queue kept relay active");check(NetworkCaptureService.lastError.contains("saturée"),"missing overflow reason");
@@ -127,13 +133,13 @@ public class Probe {
   }
   release.countDown();if(!baseline){__DRAIN_OBSERVATIONS__}
   check(error[0]==null&&result[0]==0,"native exception or error");
-  if(!baseline&&(scenario.equals("watchdog")||scenario.equals("overflow")))check(!Continuous.vpnEnabled,"fatal capture can restart automatically");
+  if(!baseline&&(scenario.equals("persistent-stall")||scenario.equals("overflow")))check(!Continuous.vpnEnabled,"fatal capture can restart automatically");
   JSONObject counters=null,raw=null;for(JSONObject e:store.events){JSONObject d=e.getJSONObject("details");if("FLOW_METADATA".equals(d.optString("observation_type"))&&raw==null)raw=e;if("COUNTER_SNAPSHOT".equals(d.optString("observation_type")))counters=d;}
   check(raw!=null,"raw open missing");if(!baseline){check(raw.getJSONObject("details").getInt("uid")==-1,"raw identity was retrospectively rewritten");check(Math.abs(raw.getLong("timestamp_ms")-captured)<200,"capture timestamp changed by worker delay");}
   if(tcpFlow){check(counters!=null&&counters.getLong("tx_bytes")==tcpBytes[0]&&counters.getLong("rx_bytes")>=tcpBytes[1]&&counters.getLong("tx_packets")>2&&counters.getLong("rx_packets")>2,"TCP IP volume lost/counted twice");}
   else if(!scenario.equals("overflow")){check(counters!=null&&counters.getLong("tx_bytes")==44&&counters.getLong("rx_bytes")==44&&counters.getLong("tx_packets")==1&&counters.getLong("rx_packets")==1,"native volume lost or counted twice");}
   if(!baseline&&scenario.equals("uid")){for(JSONObject e:store.events)check(e.getJSONObject("details").optInt("uid",-1)<0,"closed tuple got stale attribution");}
-  if(!baseline&&scenario.equals("sign"))check(PinVault.signatures==1,"unchanged flow was signed repeatedly: "+PinVault.signatures);
+  if(!baseline&&scenario.equals("sign"))check(PinVault.signatures==PinVault.signed.size(),"identical metadata was signed repeatedly: "+PinVault.signatures);
   try(ResultSet r=store.db.createStatement().executeQuery("SELECT COUNT(*) FROM events")){check(r.next()&&r.getInt(1)==store.events.size(),"SQLite row count mismatch");}
   server.close();tcpServer.close();echo.join(1000);close(descriptors[0]);close(descriptors[1]);store.db.close();
   System.out.println((baseline?"REPRODUCED baseline stall: ":"PASS actual JNI relay: ")+(tcpFlow?"TCP ":"UDP ")+scenario+", rows="+store.events.size()+", signatures="+PinVault.signatures);
@@ -152,7 +158,7 @@ short_flow_test=r'''
  static void shortFlow(String path)throws Exception{
   // Controlled callbacks, not packets from a device. A prior flow blocks the
   // single observer in its journal write while the short flow opens and closes.
-  mode="journal";blocked=new CountDownLatch(1);release=new CountDownLatch(1);uidCalls.set(0);NetworkCaptureService.lastError="";
+  mode="journal";blocked=new CountDownLatch(1);release=new CountDownLatch(1);uidCalls.set(0);NetworkCaptureService.lastError="";boolean verify=__VERIFY_SHORT__;
   NetworkCaptureService service=new NetworkCaptureService();EventStore store=new EventStore(path+"-short-flow.sqlite");
   set(service,"store",store);set(service,"connectivity",Class.forName("android.net.ConnectivityManager").getConstructor().newInstance());set(service,"session","host-short-flow");
   set(service,"main",Class.forName("android.os.Handler").getConstructor().newInstance());
@@ -161,43 +167,50 @@ short_flow_test=r'''
   try{
    service.onFlowOpen(101,4,17,"10.203.0.1",42001,"127.0.0.1",53001);
    check(blocked.await(2,TimeUnit.SECONDS),"prior journal write did not reach gate");
+   long controlDeadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(1);while(uidCalls.get()<1&&System.nanoTime()<controlDeadline)Thread.yield();
    int priorLookups=uidCalls.get();check(priorLookups==1,"control flow did not exercise owner lookup");
    long openedMs=System.currentTimeMillis();service.onFlowOpen(102,4,17,"10.203.0.1",42002,"127.0.0.1",53);long openEnqueuedMs=System.currentTimeMillis();
    service.onFlowDirection(102,true,60,openedMs);
+   if(verify){__WAIT_SHORT_UID__}
    Thread.sleep(20);long inboundMs=System.currentTimeMillis();service.onFlowDirection(102,false,205,inboundMs);long inboundEnqueuedMs=System.currentTimeMillis();
    Thread.sleep(10);service.onFlowUpdate(102,60,205,1,1,2,0,true,inboundMs);
-   Thread.sleep(500);check(uidCalls.get()==priorLookups,"short flow unexpectedly got a lookup while observer was gated");
+   Thread.sleep(500);check(uidCalls.get()==priorLookups+(verify?1:0),"short-flow lookup count while journal was gated");
    release.countDown();queue.finish();check(queue.await(6000),"short-flow observations did not drain");
    check(queue.accepted()==queue.completed()&&queue.rejected()==0,"short-flow observations lost");
-   check(uidCalls.get()==priorLookups,"closed short tuple was queried or incorrectly attributed");
+   check(uidCalls.get()==priorLookups+(verify?1:0),"closed short tuple was queried or incorrectly attributed");
    JSONObject raw=null,incoming=null,counters=null;
    for(JSONObject e:store.events){JSONObject d=e.getJSONObject("details");if(d.optLong("native_flow_id",-1)!=102)continue;
     if("FLOW_METADATA".equals(d.optString("observation_type")))raw=e;
     if("FIRST_PACKET".equals(d.optString("observation_type"))&&"entrant".equals(d.optString("direction")))incoming=e;
     if("COUNTER_SNAPSHOT".equals(d.optString("observation_type")))counters=d;
-    check(d.optInt("uid",-1)==-1&&"Application non identifiée".equals(e.getString("app")),"unknown short flow received a fabricated identity");
+    if(!verify)check(d.optInt("uid",-1)==-1&&"Application non identifiée".equals(e.getString("app")),"unknown short flow received a fabricated identity");
    }
    check(raw!=null&&incoming!=null&&counters!=null,"short-flow records missing");
    check(raw.getLong("timestamp_ms")>=openedMs&&raw.getLong("timestamp_ms")<=openEnqueuedMs,"open timestamp replaced by persistence time");
    long captured=incoming.getLong("timestamp_ms"),delay=incoming.getLong("persisted_at_ms")-captured;
    check(captured>=inboundMs&&captured<=inboundEnqueuedMs&&delay>=500,"inbound capture/persistence times did not preserve journal delay");
    JSONObject d=incoming.getJSONObject("details");
-   check(!d.getBoolean("closed")&&"CLOSED_UNRESOLVED".equals(d.getString("identity_status")),"mixed capture/enrichment closure states not reproduced");
-   check(d.getInt("identity_attempts")==0,"zero lookup attempts not reproduced");
+   check(!d.getBoolean("closed"),"packet capture state retrospectively rewritten");
+   if(verify){check(d.getInt("uid")==12345&&d.getInt("identity_attempts")==1&&"RESOLVED".equals(d.getString("identity_status")),"observed UID lost behind journal delay");
+    check(d.getBoolean("identity_lookup_flow_closed")&&d.getLong("uid_observed_ms")<=inboundMs,"lookup closure/time not separated from packet state");
+    check(raw.getJSONObject("details").getInt("uid")==-1,"raw observation rewritten with later identity");
+   }else{check("CLOSED_UNRESOLVED".equals(d.getString("identity_status"))&&d.getInt("identity_attempts")==0,"missed lookup not reproduced");}
    check(d.getLong("first_packet_bytes")==205&&"OBSERVED".equals(d.getString("packet_volume_status")),"first-packet volume lost");
    check(d.isNull("tx_bytes")&&d.isNull("rx_bytes")&&d.isNull("bytes")&&"UNKNOWN".equals(d.getString("volume_status")),"first packet was incorrectly converted into flow totals");
    check(counters.getBoolean("closed")&&counters.getLong("tx_bytes")==60&&counters.getLong("rx_bytes")==205&&counters.getLong("bytes")==265&&counters.getLong("tx_packets")==1&&counters.getLong("rx_packets")==1&&"OBSERVED".equals(counters.getString("volume_status")),"unknown-flow counters lost or counted twice");
    check(NetworkCaptureService.lastError.isEmpty(),"observer failed during reproduction: "+NetworkCaptureService.lastError);
    try(ResultSet r=store.db.createStatement().executeQuery("SELECT COUNT(*) FROM events")){check(r.next()&&r.getInt(1)==store.events.size(),"short-flow SQLite row count mismatch");}
-   System.out.println("REPRODUCED 2.0.7 short flow: synthetic callbacks, uid_attempts=0, closed=false + CLOSED_UNRESOLVED, packet=205 B, final tx=60 B/rx=205 B, capture-to-persistence="+delay+" ms");
+   System.out.println((verify?"PASS 2.0.8 short flow: UID observed while journal blocked, retained after closure; ":"REPRODUCED 2.0.7 short flow: uid_attempts=0, closed=false + CLOSED_UNRESOLVED; ")+"synthetic callbacks, packet=205 B, final tx=60 B/rx=205 B, capture-to-persistence="+delay+" ms");
   }finally{release.countDown();queue.finish();queue.await(6000);store.db.close();}
  }
 '''
 # Both stress scenarios block the journal but retain their scenario name for assertions.
-probe=probe.replace('if(name.equals(mode)&&blocked.getCount()>0)', 'if((name.equals(mode)||name.equals("journal")&&(mode.equals("watchdog")||mode.equals("overflow")))&&blocked.getCount()>0)')
+probe=probe.replace('if(name.equals(mode)&&blocked.getCount()>0)', 'if((name.equals(mode)||name.equals("journal")&&(mode.equals("watchdog")||mode.equals("overflow")||mode.equals("persistent-stall")))&&blocked.getCount()>0)')
 probe=probe.replace('__BASELINE__',str(baseline).lower())
-probe=probe.replace('__SHORT_FLOW_TEST__','' if baseline else short_flow_test)
+short_flow_test=short_flow_test.replace('__VERIFY_SHORT__',str(verify_short).lower()).replace('__WAIT_SHORT_UID__','' if short_flow else 'Field live=NetworkCaptureService.class.getDeclaredField("liveFlows");live.setAccessible(true);UidProbe.Ticket ticket=(UidProbe.Ticket)((Map<?,?>)live.get(service)).get("host-short-flow:102");long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(1);while(ticket.snapshot().uid<0&&System.nanoTime()<deadline)Thread.yield();check(ticket.snapshot().uid==12345,"UID worker waited on journal");')
+probe=probe.replace('__SHORT_FLOW_TEST__','' if baseline or persistent_stall else short_flow_test)
 probe=probe.replace('__RUN_SHORT_FLOW__','' if baseline else 'if(args.length>2&&args[2].equals("short-flow")){shortFlow(args[1]);return;}')
+if persistent_stall:probe=probe.replace('if(args.length>2&&args[2].equals("short-flow")){shortFlow(args[1]);return;}','if(args.length>0){one("persistent-stall",args[1],false);return;}')
 drain=r'''Field f=NetworkCaptureService.class.getDeclaredField("observations");f.setAccessible(true);CaptureQueue q=(CaptureQueue)f.get(service);q.finish();check(q.await(6000),"accepted observations did not drain");check(q.completed()==q.accepted(),"accepted commands lost");if(scenario.equals("overflow"))check(q.rejected()>0&&q.highWater()<=4096,"queue bound/gap count");'''
 probe=probe.replace('__DRAIN_OBSERVATIONS__','' if baseline else drain)
 helpers=r'''
@@ -216,8 +229,12 @@ with tempfile.TemporaryDirectory() as folder:
     for name,content in apps.items():(app/name).write_text(content)
     (app/'Probe.java').write_text(probe)
     service=app/'NetworkCaptureService.java'
-    service.write_text(subprocess.check_output(['git','show','c4c107300b3a5ac0c2ac4a5760e8b9b907bed489:aiv-v19/app/src/main/java/fr/erick/journallocal/NetworkCaptureService.java'],cwd=ROOT,text=True) if baseline else (JAVA/'NetworkCaptureService.java').read_text())
-    support=('IdentityRetry','ObservationValues')+(() if baseline else ('CaptureQueue',))
+    reference='c4c107300b3a5ac0c2ac4a5760e8b9b907bed489' if baseline else '62b5f1848854b1366dd87ef2ee1dd48fb95afaa0' if short_flow else None
+    service_source=subprocess.check_output(['git','show',reference+':aiv-v19/app/src/main/java/fr/erick/journallocal/NetworkCaptureService.java'],cwd=ROOT,text=True) if reference else (JAVA/'NetworkCaptureService.java').read_text()
+    if not baseline and not short_flow:service_source=service_source.replace('    public boolean shouldStopNative(){','    private long observerDelayForTest(){return observations.oldestAgeMs();}\n    public boolean shouldStopNative(){')
+    if persistent_stall:service_source=service_source.replace('MAX_OBSERVER_STALL_MS=30000','MAX_OBSERVER_STALL_MS=400') # host fixture only; APK keeps 30 seconds
+    service.write_text(service_source)
+    support=('IdentityRetry','ObservationValues')+(() if baseline else ('CaptureQueue',))+(() if baseline or short_flow else ('UidProbe',))
     src=list(app.glob('*.java'))+[JAVA/(n+'.java') for n in support]
     subprocess.run(['javac','-encoding','UTF-8','-cp',jars+os.pathsep+str(sdk),'-d',str(classes),*map(str,src)],check=True,timeout=30)
     for name,content in runtime.items():p=rt/name;p.parent.mkdir(parents=True,exist_ok=True);p.write_text(content)
@@ -225,4 +242,4 @@ with tempfile.TemporaryDirectory() as folder:
     helper=tmp/'probe.c';helper.write_text(helpers);lib=tmp/'probe.so';cpp=ROOT/'app/src/main/cpp';vendor=ROOT/'third_party/zdtun'
     jdk=Path(os.environ.get('AIV_JDK_INCLUDE','/usr/lib/jvm/java-17-openjdk-amd64/include'))
     subprocess.run(['cc','-shared','-fPIC','-O1','-DNO_DEBUG','-D_LITTLE_ENDIAN','-pthread','-I'+str(jdk),'-I'+str(jdk/'linux'),'-I'+str(cpp),'-I'+str(vendor),str(helper),*[str(cpp/n) for n in ('jni.c','relay.c','tls_sni.c')],str(vendor/'zdtun.c'),str(vendor/'utils.c'),'-o',str(lib)],check=True,timeout=30)
-    subprocess.run(['java','-Xmx256m','-cp',str(runtime_classes)+os.pathsep+str(classes)+os.pathsep+jars+os.pathsep+str(sdk),'fr.erick.journallocal.Probe',str(lib),str(tmp/'journal')]+(['short-flow'] if short_flow else []),check=True,timeout=35)
+    subprocess.run(['java','-Xmx256m','-cp',str(runtime_classes)+os.pathsep+str(classes)+os.pathsep+jars+os.pathsep+str(sdk),'fr.erick.journallocal.Probe',str(lib),str(tmp/'journal')]+(['short-flow'] if short_flow or verify_short else []),check=True,timeout=35)

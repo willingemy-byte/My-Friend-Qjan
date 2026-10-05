@@ -15,8 +15,14 @@ PY
 python3 aiv-v19/tests/permission-integration-stubs.py "$FIXTURE_ROOT/src"
 mapfile -t FIXTURE_SOURCES < <(rg --files "$FIXTURE_ROOT/src" -g '*.java')
 javac -encoding UTF-8 -cp "$JSON_JAR" -d "$FIXTURE_ROOT/classes" "${FIXTURE_SOURCES[@]}" \
-    aiv-v19/app/src/main/java/fr/erick/journallocal/{PermissionControl,PermissionControlRules,PermissionReviewRules,ControlCoordinator}.java \
-    aiv-v19/tests/PermissionControlIntegrationTest.java
+    aiv-v19/app/src/main/java/fr/erick/journallocal/{PermissionControl,PermissionMaintenance,PermissionControlRules,PermissionReviewRules,ControlRules,ControlCoordinator}.java \
+    aiv-v19/tests/{PermissionControlIntegrationTest,PermissionMaintenanceTest,PermissionConsentTest}.java
 mkdir "$FIXTURE_ROOT/files"
 java -Xmx512m -cp "$FIXTURE_ROOT/classes:$JSON_JAR" fr.erick.journallocal.PermissionControlIntegrationTest \
     "$FIXTURE_ROOT/files" aiv-v19/app/src/main/assets
+mkdir "$FIXTURE_ROOT/maintenance-files"
+java -Xmx512m -cp "$FIXTURE_ROOT/classes:$JSON_JAR" fr.erick.journallocal.PermissionMaintenanceTest \
+    "$FIXTURE_ROOT/maintenance-files" aiv-v19/app/src/main/assets
+mkdir "$FIXTURE_ROOT/consent-files"
+java -Xmx512m -cp "$FIXTURE_ROOT/classes:$JSON_JAR" fr.erick.journallocal.PermissionConsentTest \
+    "$FIXTURE_ROOT/consent-files" aiv-v19/app/src/main/assets

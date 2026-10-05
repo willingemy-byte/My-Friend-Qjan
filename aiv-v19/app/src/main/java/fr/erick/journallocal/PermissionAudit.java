@@ -16,6 +16,9 @@ public final class PermissionAudit extends SQLiteOpenHelper {
     private final AtomicBoolean busy=new AtomicBoolean();
     private final AtomicBoolean scanAgain=new AtomicBoolean();
     private volatile String error="";
+    private final java.util.concurrent.ConcurrentHashMap<String,Integer> exposureLevels=new java.util.concurrent.ConcurrentHashMap<>();
+    private volatile long exposureScan=-1;
+    private final java.util.concurrent.atomic.AtomicLong exposureRevision=new java.util.concurrent.atomic.AtomicLong();
     public static synchronized PermissionAudit get(Context c){if(instance==null)instance=new PermissionAudit(c.getApplicationContext());return instance;}
     private PermissionAudit(Context c){super(c,"permission-audit.sqlite",null,2);context=c;setWriteAheadLoggingEnabled(true);}
     @Override public void onCreate(SQLiteDatabase db){
@@ -38,7 +41,7 @@ public final class PermissionAudit extends SQLiteOpenHelper {
     private JSONObject stored(long scan,String pkg)throws Exception{try(Cursor c=getReadableDatabase().rawQuery("SELECT payload FROM apps WHERE scan_id=? AND package_name=?",new String[]{""+scan,pkg})){return c.moveToFirst()?new JSONObject(c.getString(0)):null;}}
     private JSONObject reference(String pkg)throws Exception{try(Cursor c=getReadableDatabase().rawQuery("SELECT payload FROM references_data WHERE package_name=?",new String[]{pkg})){return c.moveToFirst()?new JSONObject(c.getString(0)):new JSONObject();}}
     private void history(String pkg,JSONObject value){ContentValues v=new ContentValues();v.put("package_name",pkg);v.put("timestamp_ms",System.currentTimeMillis());v.put("payload",value.toString());getWritableDatabase().insertOrThrow("history",null,v);}
-    private void saveReference(String pkg,JSONObject r){ContentValues v=new ContentValues();v.put("package_name",pkg);v.put("payload",r.toString());getWritableDatabase().insertWithOnConflict("references_data",null,v,SQLiteDatabase.CONFLICT_REPLACE);}
+    private void saveReference(String pkg,JSONObject r){ContentValues v=new ContentValues();v.put("package_name",pkg);v.put("payload",r.toString());getWritableDatabase().insertWithOnConflict("references_data",null,v,SQLiteDatabase.CONFLICT_REPLACE);exposureRevision.incrementAndGet();exposureLevels.remove(pkg);}
     public synchronized void scan(){
         if(!busy.compareAndSet(false,true)){scanAgain.set(true);return;}error="";
         new Thread(()->{try{collect();}catch(Exception e){error="Inventaire interrompu : "+e.getClass().getSimpleName()+". Dernier relevé complet conservé.";}finally{ApkEvidence.get(context).request();finishScan();}},"journal-inventory").start();
@@ -144,6 +147,27 @@ public final class PermissionAudit extends SQLiteOpenHelper {
         }
         return EventStore.object("schema","journal-coherence-input/1","scan_id",scan,"scope","Permissions demandées/déclarées lues localement via PackageManager; présence ne signifie pas utilisation.","apps",apps);
     }
+    /** Same completed scan and full references for counts, cards and their grades. No WebView required. */
+    public JSONObject presentationInventory()throws Exception{
+        long scan=latest();JSONArray apps=new JSONArray();JSONObject grades=new JSONObject();
+        try(Cursor c=getReadableDatabase().rawQuery("SELECT a.payload,r.payload FROM apps a LEFT JOIN references_data r ON r.package_name=a.package_name WHERE a.scan_id=? ORDER BY a.package_name",new String[]{""+scan})){
+            while(c.moveToNext()){
+                JSONObject raw=new JSONObject(c.getString(0)),reference=c.isNull(1)?new JSONObject():new JSONObject(c.getString(1));
+                JSONObject exposure=ExposureRules.assess(raw,reference);String pkg=raw.optString("package_name");int uid=raw.optInt("uid",-1);JSONArray peers=raw.optJSONArray("uid_packages"),names=new JSONArray(),permissions=raw.optJSONArray("permissions");int peerCount=peers==null?0:peers.length();
+                if(permissions!=null)for(int i=0;i<permissions.length();i++){JSONObject p=permissions.optJSONObject(i);if(p!=null)names.put(p.optString("name"));}
+                apps.put(EventStore.object("package",pkg,"label",raw.optString("label",pkg),"uid",uid,"uid_package_count",peerCount,"attribution_unique",uid>=0&&uid%100000>=10000&&peerCount==1,
+                    "system_app",raw.optBoolean("system_app"),"updated_system_app",raw.optBoolean("updated_system_app"),"permissions",names,"visibility_status",exposure.optString("visibility_status"),"unclassified_permissions",exposure.optInt("unclassified_permissions")));
+                grades.put(pkg,exposure.optInt("level"));
+            }
+        }
+        return EventStore.object("schema","aiv-presentation-inventory/1","scan_id",scan,"apps",apps,"grades",grades);
+    }
+    public int exposureLevelFor(String pkg)throws Exception{
+        long scan=latest();if(scan!=exposureScan){exposureLevels.clear();exposureScan=scan;}
+        Integer cached=exposureLevels.get(pkg);if(cached!=null)return cached;
+        long revision=exposureRevision.get();JSONObject raw=stored(scan,pkg);if(raw==null)return 0;int level=ExposureRules.assess(raw,reference(pkg)).optInt("level");
+        if(latest()==scan&&exposureScan==scan&&exposureRevision.get()==revision)exposureLevels.put(pkg,level);return level;
+    }
     public JSONObject penaltyConfig()throws Exception{
         JSONObject policy=new JSONObject();
         try(Cursor c=getReadableDatabase().rawQuery("SELECT payload FROM penalty_config WHERE id=1",null)){if(c.moveToFirst())policy=new JSONObject(c.getString(0));}
@@ -205,7 +229,7 @@ public final class PermissionAudit extends SQLiteOpenHelper {
         try(Cursor c=getReadableDatabase().rawQuery("SELECT timestamp_ms,payload FROM history WHERE package_name=? ORDER BY id DESC LIMIT 100",new String[]{pkg})){while(c.moveToNext())h.put(new JSONObject(c.getString(1)).put("timestamp_ms",c.getLong(0)));}
         try(Cursor c=getReadableDatabase().rawQuery("SELECT import_id,payload FROM imported_findings WHERE package_name=? ORDER BY id DESC LIMIT 50",new String[]{pkg})){while(c.moveToNext())findings.put(new JSONObject(c.getString(1)).put("import_id",c.getString(0)));}
         a.put("apk_evidence",ApkEvidence.get(context).read(pkg,a.optLong("version_code"),a.optLong("last_update_ms")));
-        return EventStore.object("app",a,"reference",reference(pkg),"history",h,"imported_findings",findings,"import_scope","Rapprochement par le profil du rapport importé; attribution réseau non vérifiée par l’import");
+        JSONObject reference=reference(pkg);return EventStore.object("app",a,"reference",reference,"exposure",ExposureRules.assess(a,reference),"history",h,"imported_findings",findings,"import_scope","Rapprochement par le profil du rapport importé; attribution réseau non vérifiée par l’import");
     }
     public synchronized JSONObject save(String pkg,String json)throws Exception{
         if(json==null||json.length()>16000||stored(latest(),pkg)==null)throw new IllegalArgumentException("Dossier invalide");JSONObject input=new JSONObject(json),r=reference(pkg);

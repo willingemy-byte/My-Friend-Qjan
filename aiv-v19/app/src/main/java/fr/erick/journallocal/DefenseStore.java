@@ -152,6 +152,15 @@ public final class DefenseStore extends SQLiteOpenHelper {
         }catch(Exception e){return 0;}
     }
 
+    /** Bulk lookup from the requested scan: a newer or stale grade never leaks into home counts. */
+    public JSONObject levelsForScan(long scan)throws Exception {
+        JSONObject levels=new JSONObject();
+        try(Cursor c=getReadableDatabase().rawQuery("SELECT pkg,level FROM apps WHERE scan_id=?",new String[]{""+scan})){
+            while(c.moveToNext())levels.put(c.getString(0),c.getInt(1));
+        }
+        return levels;
+    }
+
     public JSONObject status() throws Exception {
         JSONObject counts=new JSONObject();try(Cursor c=getReadableDatabase().rawQuery("SELECT state,COUNT(*) FROM apps GROUP BY state",null)){while(c.moveToNext())counts.put(c.getString(0),c.getLong(1));}
         long head=0;try(Cursor c=getReadableDatabase().rawQuery("SELECT COALESCE(MAX(id),0) FROM journal",null)){c.moveToFirst();head=c.getLong(0);}

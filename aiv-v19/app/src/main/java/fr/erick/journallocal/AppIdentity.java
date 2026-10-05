@@ -42,6 +42,7 @@ final class AppIdentity {
             "package_name",info.packageName,
             "profile_id",profile,
             "uid",uid,
+            "first_install_ms",info.firstInstallTime,
             "app_identity_id",sha256(canonical),
             "current_signer_sha256",array(current),
             "signing_history_sha256",array(history),

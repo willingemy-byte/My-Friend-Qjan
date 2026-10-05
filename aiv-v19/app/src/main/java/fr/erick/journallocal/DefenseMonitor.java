@@ -19,6 +19,7 @@ public final class DefenseMonitor {
         receiver=new BroadcastReceiver(){@Override public void onReceive(Context context,Intent i){
             String pkg=i.getData()==null?null:i.getData().getSchemeSpecificPart();if(pkg==null)return;
             try{DefenseStore.get(app).packageEvent(pkg,i.getAction(),i.getBooleanExtra(Intent.EXTRA_REPLACING,false),i.getBooleanExtra(Intent.EXTRA_ARCHIVAL,false));}catch(Exception e){DefenseStore.get(app).failed(e);}
+            PermissionMaintenance.request(app);
             // Coalesce ADDED/REPLACED bursts. PermissionAudit also re-runs if a scan was already active.
             main.removeCallbacks(scan);main.postDelayed(scan,1000);
         }};

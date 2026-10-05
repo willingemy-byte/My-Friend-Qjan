@@ -15,6 +15,8 @@ import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import android.os.Handler;
+import android.os.Looper;
 
 /**
  * Uploads sealed 50,000-event journal segments to the AIV Supabase archive.
@@ -32,20 +34,42 @@ public final class ArchiveSync {
 
     public static volatile String lastError="";
     public static volatile long lastVerifiedSegment=0;
+    private static volatile String phase="IDLE";
+    private static volatile long currentSegment;
+    private static final long RETRY_MIN_MS=30000,RETRY_MAX_MS=900000;
 
     private ArchiveSync(){}
 
-    public static void request(Context context){
+    private static SharedPreferences status(Context context){return context.getSharedPreferences("aiv_archive_status",0);}
+    public static void request(Context context){request(context,true);}
+    public static void requestAutomatic(Context context){request(context,false);}
+    private static synchronized void request(Context context,boolean manual){
+        SharedPreferences saved=status(context);
+        if(!manual&&System.currentTimeMillis()<saved.getLong("next_attempt_ms",0))return;
         if(!running.compareAndSet(false,true))return;
         Context app=context.getApplicationContext();
         new Thread(()->{
+            long delay=0;
             try{
-                sync(app);
+                sync(app,ArchiveSync::post);
                 lastError="";
+                saved.edit().putString("last_error","").putInt("failures",0).putLong("next_attempt_ms",0).commit();
             }catch(Exception e){
                 lastError="Archive Supabase : "+e.getClass().getSimpleName()+(e.getMessage()==null?"":" · "+e.getMessage());
+                int failures=Math.min(6,saved.getInt("failures",0)+1);
+                delay=Math.min(RETRY_MAX_MS,RETRY_MIN_MS*(1L<<(failures-1)));
+                saved.edit().putString("last_error",lastError).putInt("failures",failures).putLong("next_attempt_ms",System.currentTimeMillis()+delay).commit();
+                try{EventStore.get(app).getWritableDatabase().execSQL("UPDATE journal_archive_state SET remote_state='PENDING',error=? WHERE segment=? AND remote_state!='VERIFIED'",new Object[]{lastError,currentSegment});}catch(Exception ignored){}
             }finally{
+                phase=lastError.isEmpty()?"IDLE":"RETRY";
                 running.set(false);
+                // One segment per pass. Retry also works when collection is paused.
+                try{
+                    if(nextSegment(EventStore.get(app).getReadableDatabase())!=null){
+                        long wait=delay==0?1000:delay;
+                        new Handler(Looper.getMainLooper()).postDelayed(()->requestAutomatic(app),wait);
+                    }
+                }catch(Exception ignored){}
             }
         },"aiv-archive-sync").start();
     }
@@ -53,7 +77,8 @@ public final class ArchiveSync {
     public static JSONObject state(Context context){
         JSONObject out=EventStore.object(
             "running",running.get(),
-            "last_error",lastError,
+            "last_error",lastError.isEmpty()?status(context).getString("last_error",""):lastError,
+            "phase",phase,"current_segment",currentSegment,"next_attempt_ms",status(context).getLong("next_attempt_ms",0),
             "last_verified_segment",lastVerifiedSegment,
             "segment_size",JournalSegments.LIMIT,
             "remote","Supabase"
@@ -67,23 +92,38 @@ public final class ArchiveSync {
                     out.put("last_verified_segment",c.getLong(2));
                 }
             }
+            try(Cursor c=db.rawQuery("SELECT COUNT(*),COALESCE(SUM(s.event_count),0) FROM journal_segments s LEFT JOIN journal_archive_state a ON a.segment=s.segment WHERE s.sealed=1 AND COALESCE(a.remote_state,'')!='VERIFIED'",null)){
+                if(c.moveToFirst()){out.put("pending_segments",c.getLong(0));out.put("pending_events",c.getLong(1));}
+            }
+            try(Cursor c=db.rawQuery("SELECT segment,uploaded_through_id,error FROM journal_archive_state WHERE remote_state!='VERIFIED' ORDER BY segment LIMIT 1",null)){
+                if(c.moveToFirst()){out.put("pending_segment",c.getLong(0));out.put("uploaded_through_id",c.getLong(1));}
+            }
         }catch(Exception e){
             try{out.put("state_error",e.getClass().getSimpleName());}catch(Exception ignored){}
         }
         return out;
     }
 
-    private static void sync(Context context)throws Exception{
+    interface Transport {JSONObject send(Identity identity,JSONObject body)throws Exception;}
+    static void sync(Context context,Transport transport)throws Exception{
+        currentSegment=0;phase="START";
         Identity identity=identity(context);
         SQLiteDatabase db=EventStore.get(context).getWritableDatabase();
 
-        while(true){
             Segment s=nextSegment(db);
             if(s==null)return;
+            currentSegment=s.segment;phase="MANIFEST";
 
             String manifest=segmentManifest(db,s);
-            db.execSQL("INSERT OR REPLACE INTO journal_archive_state(segment,remote_state,client_sha256,uploaded_through_id,verified_at_ms,error) VALUES(?,?,?,?,?,?)",
-                new Object[]{s.segment,"UPLOADING",manifest,0,0,null});
+            long through=0;
+            try(Cursor c=db.rawQuery("SELECT client_sha256,uploaded_through_id FROM journal_archive_state WHERE segment=?",new String[]{String.valueOf(s.segment)})){
+                if(c.moveToFirst()){
+                    if(!manifest.equalsIgnoreCase(c.getString(0)))throw new IOException("Manifeste local modifié : segment "+s.segment);
+                    through=c.getLong(1);
+                }
+            }
+            db.execSQL("INSERT OR IGNORE INTO journal_archive_state(segment,client_sha256) VALUES(?,?)",new Object[]{s.segment,manifest});
+            db.execSQL("UPDATE journal_archive_state SET remote_state='UPLOADING',error=NULL WHERE segment=?",new Object[]{s.segment});
 
             JSONObject begin=EventStore.object(
                 "schema","aiv-journal/1",
@@ -99,28 +139,36 @@ public final class ArchiveSync {
                     "last_observed_ms",s.lastObserved
                 )
             );
-            JSONObject beginReply=post(identity,begin);
+            phase="BEGIN";
+            JSONObject beginReply=transport.send(identity,begin);
             if("VERIFIED".equals(beginReply.optString("state"))){
+                requireReceipt(beginReply,s,manifest);
                 markVerified(db,s.segment,manifest);
-                continue;
+                return;
             }
 
-            uploadEvents(db,identity,s);
+            long acknowledged=0;
+            try(Cursor c=db.rawQuery("SELECT COUNT(*) FROM events WHERE id>=? AND id<=?",new String[]{String.valueOf(s.firstId),String.valueOf(Math.min(through,s.lastId))})){
+                if(c.moveToFirst())acknowledged=c.getLong(0);
+            }
+            // A count mismatch means remote progress cannot be safely matched to our cursor.
+            if(beginReply.optLong("received_count",-1)!=acknowledged)through=0;
+            if(beginReply.optLong("received_count",-1)!=s.count){
+                phase="UPLOAD";uploadEvents(db,identity,s,through,transport);
+            }
 
-            JSONObject finalizeReply=post(identity,EventStore.object(
+            phase="VERIFY";
+            JSONObject finalizeReply=transport.send(identity,EventStore.object(
                 "schema","aiv-journal/1",
                 "action","finalize",
                 "segment_no",s.segment
             ));
-            if(!"VERIFIED".equals(finalizeReply.optString("state")))
-                throw new IOException("Segment "+s.segment+" non vérifié à distance");
-
-            String remoteSha=finalizeReply.optString("server_segment_sha256");
-            if(!manifest.equalsIgnoreCase(remoteSha))
-                throw new IOException("SHA distant différent pour segment "+s.segment);
-
+            requireReceipt(finalizeReply,s,manifest);
             markVerified(db,s.segment,manifest);
-        }
+    }
+    private static void requireReceipt(JSONObject reply,Segment s,String manifest)throws IOException{
+        if(!"VERIFIED".equals(reply.optString("state"))||reply.optLong("received_count",-1)!=s.count||!manifest.equalsIgnoreCase(reply.optString("server_segment_sha256")))
+            throw new IOException("Reçu distant incomplet ou SHA différent pour segment "+s.segment);
     }
 
     private static Segment nextSegment(SQLiteDatabase db){
@@ -156,13 +204,13 @@ public final class ArchiveSync {
         return hex(manifest.digest());
     }
 
-    private static void uploadEvents(SQLiteDatabase db,Identity identity,Segment s)throws Exception{
+    private static void uploadEvents(SQLiteDatabase db,Identity identity,Segment s,long through,Transport transport)throws Exception{
         JSONArray batch=new JSONArray();
         int approximateChars=0;
         long uploadedThrough=0;
 
-        try(Cursor c=db.rawQuery("SELECT id,timestamp_ms,app,action,destination,transport,category,payload FROM events WHERE id>=? AND id<=? ORDER BY id",
-            new String[]{String.valueOf(s.firstId),String.valueOf(s.lastId)})){
+        try(Cursor c=db.rawQuery("SELECT id,timestamp_ms,app,action,destination,transport,category,payload FROM events WHERE id>=? AND id<=? AND id>? ORDER BY id",
+            new String[]{String.valueOf(s.firstId),String.valueOf(s.lastId),String.valueOf(through)})){
             while(c.moveToNext()){
                 long id=c.getLong(0);
                 String raw=c.getString(7);
@@ -179,7 +227,7 @@ public final class ArchiveSync {
                 );
                 int chars=event.toString().length();
                 if(batch.length()>0&&(batch.length()>=MAX_EVENTS_PER_REQUEST||approximateChars+chars>MAX_REQUEST_CHARS)){
-                    sendBatch(identity,s.segment,batch);
+                    sendBatch(identity,s.segment,batch,transport);
                     uploadedThrough=batch.getJSONObject(batch.length()-1).getLong("event_id");
                     saveProgress(db,s.segment,uploadedThrough);
                     batch=new JSONArray();
@@ -191,14 +239,14 @@ public final class ArchiveSync {
         }
 
         if(batch.length()>0){
-            sendBatch(identity,s.segment,batch);
+            sendBatch(identity,s.segment,batch,transport);
             uploadedThrough=batch.getJSONObject(batch.length()-1).getLong("event_id");
             saveProgress(db,s.segment,uploadedThrough);
         }
     }
 
-    private static void sendBatch(Identity identity,long segment,JSONArray events)throws Exception{
-        JSONObject reply=post(identity,EventStore.object(
+    private static void sendBatch(Identity identity,long segment,JSONArray events,Transport transport)throws Exception{
+        JSONObject reply=transport.send(identity,EventStore.object(
             "schema","aiv-journal/1",
             "action","batch",
             "segment_no",segment,
@@ -251,7 +299,7 @@ public final class ArchiveSync {
             byte[] random=new byte[32];
             new SecureRandom().nextBytes(random);
             secret=Base64.encodeToString(random,Base64.NO_WRAP|Base64.URL_SAFE|Base64.NO_PADDING);
-            p.edit().putString("install_id",id).putString("install_secret",secret).apply();
+            if(!p.edit().putString("install_id",id).putString("install_secret",secret).commit())throw new IllegalStateException("Identité d’archive non persistée");
         }
         return new Identity(id,secret);
     }
@@ -275,7 +323,7 @@ public final class ArchiveSync {
         }
     }
 
-    private static final class Identity{
+    static final class Identity{
         final String id,secret;
         Identity(String id,String secret){this.id=id;this.secret=secret;}
     }

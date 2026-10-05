@@ -325,6 +325,19 @@ public final class TrackerIndex extends SQLiteOpenHelper {
         boolean first=true;try(Cursor c=getReadableDatabase().rawQuery("SELECT payload FROM flows ORDER BY latest",null)){while(c.moveToNext()){if(!first)writer.write(",");writer.write(c.getString(0));first=false;}}writer.write("]}");
     }
 
+    public void exportReport(java.io.Writer writer)throws Exception{
+        writer.write("{\"schema\":\"aiv-network-report/1\",\"generated_ms\":"+System.currentTimeMillis()+",\"index_status\":"+status()+",\"service_catalogue\":"+NetworkReport.catalogueSummary(context)+",\"exodus_catalogue\":"+ReferenceCatalog.get(context).summary()+",\"flows\":[");
+        boolean first=true;long count=0;
+        try(Cursor c=getReadableDatabase().rawQuery("SELECT payload FROM flows ORDER BY latest",null)){
+            while(c.moveToNext()){
+                JSONObject flow=new JSONObject(c.getString(0));ReferenceCatalog.get(context).flow(flow);
+                PermissionUsage.enrich(context,new JSONArray().put(flow));
+                if(!first)writer.write(",");writer.write(flow.toString());first=false;count++;
+            }
+        }
+        writer.write("],\"exported_flows\":"+count+",\"scope\":\"Rapport dérivé des flux indexés, avec rôles documentés, candidats Exodus et accès rapprochés. L’avancement de l’index précise sa couverture; aucun contenu ni destinataire local supplémentaire n’est déduit.\"}");writer.flush();
+    }
+
     // Legacy flat page retained for older UI paths and exports.
     public JSONObject page(String query,long before)throws Exception{return page(query,before,25);}
     public JSONObject page(String query,long before,int limit)throws Exception{

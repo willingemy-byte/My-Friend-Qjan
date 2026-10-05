@@ -48,6 +48,7 @@ public final class MainActivity extends Activity {
     private static final int EXPORT_REQUEST=1203;
     private static final int JSONL_EXPORT_REQUEST=1207,SQLITE_EXPORT_REQUEST=1208;
     private static final int ANALYSIS_EXPORT_REQUEST=1204;
+    private static final int NETWORK_REPORT_REQUEST=1209;
     private static final int SHIZUKU_PERMISSION_REQUEST=1205;
     private static final int PERMISSION_EXPORT_REQUEST=1206;
     private static final int BG=0xff04102f;
@@ -78,6 +79,11 @@ public final class MainActivity extends Activity {
     private int permissionOffset;
     private final java.util.Set<String> permissionSelection=new java.util.LinkedHashSet<>();
     private TextView permissionStatusView;
+    private TextView maintenanceStatusView;
+    private ApplicationOverview applicationOverview;
+    private String overviewCategory="";
+    private LinearLayout overviewGroups,overviewApplications;
+    private final AtomicInteger overviewGeneration=new AtomicInteger();
     private boolean permissionPrepareAfterReview,permissionShowReportAfterJob;
     private final rikka.shizuku.Shizuku.OnRequestPermissionResultListener permissionAuthListener=(code,result)->{
         if(code!=SHIZUKU_PERMISSION_REQUEST)return;
@@ -91,6 +97,7 @@ public final class MainActivity extends Activity {
     };
     private final Runnable headerStatusPulse=new Runnable(){@Override public void run(){
         if(statusRow!=null)refreshHeaderStatus();
+        if("shizuku".equals(currentPage)&&maintenanceStatusView!=null)maintenanceStatusView.setText(maintenanceSummary());
         main.postDelayed(this,2000);
     }};
 
@@ -109,7 +116,7 @@ public final class MainActivity extends Activity {
         previewTier=ProductAccess.demoTier(this);
         buildShell();
         prepareLocalData();
-        showPage("presentation");
+        showPage(getIntent().getBooleanExtra("open_maintenance",false)?"shizuku":"presentation");
     }
 
     private void buildShell(){
@@ -145,7 +152,7 @@ public final class MainActivity extends Activity {
         brandText.setOrientation(LinearLayout.VERTICAL);
         TextView title=text("ALL IN VISIBLE",24,TEXT,true);
         title.setLetterSpacing(.09f);
-        TextView sub=text("AIV 2.0.6 · interface Android native",13,MUTED,false);
+        TextView sub=text("AIV "+BuildMetadata.VERSION_NAME+" · interface Android native",13,MUTED,false);
         TextView nativeTag=text("●  NATIF · WebView absent",13,GREEN,true);
         nativeTag.setPadding(0,dp(4),0,0);
         brandText.addView(title);brandText.addView(sub);brandText.addView(nativeTag);
@@ -242,7 +249,7 @@ public final class MainActivity extends Activity {
         generation.incrementAndGet();
         for(int i=0;i<nav.getChildCount();i++){
             View v=nav.getChildAt(i);
-            if(v instanceof Button)styleTab((Button)v,id.equals(v.getTag()));
+            if(v instanceof Button)styleTab((Button)v,id.equals(v.getTag())||("status".equals(id)&&"presentation".equals(v.getTag())));
         }
         if("journal".equals(id))renderJournal("");
         else if("flows".equals(id))renderFlows("");
@@ -253,28 +260,14 @@ public final class MainActivity extends Activity {
         else if("integrity".equals(id))renderIntegrity();
         else if("shizuku".equals(id)){ if(previewTier>=TIER_PAID)renderShizuku(); else renderUpgradeGate(); }
         else if("supabase".equals(id))renderSupabase();
+        else if("status".equals(id))renderAivStatus();
         else renderPresentation();
     }
 
     private void renderPresentation(){
+        int ticket=generation.incrementAndGet();overviewGeneration.incrementAndGet();
         page.removeAllViews();
-        page.addView(sectionTitle("Présentation"));
-        page.addView(note("AIV 2.0.6 · journal corrigé · interface Android native. Capture réseau volontaire dans Flux; journal et exports locaux. Inconnu reste inconnu. Source : "+BuildMetadata.SOURCE_COMMIT.substring(0,12)));
-
-        page.addView(sectionTitle("Mode d’utilisation"));
-        tierFooter=new LinearLayout(this);
-        tierFooter.setOrientation(LinearLayout.HORIZONTAL);
-        tierFooter.setGravity(Gravity.CENTER);
-        tierFooter.setPadding(dp(4),dp(4),dp(4),dp(10));
-        addTierButton("Free",TIER_FREE);
-        addTierButton("Paid",TIER_PAID);
-        addTierButton("TI",TIER_IT);
-        page.addView(tierFooter,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,dp(62)));
-        refreshTierFooter();
         page.addView(sectionTitle("Niveaux d’autorisation"));
-        String[] levelHeaders={"Niveau","Définition","Détail"};
-        int[] levelWidths={90,520,100};
-        TableLayout levels=dataTable(levelHeaders,levelWidths);
         String[][] levelDefs={
             {"A1","Visible dans les autorisations"},
             {"A2","Visible dans Toutes les autorisations"},
@@ -285,25 +278,116 @@ public final class MainActivity extends Activity {
         for(int i=0;i<levelDefs.length;i++){
             final int level=i+1;
             final String code=levelDefs[i][0],definition=levelDefs[i][1];
-            addTableRow(levels,new String[]{code,definition},null,levelWidths,level,null,null,
-                v->showDetail(code+" · niveau d’autorisation",definition,null,null));
+            LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.HORIZONTAL);box.setGravity(Gravity.CENTER_VERTICAL);
+            box.setPadding(dp(12),dp(10),dp(12),dp(10));box.setBackground(panelDrawable(PANEL_2,levelColor(level),12));box.setLayoutParams(blockParams());
+            box.addView(text(code,19,levelColor(level),true),new LinearLayout.LayoutParams(dp(42),ViewGroup.LayoutParams.WRAP_CONTENT));
+            box.addView(text(definition,15,TEXT,false),new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
+            page.addView(box);
         }
-        page.addView(tableScroller(levels));
-
         page.addView(sectionTitle("Catégories d’applications"));
-        String[] groupHeaders={"Catégorie","Définition","Détail"};
-        int[] groupWidths={160,450,100};
-        TableLayout groups=dataTable(groupHeaders,groupWidths);
-        addTableRow(groups,new String[]{"Android","UID réservé/partagé ou attribution non unique dans le journal."},
-            null,groupWidths,0,null,null,v->showDetail("Android",
-                "Événements Android dont AIV ne peut pas attribuer proprement l’auteur à un seul package : UID réservé, partagé ou plusieurs candidats.",null,null));
-        addTableRow(groups,new String[]{"Système","Application préinstallée identifiée avec un package unique."},
-            null,groupWidths,0,null,null,v->showDetail("Système",
-                "Application préinstallée/système pour laquelle Android permet une attribution unique au package.",null,null));
-        addTableRow(groups,new String[]{"Utilisateur","Application installée par l’utilisateur avec un package unique."},
-            null,groupWidths,0,null,null,v->showDetail("Utilisateur",
-                "Application non système installée dans le profil utilisateur et attribuable à un package unique.",null,null));
-        page.addView(tableScroller(groups));
+        overviewGroups=new LinearLayout(this);overviewGroups.setOrientation(LinearLayout.VERTICAL);page.addView(overviewGroups);
+        TextView loading=text("Calcul en cours · lecture de l’inventaire…",16,BLUE,true);overviewGroups.addView(loading);
+        page.addView(action("Statut",v->showPage("status")));
+        overviewApplications=new LinearLayout(this);overviewApplications.setOrientation(LinearLayout.VERTICAL);page.addView(overviewApplications);
+        new Thread(()->{try{
+            JSONObject inventory=PermissionAudit.get(this).presentationInventory();
+            boolean scanning=PermissionAudit.get(this).summary().optBoolean("busy");
+            ApplicationOverview result=new ApplicationOverview(inventory,inventory.getJSONObject("grades"));
+            main.post(()->{
+                if(ticket!=generation.get()||!"presentation".equals(currentPage)||isFinishing()||isDestroyed())return;
+                applicationOverview=result;renderOverviewGroups();renderOverviewApplications();
+                if(result.scan==0)overviewApplications.addView(action("Lancer l’inventaire",v->{PermissionAudit.get(this).scan();pollOverviewInventory(ticket,0);}));
+                if(scanning)pollOverviewInventory(ticket,0);
+            });
+        }catch(Exception e){main.post(()->{
+            if(ticket!=generation.get()||!"presentation".equals(currentPage))return;
+            applicationOverview=null;overviewGroups.removeAllViews();overviewGroups.addView(card("Inventaire indisponible",String.valueOf(e.getMessage())));
+        });}},"aiv-home-inventory").start();
+    }
+
+    private void pollOverviewInventory(int ticket,int attempt){
+        main.postDelayed(()->{
+            if(ticket!=generation.get()||!"presentation".equals(currentPage)||isFinishing()||isDestroyed())return;
+            new Thread(()->{try{
+                JSONObject state=PermissionAudit.get(this).summary();
+                main.post(()->{if(ticket!=generation.get())return;if(!state.optBoolean("busy"))renderPresentation();else if(attempt<60)pollOverviewInventory(ticket,attempt+1);});
+            }catch(Exception e){main.post(()->toast("Inventaire : "+e.getMessage()));}},"aiv-home-inventory-progress").start();
+        },1000);
+    }
+
+    private String overviewDefinition(String category){
+        return "Android".equals(category)?"UID réservé, partagé ou attribution non unique.":"Système".equals(category)?"Applications préinstallées avec un package unique.":"Applications installées par l’utilisateur avec un package unique.";
+    }
+    private void renderOverviewGroups(){
+        overviewGroups.removeAllViews();
+        for(String category:ApplicationOverview.CATEGORIES){
+            int total=applicationOverview.apps(category).size();boolean selected=category.equals(overviewCategory);
+            LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(14),dp(14),dp(14),dp(14));
+            box.setBackground(panelDrawable(selected?0xff123b5a:PANEL_2,BLUE,16));box.setLayoutParams(blockParams());box.setMinimumHeight(dp(132));
+            LinearLayout heading=new LinearLayout(this);heading.setGravity(Gravity.CENTER_VERTICAL);
+            heading.addView(text(category,21,BLUE,true),new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
+            heading.addView(text(String.valueOf(total),29,TEXT,true));box.addView(heading);
+            TextView definition=text(overviewDefinition(category),13,MUTED,false);definition.setPadding(0,dp(5),0,dp(10));box.addView(definition);
+            LinearLayout distribution=new LinearLayout(this);distribution.setOrientation(LinearLayout.HORIZONTAL);
+            StringBuilder accessible=new StringBuilder(category+", "+total+" applications");
+            for(int level=1;level<=5;level++){
+                int count=applicationOverview.count(category,level);TextView grade=text("A"+level+"\n"+count,15,levelColor(level),true);grade.setGravity(Gravity.CENTER);grade.setPadding(0,dp(5),0,dp(5));
+                grade.setBackground(panelDrawable(PANEL,levelColor(level),8));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f);lp.setMargins(level==1?0:dp(4),0,0,0);distribution.addView(grade,lp);
+                accessible.append(", A").append(level).append(": ").append(count);
+            }
+            box.addView(distribution);int ungraded=applicationOverview.count(category,0);
+            if(ungraded>0){TextView unknown=text("Indéterminées : "+ungraded+" · éléments de classement manquants",13,MUTED,false);unknown.setPadding(0,dp(7),0,0);box.addView(unknown);accessible.append(", indéterminées: ").append(ungraded);}
+            box.setContentDescription(accessible.toString());box.setFocusable(true);box.setClickable(true);
+            box.setOnClickListener(v->{overviewCategory=category;renderOverviewGroups();renderOverviewApplications();});overviewGroups.addView(box);
+        }
+        overviewGroups.addView(note(applicationOverview.total()+" applications dans le dernier inventaire du profil courant. Chaque package est compté une seule fois."));
+        overviewGroups.addView(note("Grade maximal établi parmi les permissions déclarées. A1/A2 demandent des listes de visibilité vérifiées pour la même version. Un grade ne prouve pas un usage effectif."));
+    }
+    private void renderOverviewApplications(){
+        int ticket=overviewGeneration.incrementAndGet();overviewApplications.removeAllViews();
+        if(overviewCategory.isEmpty()){overviewApplications.addView(note("Choisis Android, Système ou Utilisateur pour afficher les applications et leur grade ici."));return;}
+        java.util.List<JSONObject> apps=applicationOverview.apps(overviewCategory);
+        overviewApplications.addView(sectionTitle(overviewCategory+" · "+apps.size()+" applications"));
+        overviewApplications.addView(note("Liste complète du dernier inventaire, du grade A5 au grade A1, puis les applications sans grade. Appuie sur une application pour voir son dossier."));
+        appendOverviewApplications(apps,0,ticket);
+    }
+    private void appendOverviewApplications(java.util.List<JSONObject> apps,int offset,int ticket){
+        if(ticket!=overviewGeneration.get()||!"presentation".equals(currentPage)||isFinishing()||isDestroyed())return;
+        int end=Math.min(offset+20,apps.size());
+        for(int i=offset;i<end;i++){
+            JSONObject app=apps.get(i);String pkg=app.optString("package"),label=app.optString("label",pkg);int level=app.optInt("level");
+            LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(13),dp(12),dp(13),dp(12));box.setLayoutParams(blockParams());box.setBackground(panelDrawable(PANEL_2,levelColor(level),12));
+            LinearLayout row=new LinearLayout(this);row.setGravity(Gravity.CENTER_VERTICAL);row.addView(text(label,17,TEXT,true),new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
+            TextView grade=text(level>0?"A"+level:"?",20,levelColor(level),true);grade.setPadding(dp(8),0,0,0);row.addView(grade);box.addView(row);
+            TextView detail=text(pkg+"\nUID "+app.optInt("uid",-1)+" · "+(app.optJSONArray("permissions")==null?0:app.optJSONArray("permissions").length())+" permissions déclarées",13,MUTED,false);detail.setPadding(0,dp(5),0,0);box.addView(detail);
+            box.setFocusable(true);box.setClickable(true);box.setOnClickListener(v->openOverviewApplication(pkg,label));overviewApplications.addView(box);
+        }
+        if(end<apps.size())main.post(()->appendOverviewApplications(apps,end,ticket));
+    }
+    private void openOverviewApplication(String pkg,String label){
+        new Thread(()->{try{JSONObject detail=PermissionAudit.get(this).detail(pkg);String why=exposureExplanation(detail.getJSONObject("exposure"));main.post(()->{if(!isFinishing()&&!isDestroyed())showDetail(label,why,"Dossier complet",()->showJsonDetail(label,detail,pkg));});}
+            catch(Exception e){main.post(()->toast("Dossier : "+e.getMessage()));}},"aiv-home-app-detail").start();
+    }
+    private String exposureExplanation(JSONObject exposure){
+        int level=exposure.optInt("level");StringBuilder out=new StringBuilder(level>0?"Grade A"+level+" · plus haut niveau établi":"Grade indéterminé · éléments de classement manquants");
+        out.append("\n\n").append(exposure.optString("scope"));
+        String visibility=exposure.optString("visibility_status");
+        out.append("\n\nVisibilité : ").append("LISTES_CONCORDANTES".equals(visibility)?"listes vérifiées concordantes":"CONTRADICTOIRE".equals(visibility)?"listes contradictoires à vérifier":"PARTIELLE".equals(visibility)?"liste partielle vérifiée":"listes non vérifiées pour cette version");
+        JSONArray findings=exposure.optJSONArray("findings");int shown=0;
+        if(findings!=null)for(int i=0;i<findings.length()&&shown<5;i++){
+            JSONObject finding=findings.optJSONObject(i);if(finding==null||finding.optInt("level")!=level)continue;shown++;
+            out.append("\n\n").append(finding.optString("permission")).append("\n").append(finding.optString("reason")).append("\nSource : ").append(finding.optString("source"));
+            out.append("\nÉtat Android : ").append("NON_ACCORDEE".equals(finding.optString("effective_status"))?"non accordée":"ACCORD_ANDROID_APP_OPS_NON_VERIFIES".equals(finding.optString("effective_status"))?"accordée; AppOps non vérifiés":"inconnu");
+        }
+        out.append("\n\nPermissions sans règle ou preuve suffisante : ").append(exposure.optInt("unclassified_permissions"));return out.toString();
+    }
+
+    private void renderAivStatus(){
+        page.removeAllViews();page.addView(action("Retour à la présentation",v->showPage("presentation")));
+        page.addView(sectionTitle("Mode d’utilisation"));
+        tierFooter=new LinearLayout(this);tierFooter.setOrientation(LinearLayout.HORIZONTAL);tierFooter.setGravity(Gravity.CENTER);
+        tierFooter.setPadding(dp(4),dp(4),dp(4),dp(10));addTierButton("Free",TIER_FREE);addTierButton("Paid",TIER_PAID);addTierButton("TI",TIER_IT);
+        page.addView(tierFooter,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,dp(62)));refreshTierFooter();
 
         page.addView(sectionTitle("État AIV"));
         String[] headers={"Section","État","Résumé","Ouvrir"};
@@ -372,6 +456,8 @@ public final class MainActivity extends Activity {
             addTableRow(table,new String[]{"Shizuku","INDISPONIBLE",e.getClass().getSimpleName()},
                 null,widths,0,null,null,v->showDetail("Shizuku","Indisponible : "+e.getClass().getSimpleName(),null,null));
         }
+        addTableRow(table,new String[]{"Maintien des droits",PermissionMaintenance.enabled(this)?"ACTIVÉ":"EN PAUSE",maintenanceSummary()},
+            null,widths,0,null,null,v->openPermissionMaintenance());
 
         try{
             JSONObject app=AppIdentity.forPackage(this,getPackageName());
@@ -391,11 +477,11 @@ public final class MainActivity extends Activity {
         page.addView(tableScroller(table));
 
         LinearLayout actions=new LinearLayout(this);actions.setOrientation(LinearLayout.VERTICAL);
-        actions.addView(action("Actualiser l'inventaire",v->{PermissionAudit.get(this).scan();toast("Inventaire lancé");main.postDelayed(this::renderPresentation,900);}));
+        actions.addView(action("Actualiser l'inventaire",v->{PermissionAudit.get(this).scan();toast("Inventaire lancé");showPage("presentation");}));
         actions.addView(action("Démarrer la collecte locale (sans VPN)",v->startCollection()));
         actions.addView(action("Exporter le journal local",v->beginJournalExport()));
-        actions.addView(action("Synchroniser l'archive Supabase",v->{ArchiveSync.request(this);toast("Synchronisation Supabase demandée");main.postDelayed(this::renderPresentation,1200);}));
-        actions.addView(action("Arrêter la collecte AIV",v->{Continuous.stop(this);toast("Collecte arrêtée");main.postDelayed(this::renderPresentation,400);}));
+        actions.addView(action("Synchroniser l'archive Supabase",v->{ArchiveSync.request(this);toast("Synchronisation Supabase demandée");main.postDelayed(()->{if("status".equals(currentPage))renderAivStatus();},1200);}));
+        actions.addView(action("Arrêter la collecte AIV",v->{Continuous.stop(this);toast("Collecte arrêtée");main.postDelayed(()->{if("status".equals(currentPage))renderAivStatus();},400);}));
         page.addView(actions);
     }
 
@@ -482,13 +568,16 @@ public final class MainActivity extends Activity {
             try{
                 JSONObject data=EventStore.get(this).page(query,"",offset,150,ceiling,"","",false);
                 JSONArray rows=data.optJSONArray("events");
+                PermissionUsage.enrich(this,rows);
+                JSONObject usageStatus=PermissionUsage.get(this).status();
                 main.post(()->{
                     if(ticket!=generation.get()||!"journal".equals(currentPage))return;
                     page.removeView(loading);
+                    page.addView(note("Accès Android : "+usageStatus.optString("state")+(usageStatus.optLong("last_success_ms")>0?" · relevé "+shortTime(usageStatus.optLong("last_success_ms")):"")+". Un accès rapproché ne prouve pas son envoi dans le flux."));
                     page.addView(text(data.optLong("matched")+" résultat(s) · "+data.optLong("total")+" événement(s)",14,MUTED,true));
                     if(rows==null)return;
-                    String[] headers={"Niv.","Heure","Application","UID","Action","Destination","Sens","↑","↓","Flux","Détail"};
-                    int[] widths={64,120,190,90,220,280,100,100,100,170,100};
+                    String[] headers={"Niv.","Heure","Application","UID","Action","Service / accès","Destination","Sens","↑","↓","Flux","Détail"};
+                    int[] widths={64,120,190,90,220,250,280,100,100,100,170,100};
                     TableLayout table=dataTable(headers,widths);
                     for(int i=0;i<rows.length();i++){
                         JSONObject e=rows.optJSONObject(i);if(e==null)continue;
@@ -505,8 +594,8 @@ public final class MainActivity extends Activity {
                         String rx=formatCounter(d,"rx_bytes");
                         String flow=d==null?"":d.optString("flow_correlation_id","");
                         String flowText=flow.isEmpty()?"—":(flow.length()>14?flow.substring(0,14)+"…":flow);
-                        String[] values={levelShort(level),shortTime(e.optLong("timestamp_ms")),app,uidText,action,destination,direction,tx,rx,flowText};
-                        String[] filters={null,null,app,uid<0?null:uidText,action,destination,direction,null,null,flow.isEmpty()?null:flow};
+                        String[] values={levelShort(level),shortTime(e.optLong("timestamp_ms")),app,uidText,action,PermissionUsage.brief(e),destination,direction,tx,rx,flowText};
+                        String[] filters={null,null,app,uid<0?null:uidText,action,null,destination,direction,null,null,flow.isEmpty()?null:flow};
                         addTableRow(table,values,filters,widths,level,search,()->renderJournal(search.getText().toString()),
                             v->showEventPedigree("Journal · "+app,e,pkg));
                     }
@@ -583,8 +672,8 @@ public final class MainActivity extends Activity {
                     page.removeView(loading);
                     page.addView(text(data.optLong("total")+" groupe(s)",14,MUTED,true));
                     if(rows==null)return;
-                    String[] headers={"Niv.","Heure","Application","Règle","Destination / sujet","Occ.","Sévérité","Détail"};
-                    int[] widths={64,135,190,220,310,80,110,100};
+                    String[] headers={"Niv.","Heure","Application","Règle","Accès rapprochés","Destination / sujet","Occ.","Sévérité","Détail"};
+                    int[] widths={64,135,190,220,250,310,80,110,100};
                     TableLayout table=dataTable(headers,widths);
                     for(int i=0;i<rows.length();i++){
                         JSONObject x=rows.optJSONObject(i);if(x==null)continue;
@@ -599,8 +688,8 @@ public final class MainActivity extends Activity {
                         String destination=facts==null?"":facts.optString("Destination contactée","");
                         if(destination.isEmpty())destination=x.optString("subject","—");
                         String rule=x.optString("rule",title);
-                        String[] values={levelShort(level),shortTime(x.optLong("last_ms")),actor,rule,destination,String.valueOf(x.optLong("occurrences",1)),severity};
-                        String[] filters={null,null,actor,rule,destination,null,severity};
+                        String[] values={levelShort(level),shortTime(x.optLong("last_ms")),actor,rule,PermissionUsage.brief(x),destination,String.valueOf(x.optLong("occurrences",1)),severity};
+                        String[] filters={null,null,actor,rule,null,destination,null,severity};
                         final int rowLevel=level;
                         addTableRow(table,values,filters,widths,rowLevel,search,()->renderAnomalies(search.getText().toString()),
                             v->showAnomalyDetail(x,pkg));
@@ -703,6 +792,11 @@ public final class MainActivity extends Activity {
         page.removeAllViews();
         page.addView(sectionTitle("Flux"));
         page.addView(note("Projection native des événements du VPN AIV. Aucun contenu TLS n'est déchiffré et aucun marqueur n'est injecté dans Internet."));
+        page.addView(note("VPN : "+NetworkCaptureService.stateText+(NetworkCaptureService.lastError.isEmpty()?"":"\nErreur : "+NetworkCaptureService.lastError)));
+        String lastStop=NetworkCaptureService.lastStopReason(this);
+        if(!lastStop.isEmpty())page.addView(note("Dernier arrêt VPN : "+lastStop));
+        if(NetworkCaptureService.running&&NetworkCaptureService.observationDelayMs>=3000)
+            page.addView(note("Journal en retard de "+(NetworkCaptureService.observationDelayMs/1000)+" s; interface VPN maintenue. Les observations en attente gardent leur heure de capture."));
         page.addView(action(NetworkCaptureService.running||NetworkCaptureService.starting?"Arrêter la capture réseau":"Activer la capture réseau (VPN local)",v->{
             if(NetworkCaptureService.running||NetworkCaptureService.starting){Continuous.prefs(this).edit().putBoolean("vpn_enabled",false).apply();stopService(new Intent(this,NetworkCaptureService.class));renderFlows(query);}
             else beginNetworkCapture();
@@ -710,12 +804,14 @@ public final class MainActivity extends Activity {
         EditText search=searchBox("Application, UID, IP, domaine ou ID",query);
         page.addView(search);
         page.addView(action("Actualiser",v->renderFlows(search.getText().toString())));
+        page.addView(action("Exporter le rapport des échanges",v->beginNetworkReportExport()));
         page.addView(note("Double-tape une valeur du tableau pour la placer dans la recherche. Ouvrir montre la ligne complète et les preuves conservées."));
         TextView loading=text("Lecture des flux…",14,MUTED,false);page.addView(loading);
         new Thread(()->{
             try{
                 JSONObject data=EventStore.get(this).flowPage(query,before,100);
                 JSONArray flows=data.optJSONArray("flows");
+                PermissionUsage.enrich(this,flows);
                 main.post(()->{
                     if(ticket!=generation.get()||!"flows".equals(currentPage))return;
                     page.removeView(loading);
@@ -724,8 +820,8 @@ public final class MainActivity extends Activity {
                     if(status!=null)page.addView(note("Index du journal : "+status.optLong("checkpoint")+" / "+status.optLong("latest_event")+" événements"+(status.optBoolean("busy")?" · reconstruction en cours":"")+(status.optString("error").isEmpty()?"":" · "+status.optString("error"))));
                     if(quality!=null)page.addView(card("Qualité de cette page", "Attribution : "+formatRate(quality,"attribution_rate")+" · inconnus : "+formatRate(quality,"unknown_rate")+"\nCouverture des volumes : "+formatRate(quality,"volume_coverage")+"\nOctets observés : ↑ "+formatCounter(quality,"tx_bytes_observed")+" · ↓ "+formatCounter(quality,"rx_bytes_observed")+"\nAlertes de compteurs : "+quality.optLong("counter_issue_connections")+"\n"+quality.optString("scope")));
                     if(flows==null)return;
-                    String[] headers={"Niv.","Heure","Application","UID","Attribution","Proto","Destination","Tracker","↑","↓","Détail"};
-                    int[] widths={64,120,190,90,150,90,260,190,100,100,100};
+                    String[] headers={"Niv.","Heure","Application","UID","Attribution","Proto","Service / accès","Destination","Pisteurs candidats","↑","↓","Détail"};
+                    int[] widths={64,120,190,90,150,90,250,260,190,100,100,100};
                     TableLayout table=dataTable(headers,widths);
                     for(int i=0;i<flows.length();i++){
                         JSONObject f=flows.optJSONObject(i);if(f==null)continue;
@@ -736,15 +832,14 @@ public final class MainActivity extends Activity {
                         JSONArray packages=f.optJSONArray("packages");
                         String pkg=uniquePackage(f);
                         int level=levelForPackage(pkg);
-                        JSONArray trackers=f.optJSONArray("tracker_matches");
-                        String tracker=(trackers!=null&&trackers.length()>0&&trackers.optJSONObject(0)!=null)?trackers.optJSONObject(0).optString("name","tracker"):"—";
+                        String tracker=NetworkReport.trackersBrief(f);
                         String uidText=uid<0?"Inconnu":String.valueOf(uid);
                         String protocol=f.optString("protocol","—");
                         String attribution=attributionLabel(f);
-                        String[] values={levelShort(level),shortTime(Math.max(f.optLong("first_outbound_ms"),f.optLong("first_inbound_ms"))),actor,uidText,attribution,protocol,dest,tracker,formatCounter(f,"tx_bytes"),formatCounter(f,"rx_bytes")};
-                        String[] filters={null,null,actor,uid<0?null:uidText,null,protocol,dest,"—".equals(tracker)?null:tracker,null,null};
+                        String[] values={levelShort(level),shortTime(Math.max(f.optLong("first_outbound_ms"),f.optLong("first_inbound_ms"))),actor,uidText,attribution,protocol,PermissionUsage.brief(f),dest,tracker,formatCounter(f,"tx_bytes"),formatCounter(f,"rx_bytes")};
+                        String[] filters={null,null,actor,uid<0?null:uidText,null,protocol,null,dest,null,null,null};
                         addTableRow(table,values,filters,widths,level,search,()->renderFlows(search.getText().toString()),
-                            v->showJsonDetail("Flux · "+actor,f,pkg));
+                            v->showEventPedigree("Flux · "+actor,f,pkg));
                     }
                     page.addView(tableScroller(table));
                     if(data.optBoolean("has_more"))page.addView(action("Page suivante",v->renderFlows(query,data.optLong("next_before_id"))));
@@ -812,6 +907,8 @@ public final class MainActivity extends Activity {
     private void permissionControls(){
         TextView state=text((PermissionControl.authorized()?"Shizuku autorisé":"Shizuku à autoriser")+" · "+PermissionControl.status(),15,BLUE,true);
         permissionStatusView=state;page.addView(state);
+        maintenanceStatusView=text(maintenanceSummary(),15,BLUE,true);page.addView(maintenanceStatusView);
+        page.addView(action("Maintien automatique des droits",v->openPermissionMaintenance()));
         if(!PermissionControl.authorized())page.addView(action("Autoriser AIV dans Shizuku",v->{
             try{
                 if(!rikka.shizuku.Shizuku.pingBinder()){showDetail("Shizuku","Démarre Shizuku, puis reviens autoriser AIV.","Ouvrir Shizuku",()->openPackage("moe.shizuku.privileged.api"));return;}
@@ -830,6 +927,72 @@ public final class MainActivity extends Activity {
                     .setNegativeButton("Annuler",null).setPositiveButton("Restaurer",(d,w)->permissionJob(()->PermissionControl.restore(this))).show();
                 else requestPermissionExport();
             }).setNegativeButton("Fermer",null).show()));
+    }
+
+    private void startMaintenanceCollector(){
+        Continuous.prefs(this).edit().putBoolean("enabled",true).apply();
+        if(!RecorderService.running)startForegroundService(new Intent(this,RecorderService.class));
+    }
+    private String maintenanceSummary(){
+        if(PermissionMaintenance.enabled(this)&&!PermissionMaintenance.busy()&&!RecorderService.running&&PermissionControl.authorized())return "Maintien : en attente de la collecte AIV · reprendre le maintien";
+        return PermissionMaintenance.displayStatus(this);
+    }
+    private void maintenanceJob(PermissionJob job){maintenanceJobPending=true;permissionJob(job);}
+    private void openPermissionMaintenance(){
+        new Thread(()->{try{JSONObject s=PermissionMaintenance.state(this);main.post(()->{
+            if(isFinishing()||isDestroyed())return;
+            LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);body.setPadding(dp(16),dp(12),dp(16),dp(16));body.setBackgroundColor(BG);
+            TextView live=text(maintenanceSummary(),16,BLUE,true);body.addView(live);
+            body.addView(note(s.optInt("rights")+" refus enregistrés · "+s.optLong("corrections")+" corrections confirmées · "+s.optInt("user_exceptions")+" autorisations conservées\nDernier contrôle : "+(s.optLong("last_check_ms")==0?"aucun contrôle terminé":new java.text.SimpleDateFormat("dd-MM HH:mm:ss",Locale.CANADA_FRENCH).format(new java.util.Date(s.optLong("last_check_ms"))))));
+            body.addView(note("1. Démarre Shizuku et autorise AIV.\n2. Enregistre les refus actuels avec le bouton ci-dessous.\n3. Attends la fin de la préparation : l’état doit afficher Maintien actif.\nAIV démarre sa collecte locale et vérifie ensuite par cycles de 15 secondes. Le VPN n’est pas requis. Zéro correction signifie qu’aucun retour de droit n’a été corrigé."));
+            body.addView(note("Une permission réaccordée avec un marqueur de choix utilisateur Android sort du maintien et reste autorisée. L’exception concerne seulement cette permission dans cette application; elle reste enregistrée après redémarrage. Pour la remettre sous maintien, retire-la à nouveau avec AIV. Les exceptions sont détaillées dans État détaillé et dernier résultat."));
+            ScrollView scroll=new ScrollView(this);scroll.addView(body);
+            AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Maintien automatique des droits").setView(scroll).setNegativeButton("Fermer",null).create();
+            Button activate=action(s.optBoolean("has_baseline")?"Ajouter les refus actuels à la référence":"Enregistrer les refus actuels et activer",v->{
+                dialog.dismiss();new AlertDialog.Builder(this).setTitle("Enregistrer les refus actuels ?")
+                        .setMessage("AIV mémorise les refus vérifiables dans les catégories choisies et les retraits confirmés. Elle les vérifie pendant la collecte et les réapplique via Shizuku s’ils reviennent sans marqueur de choix utilisateur. Une permission réaccordée avec ce marqueur est conservée et sort du maintien. Les refus manuels vérifiables sont inclus. Les applications présentes et identifiées forment la référence approuvée; les nouvelles restent à examiner. Ajouter des refus conserve les règles et les exceptions déjà enregistrées. Le contrôle se fait par cycles, après le changement. Les droits d’installation/signature et les réglages réseau propres au fabricant ne sont pas couverts.")
+                        .setNegativeButton("Annuler",null).setPositiveButton("Enregistrer et maintenir",(d,w)->maintenanceJob(()->{startMaintenanceCollector();return PermissionMaintenance.prepare(this);})).show();
+            });activate.setEnabled(!s.optBoolean("busy"));body.addView(activate);
+            if(s.optBoolean("busy"))body.addView(action("Arrêter la préparation ou le cycle",v->{dialog.dismiss();PermissionMaintenance.cancelPreparation();}));
+            else if(s.optBoolean("has_baseline"))body.addView(action(s.optBoolean("enabled")?"Mettre le maintien en pause":"Reprendre le maintien",v->{dialog.dismiss();maintenanceJob(()->{if(s.optBoolean("enabled"))PermissionMaintenance.pause(this);else{startMaintenanceCollector();PermissionMaintenance.resume(this);}return new JSONObject();});}));
+            if(s.optBoolean("enabled")&&!s.optBoolean("busy"))body.addView(action("Vérifier maintenant",v->{dialog.dismiss();maintenanceJob(()->{startMaintenanceCollector();PermissionMaintenance.request(this);return new JSONObject();});}));
+            Button block=action(s.optBoolean("block_new")?"Désactiver le blocage des nouvelles applications":"Désactiver les nouvelles applications après détection",v->{
+                        dialog.dismiss();if(s.optBoolean("block_new"))maintenanceJob(()->{PermissionMaintenance.setBlocksNew(this,false);return new JSONObject();});
+                        else new AlertDialog.Builder(this).setTitle("Nouvelles applications à approuver")
+                            .setMessage("Les applications absentes de la référence seront désactivées puis arrêtées après leur détection, lorsque Shizuku le permet. Tu pourras les approuver ici. Les composants protégés et UID partagés restent à examiner. AIV n’empêche pas l’installation elle-même et ne garantit pas l’absence d’activité avant détection.")
+                            .setNegativeButton("Annuler",null).setPositiveButton("Activer",(d,w)->maintenanceJob(()->{PermissionMaintenance.setBlocksNew(this,true);return new JSONObject();})).show();
+            });block.setEnabled(s.optBoolean("has_baseline")&&!s.optBoolean("busy"));body.addView(block);
+            body.addView(note("Nouvelles applications à examiner : "+s.optInt("pending_count")+". Cette liste est distincte de l’état du maintien."));
+            body.addView(action("Applications en attente d’approbation",v->{dialog.dismiss();showMaintenanceApplications(s.optJSONObject("pending"),0);}));
+            body.addView(action("État détaillé et dernier résultat",v->{dialog.dismiss();new Thread(()->{try{String details=PermissionMaintenance.exportState(this).toString(2);main.post(()->showDetail("Maintien · état et dernier résultat",details,null,null));}catch(Exception e){main.post(()->toast(e.getMessage()));}},"aiv-maintenance-detail").start();}));
+            dialog.show();
+            Runnable pulse=new Runnable(){@Override public void run(){if(!dialog.isShowing()||isFinishing()||isDestroyed())return;live.setText(maintenanceSummary());main.postDelayed(this,1000);}};main.post(pulse);dialog.setOnDismissListener(d->main.removeCallbacks(pulse));
+        });}catch(Exception e){main.post(()->showDetail("Maintien",e.getMessage(),null,null));}},"aiv-maintenance-menu").start();
+    }
+    private void showMaintenanceApplications(JSONObject pending,int offset){
+        if(pending==null||pending.length()==0){toast("Aucune application en attente");return;}
+        java.util.List<String> packages=new java.util.ArrayList<>();pending.keys().forEachRemaining(packages::add);java.util.Collections.sort(packages);
+        java.util.List<String> labels=new java.util.ArrayList<>();int end=Math.min(packages.size(),offset+50);
+        for(int i=offset;i<end;i++){JSONObject r=pending.optJSONObject(packages.get(i)),owner=r==null?null:r.optJSONObject("owner");labels.add((owner==null?packages.get(i):owner.optString("label",packages.get(i)))+" · "+maintenancePhase(r));}
+        boolean more=end<packages.size();if(more)labels.add("Applications suivantes…");
+        new AlertDialog.Builder(this).setTitle("Applications à approuver · "+packages.size()).setItems(labels.toArray(new String[0]),(d,which)->{
+            if(more&&which==labels.size()-1){showMaintenanceApplications(pending,end);return;}
+            String pkg=packages.get(offset+which);JSONObject row=pending.optJSONObject(pkg),owner=row==null?null:row.optJSONObject("owner");if(owner==null)return;
+            boolean verified=!owner.optString("stamp").isEmpty();
+            AlertDialog.Builder detail=new AlertDialog.Builder(this).setTitle(owner.optString("label",pkg)).setMessage(pkg+"\nVersion : "+owner.optLong("version")+"\nÉtat : "+maintenancePhase(row)+"\n"+row.optString("reason",row.optString("error",""))+"\n"+(verified?"L’approbation ajoute cette identité à la référence et rétablit l’état d’activation si AIV l’a désactivée.":"Identité non vérifiée : actualiser le suivi ou examiner la fiche Android."))
+                .setNegativeButton("Garder en attente",null).setNeutralButton("Fiche Android",(x,w)->openAppSettings(pkg));
+            if(verified)detail.setPositiveButton("Approuver",(x,w)->permissionJob(()->PermissionMaintenance.approve(this,pkg,owner.optString("stamp"))));detail.show();
+        }).setNegativeButton("Fermer",null).show();
+    }
+    private String maintenancePhase(JSONObject row){
+        if(row==null)return "à examiner";
+        switch(row.optString("phase")){
+            case "awaiting_review":return "à approuver";
+            case "disabled_after_detection":return "désactivée par AIV";
+            case "protected_review":return "examen manuel requis";
+            case "identity_unverified":return "identité non vérifiée";
+            default:return "à examiner";
+        }
     }
 
     private void chooseGlobalPermissionPolicy(){
@@ -1026,10 +1189,11 @@ public final class MainActivity extends Activity {
     }
 
     private interface PermissionJob {JSONObject run()throws Exception;}
+    private boolean maintenanceJobPending;
     private void permissionJob(PermissionJob job){
         toast("Vérification avant intervention…");new Thread(()->{
             try{JSONObject result=job.run();main.post(()->{permissionShowReportAfterJob=result.has("report_id");if("shizuku".equals(currentPage)){if(permissionPackage.isEmpty())renderPermissionApps(permissionQuery,permissionOffset);else openPermissions(permissionPackage,"",0);}pollPermissionOperation();});}
-            catch(Exception e){main.post(()->{permissionPrepareAfterReview=false;permissionShowReportAfterJob=false;showDetail("Contrôle Shell",String.valueOf(e.getMessage()),null,null);});}
+            catch(Exception e){main.post(()->{maintenanceJobPending=false;permissionPrepareAfterReview=false;permissionShowReportAfterJob=false;showDetail("Contrôle Shell",String.valueOf(e.getMessage()),null,null);});}
         },"aiv-permission-request-ui").start();
     }
     private boolean permissionPollScheduled;
@@ -1037,11 +1201,15 @@ public final class MainActivity extends Activity {
         if(permissionPollScheduled||isFinishing()||isDestroyed())return;permissionPollScheduled=true;
         main.postDelayed(()->{
             permissionPollScheduled=false;if(isFinishing()||isDestroyed())return;
+            if(maintenanceJobPending&&PermissionMaintenance.busy()){
+                if("shizuku".equals(currentPage)&&maintenanceStatusView!=null)maintenanceStatusView.setText(maintenanceSummary());
+                pollPermissionOperation();return;
+            }
             if(PermissionControl.running()){
                 if("shizuku".equals(currentPage)&&permissionStatusView!=null)permissionStatusView.setText(PermissionControl.status());
                 pollPermissionOperation();return;
             }
-            toast(PermissionControl.status());permissionSelection.clear();
+            toast(maintenanceJobPending?maintenanceSummary():PermissionControl.status());maintenanceJobPending=false;permissionSelection.clear();
             if(permissionPrepareAfterReview){permissionPrepareAfterReview=false;prepareGlobalPermissions();return;}
             if(permissionShowReportAfterJob){permissionShowReportAfterJob=false;showPermissionReport(0);return;}
             if("shizuku".equals(currentPage)){if(permissionPackage.isEmpty())renderPermissionApps(permissionQuery,permissionOffset);else openPermissions(permissionPackage,"",0);}
@@ -1181,7 +1349,7 @@ public final class MainActivity extends Activity {
                 requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},NOTIFICATION_REQUEST);
             toast("Collecte locale démarrée sans VPN");
             refreshHeaderStatus();
-            main.postDelayed(this::renderPresentation,700);
+            main.postDelayed(()->{if("presentation".equals(currentPage))renderPresentation();else if("status".equals(currentPage))renderAivStatus();},700);
         }catch(Exception e){toast("Démarrage impossible : "+e.getClass().getSimpleName());}
     }
 
@@ -1207,6 +1375,19 @@ public final class MainActivity extends Activity {
             i.putExtra(Intent.EXTRA_TITLE,"AIV-anomalies-"+System.currentTimeMillis()+".json");
             startActivityForResult(i,ANALYSIS_EXPORT_REQUEST);
         }catch(Exception e){toast("Export anomalies indisponible : "+e.getClass().getSimpleName());}
+    }
+
+    private void beginNetworkReportExport(){
+        try{
+            Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("application/json");
+            i.putExtra(Intent.EXTRA_TITLE,"AIV-rapport-echanges-"+System.currentTimeMillis()+".json");startActivityForResult(i,NETWORK_REPORT_REQUEST);
+        }catch(Exception e){toast("Export du rapport indisponible : "+e.getClass().getSimpleName());}
+    }
+    private void exportNetworkReportTo(Uri destination){
+        new Thread(()->{
+            try{java.io.File ready=ExportFiles.stage(this,writer->TrackerIndex.get(this).exportReport(writer));String result=ExportFiles.copy(this,ready,destination);main.post(()->showDetail("Rapport des échanges",result,null,null));}
+            catch(Exception e){main.post(()->showDetail("Rapport des échanges","Échec : "+e.getClass().getSimpleName()+" · "+String.valueOf(e.getMessage()),null,null));}
+        },"aiv-network-report-export").start();
     }
 
     private void exportAnalysisTo(Uri destination){
@@ -1242,6 +1423,8 @@ public final class MainActivity extends Activity {
             exportJournalTo(data.getData(),requestCode==SQLITE_EXPORT_REQUEST?2:requestCode==JSONL_EXPORT_REQUEST?1:0);
         }else if(requestCode==ANALYSIS_EXPORT_REQUEST&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){
             exportAnalysisTo(data.getData());
+        }else if(requestCode==NETWORK_REPORT_REQUEST&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){
+            exportNetworkReportTo(data.getData());
         }else if(requestCode==PERMISSION_EXPORT_REQUEST&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){
             exportPermissionsTo(data.getData());
         }
@@ -1252,6 +1435,7 @@ public final class MainActivity extends Activity {
         main.removeCallbacks(headerStatusPulse);
         main.post(headerStatusPulse);
         if(page!=null&&"presentation".equals(currentPage))main.postDelayed(this::renderPresentation,250);
+        else if(page!=null&&"status".equals(currentPage))main.postDelayed(this::renderAivStatus,250);
     }
     @Override public void onPause(){
         main.removeCallbacks(headerStatusPulse);
@@ -1289,7 +1473,7 @@ public final class MainActivity extends Activity {
         LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,ViewGroup.LayoutParams.WRAP_CONTENT);
         lp.setMargins(0,0,dp(7),0);v.setLayoutParams(lp);return v;
     }
-    private int levelForPackage(String pkg){try{return DefenseStore.get(this).levelFor(pkg);}catch(Throwable t){return 0;}}
+    private int levelForPackage(String pkg){try{return PermissionAudit.get(this).exposureLevelFor(pkg);}catch(Throwable t){return 0;}}
     private int levelColor(int level){return level==1?GREEN:level==2?YELLOW:level==3?ORANGE:level==4?RED:level==5?VIOLET:MUTED;}
     private String levelPrefix(int level){return level>=1&&level<=5?"A"+level+" · ":"? · ";}
     private LinearLayout levelCard(String title,String body,int level){
@@ -1350,6 +1534,10 @@ public final class MainActivity extends Activity {
     }
 
     private TableLayout dataTable(String[] headers,int[] widthsDp){
+        // Keep the stable presentation page unchanged; narrow only roomy data columns.
+        if(!"presentation".equals(currentPage))for(int i=0;i<widthsDp.length;i++){
+            int w=widthsDp[i];if(w>=240)widthsDp[i]=Math.round(w*0.85f);else if(w>=140)widthsDp[i]=Math.round(w*0.90f);
+        }
         TableLayout table=new TableLayout(this);
         table.setStretchAllColumns(false);
         table.setShrinkAllColumns(false);
@@ -1367,9 +1555,10 @@ public final class MainActivity extends Activity {
 
     private TextView tableCell(String value,int widthDp,boolean header,int color){
         TextView cell=text(value==null?"—":value,header?13:14,color,header);
-        cell.setGravity(Gravity.START|Gravity.CENTER_VERTICAL);
+        cell.setGravity(Gravity.START|Gravity.TOP);
         cell.setPadding(dp(10),dp(header?10:9),dp(10),dp(header?10:9));
         cell.setMaxLines(header?2:5);
+        cell.setEllipsize(android.text.TextUtils.TruncateAt.END);
         TableRow.LayoutParams lp=new TableRow.LayoutParams(dp(widthDp),ViewGroup.LayoutParams.WRAP_CONTENT);
         cell.setLayoutParams(lp);
         return cell;
@@ -1486,6 +1675,7 @@ public final class MainActivity extends Activity {
             body.addView(text(anomaly.optString("title","Anomalie"),16,TEXT,true));
             body.addView(text(anomaly.optString("explanation",""),13,MUTED,false));
             body.addView(text("Occurrences : "+anomaly.optLong("occurrences",1)+" · "+anomaly.optString("severity","—"),13,MUTED,false));
+            body.addView(note("Services et accès rapprochés : "+PermissionUsage.brief(anomaly)));
 
             long id=anomaly.optLong("id",-1);
             if(id>0){
@@ -1496,7 +1686,7 @@ public final class MainActivity extends Activity {
                     for(int i=0;i<events.length();i++){
                         JSONObject e=events.optJSONObject(i);if(e==null)continue;
                         long eventId=e.optLong("id",-1);
-                        String label="#"+eventId+" · "+e.optString("app","—")+" · "+e.optString("action","—");
+                        String label="#"+eventId+" · "+e.optString("app","—")+" · "+e.optString("action","—")+"\n"+PermissionUsage.brief(e);
                         final JSONObject event=e;
                         String pkg=uniquePackage(e.optJSONObject("details"));
                         final String eventPkg=pkg.isEmpty()?fallbackPkg:pkg;
@@ -1525,36 +1715,31 @@ public final class MainActivity extends Activity {
     }
 
     private void showEventPedigree(String title,JSONObject event,String fallbackPkg){
-        StringBuilder body=new StringBuilder();
-        try{body.append("ÉVÉNEMENT\n").append(event.toString(2));}
-        catch(Exception e){body.append("ÉVÉNEMENT\n").append(String.valueOf(event));}
-
-        long eventId=event.optLong("id",-1);
-        if(eventId>0){
-            try{
-                JSONObject chain=AivStore.detail(this,eventId);
-                body.append("\n\nCHAÎNE AIV / DÉCISION\n").append(chain.toString(2));
-            }catch(Exception e){
-                body.append("\n\nCHAÎNE AIV\nIndisponible : ").append(e.getClass().getSimpleName());
-            }
-        }
-
-        String pkg=uniquePackage(event.optJSONObject("details"));
-        if(pkg.isEmpty())pkg=fallbackPkg==null?"":fallbackPkg;
-        if(!pkg.isEmpty()){
-            try{
-                JSONObject identity=AppIdentity.forPackage(this,pkg);
-                body.append("\n\nIDENTITÉ CRYPTOGRAPHIQUE DE L’APPLICATION\n").append(identity.toString(2));
+        try{
+            if(!event.has("permission_context"))event.put("permission_context",PermissionUsage.get(this).related(event));
+            NetworkReport.enrich(this,event);
+            JSONObject details=event.optJSONObject("details");
+            String candidate=uniquePackage(details==null?event:details);
+            final String pkg=candidate.isEmpty()?(fallbackPkg==null?"":fallbackPkg):candidate;
+            LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);body.setPadding(dp(12),dp(8),dp(12),dp(12));
+            body.addView(text(event.optString("app",event.optString("actor","Application non identifiée")),16,TEXT,true));
+            body.addView(text(event.optString("action",event.optString("protocol","Événement"))+"\n"+event.optString("destination",""),14,TEXT,false));
+            TextView access=text(PermissionUsage.explain(event),13,TEXT,false);access.setTextIsSelectable(true);body.addView(access);
+            body.addView(action("Données de l’événement et preuves",v->{
                 try{
-                    JSONObject dossier=DefenseStore.get(this).detail(pkg,0);
-                    body.append("\n\nPÉDIGRÉE LOCAL / HISTORIQUE\n").append(dossier.toString(2));
-                }catch(Exception ignored){}
-            }catch(Exception e){
-                body.append("\n\nIDENTITÉ CRYPTOGRAPHIQUE\nIndisponible pour ").append(pkg).append(" : ").append(e.getClass().getSimpleName());
-            }
-        }
-
-        showLargeTextDetail(title,body.toString(),pkg);
+                    String raw=event.toString(2);long eventId=event.optLong("id",event.optLong("latest_event_id",-1));
+                    if(eventId>0)raw+="\n\nCHAÎNE AIV / DÉCISION\n"+AivStore.detail(this,eventId).toString(2);
+                    showLargeTextDetail(title,raw,pkg);
+                }catch(Exception e){showJsonDetail(title,event,pkg);}
+            }));
+            if(!pkg.isEmpty())body.addView(action("Dossier complet de l’application",v->{
+                try{showJsonDetail("Dossier · "+pkg,DefenseStore.get(this).detail(pkg,0),pkg);}
+                catch(Exception e){showDetail("Dossier","Lecture indisponible : "+e.getClass().getSimpleName(),null,null);}
+            }));
+            ScrollView scroll=new ScrollView(this);scroll.addView(body);
+            AlertDialog.Builder dialog=new AlertDialog.Builder(this).setTitle(title).setView(scroll).setPositiveButton("Fermer",null);
+            if(!pkg.isEmpty())dialog.setNeutralButton("Réglages Android",(d,w)->openAppSettings(pkg));dialog.show();
+        }catch(Exception e){showJsonDetail(title,event,fallbackPkg);}
     }
 
     private void showLargeTextDetail(String title,String body,String pkg){
@@ -1596,7 +1781,7 @@ public final class MainActivity extends Activity {
         Button b=new Button(this);b.setText(label);b.setTextSize(14);b.setAllCaps(false);b.setTypeface(Typeface.DEFAULT,Typeface.BOLD);b.setPadding(dp(14),0,dp(14),0);styleTab(b,false);return b;
     }
     private Button action(String label,View.OnClickListener listener){
-        Button b=button(label);b.setTextColor(TEXT);b.setBackground(panelDrawable(0xff0a2437,0xff386782,14));b.setOnClickListener(listener);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,dp(50));lp.setMargins(0,dp(7),0,0);b.setLayoutParams(lp);return b;
+        Button b=button(label);b.setTextColor(TEXT);b.setBackground(panelDrawable(0xff0a2437,0xff386782,14));b.setOnClickListener(listener);b.setMinimumHeight(dp(50));b.setPadding(dp(14),dp(10),dp(14),dp(10));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT);lp.setMargins(0,dp(7),0,0);b.setLayoutParams(lp);return b;
     }
     private void styleTab(Button b,boolean selected){b.setTextColor(selected?0xff06101a:0xffc3d2df);b.setBackground(panelDrawable(selected?BLUE:0xff091925,selected?0xff72ccff:0xff2b5674,999));}
     private TextView text(String value,int sp,int color,boolean bold){TextView v=new TextView(this);v.setText(value);v.setTextSize(sp);v.setTextColor(color);v.setGravity(Gravity.START|Gravity.CENTER_VERTICAL);if(bold)v.setTypeface(Typeface.DEFAULT,Typeface.BOLD);return v;}

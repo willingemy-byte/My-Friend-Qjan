@@ -20,7 +20,7 @@ signatures=['private static final class Flow',
     'private void consumeFlowDirection(','private void consumeFlowUpdate(','private void consumeDnsQuestion(',
     'private void consumeTlsHello(']
 methods='\n'.join(extract(source,x) for x in signatures)
-for old,new in [('consumeFlowOpen','onFlowOpen'),('consumeFlowDirection','onFlowDirection'),('consumeFlowUpdate','onFlowUpdate'),('consumeDnsQuestion','onDnsQuestion'),('consumeTlsHello','onTlsHello')]:
+for old,new in [('consumeFlowDirection','onFlowDirection'),('consumeDnsQuestion','onDnsQuestion'),('consumeTlsHello','onTlsHello')]:
     methods=methods.replace('private void '+old+'(','public void '+new+'(')
 template=r'''
 package fr.erick.journallocal;
@@ -45,12 +45,17 @@ public class ObservationProbe {
  String session="synthetic",observedSession="synthetic",observedTransport="fixture";Config current=new Config();boolean stopped,reconfigure;
  static long lastHealthyFlowMs;
  Connectivity connectivity=new Connectivity();Packages packages=new Packages();
- HashMap<Long,Flow> flows=new HashMap<>();ArrayDeque<Long> pendingIdentity=new ArrayDeque<>();long lastIdentityPump;
+ HashMap<Long,Flow> flows=new HashMap<>();ArrayDeque<Flow> pendingIdentity=new ArrayDeque<>();long lastIdentityPump;
+ UidProbe owners=new UidProbe(2048,new UidProbe.Clock(){public long elapsed(){return SystemClock.now;}public long wall(){return 1000+SystemClock.now;}},t->connectivity.getConnectionOwnerUid(t.protocol,new InetSocketAddress(t.local,t.localPort),new InetSocketAddress(t.remote,t.remotePort)),false);
  List<String> events=new ArrayList<>();Packages getPackageManager(){return packages;}
  JSONObject vpnIdentity(long id,Flow f){return EventStore.object("status","UNAVAILABLE");}
  JSONObject trackerDetails(JSONObject d,String name,String type){return d;}
  long capturedTimestamp(){return 1000+SystemClock.now;}long capturedElapsed(){return SystemClock.now;}
- boolean isFlowLive(Flow f){return !f.closed;}
+ public void onFlowOpen(long id,int version,int protocol,String local,int localPort,String remote,int remotePort){
+  UidProbe.Ticket owner=owners.open(session+":"+id,protocol,local,localPort,remote,remotePort,Build.VERSION.SDK_INT>=29&&(protocol==6||protocol==17));owners.pump();consumeFlowOpen(id,version,protocol,local,localPort,remote,remotePort,owner);
+ }
+ public void onFlowUpdate(long id,long tx,long rx,long tp,long rp,int status,int error,boolean closed,long lastMs){if(closed&&flows.containsKey(id))flows.get(id).owner.close();consumeFlowUpdate(id,tx,rx,tp,rp,status,error,closed,lastMs);}
+ void tickIdentity(){owners.pump();pumpIdentity();}
  void recordIdentity(Flow f){JSONObject d=details(f.nativeId,f);d.put("observation_type","IDENTITY_ENRICHMENT");record("trafic",f.actor,"Enrichissement de l’identité du flux",destination(f),d);}
  void record(String category,String actor,String action,String destination,JSONObject d){events.add(EventStore.object("id",events.size()+1,"timestamp_ms",1000+events.size(),"category",category,"app",actor,"action",action,"destination",destination,"details",d).toString());}
  __METHODS__
@@ -94,6 +99,11 @@ public class ObservationProbe {
   p=fresh();p.connectivity.uid=12345;AppIdentity.fail=true;p.open();check(ObservationValues.uniquePackage(p.d()),"Optional crypto failure erased identity");
   System.out.println("PASS late package, package exception, optional identity failure preserve observed UID");
 
+  p=fresh();p.connectivity.uid=12345;p.packages.names=null;p.open();p.onFlowUpdate(1,80,20,2,1,3,0,true,1010);
+  check(p.d().getInt("uid")==12345&&p.flows.isEmpty(),"closed flow erased its UID");p.packages.names=new String[]{"example.app"};SystemClock.now=100;p.shouldStopNative();
+  check(ObservationValues.uniquePackage(p.d())&&p.connectivity.calls==1,"post-closure package enrichment re-queried the socket or was lost");verifyExport(p);
+  System.out.println("PASS package enrichment after closure from previously observed UID");
+
   for(int uid:new int[]{-1,1000,112345,12345}){
    p=fresh();p.connectivity.uid=uid;if(uid==12345)p.packages.names=new String[]{"one","two"};p.open();
    p.onFlowUpdate(1,80,20,2,1,2,0,false,2000);check(p.d().getLong("bytes")==100,"Volume depends on unique attribution");
@@ -125,8 +135,8 @@ public class ObservationProbe {
 '''
 event_stub='''package fr.erick.journallocal;import org.json.*;final class EventStore {static JSONObject object(Object... kv){JSONObject o=new JSONObject();try{for(int i=0;i<kv.length;i+=2)o.put((String)kv[i],kv[i+1]);return o;}catch(JSONException e){throw new IllegalArgumentException(e);}}}'''
 with tempfile.TemporaryDirectory() as tmp:
-    tmp=Path(tmp);(tmp/'ObservationProbe.java').write_text(template.replace('__METHODS__',methods).replace('p.shouldStopNative()','p.pumpIdentity()'));(tmp/'EventStore.java').write_text(event_stub)
-    src=[JAVA/(name+'.java') for name in ['IdentityRetry','ObservationValues','NetworkQuality','ExportMetadata','SnapshotExporter','JournalRecovery','JsonSyntax']]
+    tmp=Path(tmp);(tmp/'ObservationProbe.java').write_text(template.replace('__METHODS__',methods).replace('p.shouldStopNative()','p.tickIdentity()'));(tmp/'EventStore.java').write_text(event_stub)
+    src=[JAVA/(name+'.java') for name in ['UidProbe','IdentityRetry','ObservationValues','NetworkQuality','ExportMetadata','SnapshotExporter','JournalRecovery','JsonSyntax']]
     src+=[ROOT/'build/generated/fr/erick/journallocal/BuildMetadata.java',tmp/'ObservationProbe.java',tmp/'EventStore.java']
     subprocess.run(['javac','-encoding','UTF-8','-cp',str(jar),'-d',str(tmp),*map(str,src)],check=True)
     subprocess.run(['java','-Xmx256m','-cp',str(tmp)+os.pathsep+str(jar),'fr.erick.journallocal.ObservationProbe'],check=True)

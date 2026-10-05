@@ -1,0 +1,358 @@
+{
+  "schema": "aiv-endpoint-services/1",
+  "version": "2026-10-05-v2",
+  "sources": [
+    {
+      "id": "fcm-network",
+      "url": "https://firebase.google.com/docs/cloud-messaging/network-configuration",
+      "type": "documentation_officielle",
+      "verified_utc": "2026-10-05T01:52:40.943793+00:00"
+    },
+    {
+      "id": "fcm-architecture",
+      "url": "https://firebase.google.com/docs/cloud-messaging/fcm-architecture",
+      "type": "documentation_officielle",
+      "verified_utc": "2026-10-05T01:52:40.943793+00:00"
+    },
+    {
+      "id": "firebase-installations",
+      "url": "https://firebase.google.com/docs/projects/manage-installations",
+      "type": "documentation_officielle",
+      "verified_utc": "2026-10-05T01:52:40.943793+00:00"
+    },
+    {
+      "id": "firebase-remote-config",
+      "url": "https://firebase.google.com/docs/reference/remote-config/rest",
+      "type": "documentation_officielle",
+      "verified_utc": "2026-10-05T01:52:40.943793+00:00"
+    },
+    {
+      "id": "firebase-realtime-database",
+      "url": "https://firebase.google.com/docs/database/rest/start",
+      "type": "documentation_officielle",
+      "verified_utc": "2026-10-05T01:52:40.943793+00:00"
+    },
+    {
+      "id": "firestore",
+      "url": "https://docs.cloud.google.com/firestore/docs/reference/rest",
+      "type": "documentation_officielle",
+      "verified_utc": "2026-10-05T01:52:40.943793+00:00"
+    },
+    {
+      "id": "google-datatransport-cct",
+      "url": "https://github.com/firebase/firebase-android-sdk/blob/26c905be56b14cb5dee745cd446020db2451e0b4/transport/transport-backend-cct/src/main/java/com/google/android/datatransport/cct/CCTDestination.java",
+      "type": "code_officiel",
+      "verified_utc": "2026-10-05T02:25:09.837179+00:00"
+    },
+    {
+      "id": "dns-rfc1035",
+      "url": "https://www.rfc-editor.org/rfc/rfc1035",
+      "type": "standard_officiel",
+      "verified_utc": "2026-10-05T02:25:09.837179+00:00"
+    }
+  ],
+  "service_rules": [
+    {
+      "id": "fcm-device-transport",
+      "provider": "Google / Firebase",
+      "service": "Firebase Cloud Messaging — transport Android",
+      "documented_role_fr": "Acheminement des messages et notifications vers Android.",
+      "functional_category": "messaging_transport",
+      "match": {
+        "exact_hosts": [
+          "mtalk.google.com",
+          "mtalk4.google.com",
+          "mtalk-staging.google.com",
+          "mtalk-dev.google.com",
+          "alt1-mtalk.google.com",
+          "alt2-mtalk.google.com",
+          "alt3-mtalk.google.com",
+          "alt4-mtalk.google.com",
+          "alt5-mtalk.google.com",
+          "alt6-mtalk.google.com",
+          "alt7-mtalk.google.com",
+          "alt8-mtalk.google.com"
+        ],
+        "full_host_regex": [],
+        "documented_ports": [
+          5228,
+          5229,
+          5230,
+          443
+        ],
+        "port_alone_is_sufficient": false
+      },
+      "source_ids": [
+        "fcm-network",
+        "fcm-architecture"
+      ],
+      "assessment_status": "DOCUMENTED_SERVICE_ROLE",
+      "flow_purpose_status": "INFERENCE_REQUIRED",
+      "identifies_remote_tenant": false,
+      "identifies_payload": false,
+      "identifies_local_app_recipient": false,
+      "interpretation_note_fr": "Destination compatible avec FCM. Elle ne suffit pas à identifier l’application destinataire ou à distinguer notification, entretien de connexion et autres messages.",
+      "display_purpose_fr": "Notifications / messages",
+      "display_service_fr": "FCM — transport Android"
+    },
+    {
+      "id": "fcm-send-api",
+      "provider": "Google / Firebase",
+      "service": "Firebase Cloud Messaging — API d’envoi",
+      "documented_role_fr": "Service d’envoi des messages FCM.",
+      "functional_category": "messaging_api",
+      "match": {
+        "exact_hosts": [
+          "fcm.googleapis.com"
+        ],
+        "full_host_regex": [],
+        "documented_ports": [
+          443
+        ],
+        "port_alone_is_sufficient": false
+      },
+      "source_ids": [
+        "fcm-network"
+      ],
+      "assessment_status": "DOCUMENTED_SERVICE_ROLE",
+      "flow_purpose_status": "INFERENCE_REQUIRED",
+      "identifies_remote_tenant": false,
+      "identifies_payload": false,
+      "identifies_local_app_recipient": false,
+      "interpretation_note_fr": "Distinguer cette API du canal de réception mtalk. Le sens du flux ne détermine pas à lui seul la fonction de la requête.",
+      "display_purpose_fr": "Envoi de messages",
+      "display_service_fr": "FCM — API d’envoi"
+    },
+    {
+      "id": "fcm-topic-management",
+      "provider": "Google / Firebase",
+      "service": "FCM — abonnements et groupes",
+      "documented_role_fr": "Gestion des abonnements aux sujets et des groupes d’appareils.",
+      "functional_category": "messaging_registration",
+      "match": {
+        "exact_hosts": [
+          "iid.googleapis.com"
+        ],
+        "full_host_regex": [],
+        "documented_ports": [
+          443
+        ],
+        "port_alone_is_sufficient": false
+      },
+      "source_ids": [
+        "fcm-network"
+      ],
+      "assessment_status": "DOCUMENTED_SERVICE_ROLE",
+      "flow_purpose_status": "INFERENCE_REQUIRED",
+      "identifies_remote_tenant": false,
+      "identifies_payload": false,
+      "identifies_local_app_recipient": false,
+      "display_purpose_fr": "Abonnements de messagerie",
+      "display_service_fr": "FCM — abonnements"
+    },
+    {
+      "id": "firebase-installations",
+      "provider": "Google / Firebase",
+      "service": "Firebase Installations",
+      "documented_role_fr": "Gestion des identifiants et jetons des instances installées d’applications Firebase.",
+      "functional_category": "installation_identity",
+      "match": {
+        "exact_hosts": [
+          "firebaseinstallations.googleapis.com"
+        ],
+        "full_host_regex": [],
+        "documented_ports": [
+          443
+        ],
+        "port_alone_is_sufficient": false
+      },
+      "source_ids": [
+        "fcm-network",
+        "firebase-installations"
+      ],
+      "assessment_status": "DOCUMENTED_SERVICE_ROLE",
+      "flow_purpose_status": "INFERENCE_REQUIRED",
+      "identifies_remote_tenant": false,
+      "identifies_payload": false,
+      "identifies_local_app_recipient": false,
+      "interpretation_note_fr": "Service commun à plusieurs produits Firebase; aucune classification automatique en Analytics, Crashlytics ou notification.",
+      "display_purpose_fr": "Identifiants d’installation",
+      "display_service_fr": "Firebase Installations"
+    },
+    {
+      "id": "firebase-remote-config",
+      "provider": "Google / Firebase",
+      "service": "Firebase Remote Config",
+      "documented_role_fr": "Distribution et gestion de configuration à distance.",
+      "functional_category": "remote_configuration",
+      "match": {
+        "exact_hosts": [
+          "firebaseremoteconfig.googleapis.com"
+        ],
+        "full_host_regex": [],
+        "documented_ports": [
+          443
+        ],
+        "port_alone_is_sufficient": false
+      },
+      "source_ids": [
+        "firebase-remote-config"
+      ],
+      "assessment_status": "DOCUMENTED_SERVICE_ROLE",
+      "flow_purpose_status": "INFERENCE_REQUIRED",
+      "identifies_remote_tenant": false,
+      "identifies_payload": false,
+      "identifies_local_app_recipient": false,
+      "display_purpose_fr": "Configuration distante",
+      "display_service_fr": "Firebase Remote Config"
+    },
+    {
+      "id": "firebase-realtime-database",
+      "provider": "Google / Firebase",
+      "service": "Firebase Realtime Database",
+      "documented_role_fr": "Service de base de données temps réel.",
+      "functional_category": "database",
+      "match": {
+        "exact_hosts": [],
+        "full_host_regex": [
+          "[a-z0-9-]+\\.firebaseio\\.com",
+          "[a-z0-9-]+\\.[a-z0-9-]+\\.firebasedatabase\\.app"
+        ],
+        "documented_ports": [
+          443
+        ],
+        "port_alone_is_sufficient": false
+      },
+      "source_ids": [
+        "firebase-realtime-database"
+      ],
+      "assessment_status": "DOCUMENTED_SERVICE_ROLE",
+      "flow_purpose_status": "INFERENCE_REQUIRED",
+      "identifies_remote_tenant": false,
+      "identifies_payload": false,
+      "identifies_local_app_recipient": false,
+      "interpretation_note_fr": "Le nom d’hôte peut désigner une instance. Il ne révèle pas le contenu chiffré ni le propriétaire civil du projet.",
+      "display_purpose_fr": "Base de données temps réel",
+      "display_service_fr": "Firebase Realtime Database"
+    },
+    {
+      "id": "firestore",
+      "provider": "Google / Firebase",
+      "service": "Cloud Firestore",
+      "documented_role_fr": "Service de base de données de documents.",
+      "functional_category": "database",
+      "match": {
+        "exact_hosts": [
+          "firestore.googleapis.com"
+        ],
+        "full_host_regex": [],
+        "documented_ports": [
+          443
+        ],
+        "port_alone_is_sufficient": false
+      },
+      "source_ids": [
+        "firestore"
+      ],
+      "assessment_status": "DOCUMENTED_SERVICE_ROLE",
+      "flow_purpose_status": "INFERENCE_REQUIRED",
+      "identifies_remote_tenant": false,
+      "identifies_payload": false,
+      "identifies_local_app_recipient": false,
+      "interpretation_note_fr": "Cet hôte peut desservir plusieurs projets; conserver le tenant indéterminé sans indice supplémentaire.",
+      "display_purpose_fr": "Base de documents",
+      "display_service_fr": "Cloud Firestore"
+    },
+    {
+      "id": "fcm-support",
+      "provider": "Google / Firebase",
+      "service": "Services Google requis dans la configuration réseau FCM",
+      "documented_role_fr": "Hôtes documentés parmi les dépendances réseau de FCM.",
+      "functional_category": "supporting_service",
+      "match": {
+        "exact_hosts": [
+          "android.apis.google.com",
+          "device-provisioning.googleapis.com"
+        ],
+        "full_host_regex": [],
+        "documented_ports": [
+          443
+        ],
+        "port_alone_is_sufficient": false
+      },
+      "source_ids": [
+        "fcm-network"
+      ],
+      "assessment_status": "DOCUMENTED_SERVICE_ROLE",
+      "flow_purpose_status": "INFERENCE_REQUIRED",
+      "identifies_remote_tenant": false,
+      "identifies_payload": false,
+      "identifies_local_app_recipient": false,
+      "interpretation_note_fr": "Classer comme dépendance possible. La seule présence dans la liste FCM ne suffit pas à déterminer le rôle précis de cette connexion.",
+      "display_purpose_fr": "Rôle précis indéterminé",
+      "display_service_fr": "Google — support FCM possible"
+    },
+    {
+      "id": "firebase-logging-transport",
+      "provider": "Google / Firebase",
+      "service": "Google DataTransport — journalisation Firebase",
+      "display_service_fr": "Firebase — journalisation",
+      "documented_role_fr": "Transport de journaux d’événements via les destinations CCT publiées dans le SDK Android Firebase.",
+      "functional_category": "telemetry_transport",
+      "match": {
+        "exact_hosts": [
+          "firebaselogging.googleapis.com",
+          "firebaselogging-pa.googleapis.com"
+        ],
+        "full_host_regex": [],
+        "documented_ports": [
+          443
+        ],
+        "port_alone_is_sufficient": false
+      },
+      "source_ids": [
+        "google-datatransport-cct"
+      ],
+      "assessment_status": "DOCUMENTED_SERVICE_ROLE",
+      "flow_purpose_status": "INFERENCE_REQUIRED",
+      "identifies_remote_tenant": false,
+      "identifies_payload": false,
+      "identifies_local_app_recipient": false,
+      "interpretation_note_fr": "Le nom correspond à une destination publiée du SDK. Il ne détermine pas le produit Firebase appelant, les événements transmis ou leur contenu; ne pas le confondre avec le transport de notifications FCM.",
+      "display_purpose_fr": "Télémétrie · contenu inconnu"
+    },
+    {
+      "id": "dns-transport-candidate",
+      "provider": "Indéterminé",
+      "service": "DNS — service présumé",
+      "display_service_fr": "DNS probable",
+      "documented_role_fr": "Accès aux serveurs de noms par UDP ou TCP sur le port 53, selon RFC 1035 §4.2.",
+      "functional_category": "name_resolution",
+      "match": {
+        "exact_hosts": [],
+        "full_host_regex": [],
+        "documented_ports": [
+          53
+        ],
+        "port_alone_is_sufficient": false,
+        "transport_candidate": {
+          "port": 53,
+          "protocols": [
+            "UDP",
+            "TCP"
+          ]
+        }
+      },
+      "source_ids": [
+        "dns-rfc1035"
+      ],
+      "assessment_status": "DOCUMENTED_SERVICE_ROLE",
+      "flow_purpose_status": "INFERENCE_REQUIRED",
+      "identifies_remote_tenant": false,
+      "identifies_payload": false,
+      "identifies_local_app_recipient": false,
+      "interpretation_note_fr": "Le port et le transport sont compatibles avec DNS. Sans message DNS analysé, ni la question ni la réponse ne sont connues; aucune connexion ultérieure vers Firebase ou un autre service n’est déduite.",
+      "display_purpose_fr": "Port 53 · rôle présumé"
+    }
+  ]
+}

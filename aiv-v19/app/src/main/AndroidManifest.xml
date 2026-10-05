@@ -1,4 +1,4 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.allinvisible.aiv" android:versionCode="206" android:versionName="2.0.6">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.allinvisible.aiv" android:versionCode="217" android:versionName="2.0.17">
     <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="35" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
@@ -30,7 +30,7 @@
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User-started offline analysis of the local All In Visible journal. Persistent notification and stop action. No network synchronization or other-app AppOps access." />
         </service>
         <service android:name="fr.erick.journallocal.RecorderService" android:exported="false" android:foregroundServiceType="specialUse">
-            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User-started local All In Visible event journal: network state, battery, power, screen, USB host and optional Bluetooth connection events. Visible persistent notification with stop action. No Internet transmission or media recording." />
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User-started local All In Visible event journal and read-only AppOps observations, plus explicitly enabled Shizuku maintenance of denied permissions and newly installed app review. Visible persistent notification with stop action. No Internet transmission or media recording." />
         </service>
         <service android:name="fr.erick.journallocal.ScreenIntegrityService"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"

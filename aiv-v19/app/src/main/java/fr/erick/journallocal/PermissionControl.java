@@ -20,9 +20,9 @@ final class PermissionControl {
     private static volatile String batchPrefix="";
     private static volatile String status="Aucun retrait de permissions en cours";
     private PermissionControl(){}
-    static boolean running(){return running||analysing;}
-    static void requestStop(){stop.set(true);status="Arrêt demandé — fin de la commande en cours";}
-    static String status(){return status;}
+    static boolean running(){return running||analysing||PermissionMaintenance.busy();}
+    static void requestStop(){stop.set(true);PermissionMaintenance.cancelPreparation();status="Arrêt demandé — fin de la commande en cours";}
+    static String status(){return PermissionMaintenance.busy()?PermissionMaintenance.status():status;}
     static boolean authorized(){
         try{return Shizuku.pingBinder()&&!Shizuku.isPreV11()&&Shizuku.checkSelfPermission()==PackageManager.PERMISSION_GRANTED;}
         catch(Throwable t){return false;}
@@ -237,14 +237,14 @@ final class PermissionControl {
         if(row!=null){JSONArray names=row.getJSONArray("denied_permissions");for(int i=0;i<names.length();i++)out.add(names.getString(i));}
         return out;
     }
-    private static PackageInfo info(Context c,String pkg)throws Exception{
+    static PackageInfo info(Context c,String pkg)throws Exception{
         if(!PermissionControlRules.packageName(pkg))throw new IllegalArgumentException("Paquet invalide");
         int signing=Build.VERSION.SDK_INT>=28?PackageManager.GET_SIGNING_CERTIFICATES:PackageManager.GET_SIGNATURES;
         PackageInfo p=c.getPackageManager().getPackageInfo(pkg,signing|PackageManager.GET_PERMISSIONS|PackageManager.MATCH_DISABLED_COMPONENTS);
         if(p.applicationInfo==null||p.applicationInfo.uid/100000!=USER)throw new IllegalStateException("Paquet absent du profil courant");return p;
     }
     /** Version, installation and signer identity: prevents action on a replaced or reinstalled APK. */
-    private static String identity(Context c,PackageInfo p)throws Exception{
+    static String identity(Context c,PackageInfo p)throws Exception{
         JSONObject id=AppIdentity.forPackage(c,p);JSONArray signers=id.getJSONArray("current_signer_sha256");
         if(signers.length()==0)throw new IllegalStateException("Signataire non vérifiable");
         TreeSet<String> names=new TreeSet<>();if(p.requestedPermissions!=null)Collections.addAll(names,p.requestedPermissions);
@@ -252,17 +252,17 @@ final class PermissionControl {
             .put(Build.VERSION.SDK_INT>=28?p.getLongVersionCode():p.versionCode).put(p.firstInstallTime).put(p.lastUpdateTime)
             .put(p.applicationInfo.targetSdkVersion).put(new JSONArray(names)).toString());
     }
-    private static String targetReason(Context c,String pkg){
+    static String targetReason(Context c,String pkg){
         if(c.getPackageName().equals(pkg))return "Continuité AIV : une révocation de ses propres droits interromprait l’exécuteur et la vérification";
         if("android".equals(pkg))return "Protection AIV : identité système fondamentale";
         try{return DeveloperControl.permissionTargetReason(c,pkg);}catch(Exception e){return "Identité ou rôle non vérifiable : "+e.getClass().getSimpleName();}
     }
-    private static Map<String,PermissionControlRules.Grant> shellPermissions(String pkg)throws Exception{
+    static Map<String,PermissionControlRules.Grant> shellPermissions(String pkg)throws Exception{
         ControlShell.Result r=ControlShell.run("dumpsys package "+PermissionControlRules.quote(pkg),1024*1024);
         if(r.code!=0||!r.complete||!r.err.trim().isEmpty())throw new IOException("État Shell incomplet ou refusé");
         return PermissionControlRules.runtime(r.out,pkg,USER);
     }
-    private static JSONObject op(String pkg,String permission){
+    static JSONObject op(String pkg,String permission){
         String name=PermissionControlRules.appOp(permission);
         try{
             ControlShell.Result r=ControlShell.run("cmd appops get --user "+USER+" "+PermissionControlRules.quote(pkg)+" "+name);
@@ -466,6 +466,7 @@ final class PermissionControl {
                 String outcome=PermissionControlRules.outcome(result.code,observed&&result.complete);
                 entry.put("exit",result.code).put("stdout",result.out).put("stderr",result.err).put("after",after).put("after_key",stateKey(after)).put("outcome",outcome);
                 if("confirmed".equals(outcome))changed++;else failed++;
+                if("confirmed".equals(outcome))PermissionMaintenance.remember(c,planned,after);
             }catch(Exception e){failed++;entry.put("outcome","unverified").put("error",String.valueOf(e.getMessage()));}
             entry.put("finished_ms",System.currentTimeMillis());report.put("changed",changed).put("failed",failed);saveReport(c,report);log(c,"PERMISSION_CONTROL",entry);
         }
@@ -520,8 +521,9 @@ final class PermissionControl {
             try{
                 access();JSONObject now=readState(c,pkg,name,kind);
                 boolean same=old.getString("identity").equals(identity(c,info(c,pkg)))&&sameTarget(c,pkg,old);
-                if(same&&stateKey(now).equals(old.getJSONObject("before").getString("state_key"))){receipt.put("outcome","already_restored");skipped++;saveReport(c,report);continue;}
+                if(same&&stateKey(now).equals(old.getJSONObject("before").getString("state_key"))){PermissionMaintenance.forget(c,pkg,name);receipt.put("outcome","already_restored");skipped++;saveReport(c,report);continue;}
                 if(!PermissionControlRules.restoreAllowed(old.getString("outcome"),same,stateKey(now),old.getString("after_key")))throw new IllegalStateException("APK, rôle ou droit modifié depuis le retrait : restauration refusée");
+                PermissionMaintenance.forget(c,pkg,name);
                 String desired="appop".equals(kind)?old.getJSONObject("before").getJSONObject("appop").getString("mode"):"grant";
                 String command=PermissionControlRules.command(pkg,USER,kind,name,desired);receipt.put("command",command).put("before",now);saveReport(c,report);
                 ControlShell.Result result=ControlShell.run(command);JSONObject after=readState(c,pkg,name,kind);
@@ -559,7 +561,7 @@ final class PermissionControl {
         }
         out.write("],\"reports\":[");first=true;File[] files=dir(c).listFiles();
         if(files!=null){Arrays.sort(files,Comparator.comparing(File::getName));for(File f:files)if(f.getName().matches("[a-f0-9-]{36}\\.json")){if(!first)out.write(',');out.write(read(c,f.getName()).toString());first=false;}}
-        out.write("]}");
+        out.write("],\"maintenance\":"+PermissionMaintenance.exportState(c)+"}");
     }
     private static void log(Context c,String kind,JSONObject value){try{EventStore.get(c).add("aiv-permissions","Shizuku",kind,"Retrait de droits","Interne","État Shell vérifié",value);}catch(Exception ignored){}}
 }
