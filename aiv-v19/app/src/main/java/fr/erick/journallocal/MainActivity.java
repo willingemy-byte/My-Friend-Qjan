@@ -738,8 +738,7 @@ public final class MainActivity extends Activity {
                 "Réglages accessibilité",()->openSetting(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
         addTableRow(table,new String[]{"Badge AIV",s.optBoolean("overlay_visible")?"ACTIF":"INACTIF","Le badge en haut à droite confirme que le service d’accessibilité AIV est connecté."},null,widths,0,null,null,
             v->showJsonDetail("Intégrité · badge AIV",ScreenIntegrityService.state(),null));
-        addTableRow(table,new String[]{"État global",s.optBoolean("core_active")?"CAPTEURS OPÉRATIONNELS":"COUVERTURE PARTIELLE",
-            "Collecte "+yesNo(s.optBoolean("collector_active"))+
+        addTableRow(table,new String[]{"État global",s.optBoolean("core_active")?"OPÉRATIONNEL":"À VÉRIFIER",\n            "Couverture "+(s.optBoolean("coverage_complete")?"COMPLÈTE":"PARTIELLE")+" · Collecte "+yesNo(s.optBoolean("collector_active"))+
             " · Corrélation "+yesNo(s.optBoolean("correlation_active"))+
             " · VPN "+(s.optBoolean("vpn_expected")?yesNo(s.optBoolean("vpn_active")):"OPTIONNEL")+
             " · Shizuku "+(s.optBoolean("shizuku_expected")?yesNo(s.optBoolean("shizuku_active")):"NON REQUIS")+
@@ -766,7 +765,7 @@ public final class MainActivity extends Activity {
     private void integrityCell(int row,int cell,String value){if(integrityTable==null||row>=integrityTable.getChildCount())return;View v=integrityTable.getChildAt(row);if(v instanceof TableRow){View c=((TableRow)v).getChildAt(cell);if(c instanceof TextView)((TextView)c).setText(value);}}
     private void updateIntegrityStatus(){JSONObject s=ScreenIntegrityService.state(),op=s.optJSONObject("appops"),analysis=s.optJSONObject("anomaly_engine");
         integrityCell(1,1,s.optBoolean("connected")?"ACTIF":"INACTIF");integrityCell(1,2,s.optString("status"));integrityCell(2,1,s.optBoolean("overlay_visible")?"ACTIF":"INACTIF");
-        integrityCell(3,1,s.optBoolean("core_active")?"CAPTEURS OPÉRATIONNELS":"COUVERTURE PARTIELLE");integrityCell(3,2,"Collecte "+yesNo(s.optBoolean("collector_active"))+" · Corrélation "+yesNo(s.optBoolean("correlation_active"))+" · VPN "+(s.optBoolean("vpn_expected")?yesNo(s.optBoolean("vpn_active")):"OPTIONNEL")+" · Shizuku "+yesNo(s.optBoolean("shizuku_active"))+" · Alertes "+s.optLong("unread_anomalies")+" · Historique "+(analysis==null?0:analysis.optLong("historical_unread")));
+        integrityCell(3,1,s.optBoolean("core_active")?"OPÉRATIONNEL":"À VÉRIFIER");integrityCell(3,2,"Couverture "+(s.optBoolean("coverage_complete")?"COMPLÈTE":"PARTIELLE")+" · Collecte "+yesNo(s.optBoolean("collector_active"))+" · Corrélation "+yesNo(s.optBoolean("correlation_active"))+" · VPN "+(s.optBoolean("vpn_expected")?yesNo(s.optBoolean("vpn_active")):"OPTIONNEL")+" · Shizuku "+yesNo(s.optBoolean("shizuku_active"))+" · Alertes "+s.optLong("unread_anomalies")+" · Historique "+(analysis==null?0:analysis.optLong("historical_unread")));
         integrityCell(5,1,s.optString("observed_package","—"));integrityCell(6,1,s.optInt("node_count")+" nœuds");integrityCell(6,2,s.optInt("text_node_count")+" nœuds texte");integrityCell(7,1,s.optString("comparison_status"));integrityCell(7,2,s.optString("scope")+" · "+s.optString("visual_reason"));integrityCell(8,1,(s.optBoolean("appops_active")?"OBSERVÉ":"NON DISPONIBLE")+(op==null?"":" · "+op.optString("state")));integrityCell(8,2,String.valueOf(op));
     }
     private void authorizeShizukuObservation(){try{
