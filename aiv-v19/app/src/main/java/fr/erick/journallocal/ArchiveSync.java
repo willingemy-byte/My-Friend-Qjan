@@ -119,15 +119,16 @@ public final class ArchiveSync {
             currentSegment=s.segment;phase="MANIFEST";
 
             String manifest=segmentManifest(db,s);
-            long through=0;
-            try(Cursor c=db.rawQuery("SELECT client_sha256,uploaded_through_id FROM journal_archive_state WHERE segment=?",new String[]{String.valueOf(s.segment)})){
+            long through=0;String localRemoteState="";
+            try(Cursor c=db.rawQuery("SELECT client_sha256,uploaded_through_id,remote_state FROM journal_archive_state WHERE segment=?",new String[]{String.valueOf(s.segment)})){
                 if(c.moveToFirst()){
-                    if(!manifest.equalsIgnoreCase(c.getString(0)))throw new IOException("Manifeste local modifié : segment "+s.segment);
-                    through=c.getLong(1);
+                    String stored=c.getString(0);
+                    if(stored!=null&&!manifest.equalsIgnoreCase(stored))throw new IOException("Manifeste local modifié : segment "+s.segment);
+                    through=c.getLong(1);localRemoteState=c.getString(2);
                 }
             }
             db.execSQL("INSERT OR IGNORE INTO journal_archive_state(segment,client_sha256) VALUES(?,?)",new Object[]{s.segment,manifest});
-            db.execSQL("UPDATE journal_archive_state SET remote_state='UPLOADING',error=NULL WHERE segment=?",new Object[]{s.segment});
+            if(!"VERIFIED".equals(localRemoteState))db.execSQL("UPDATE journal_archive_state SET remote_state='UPLOADING',error=NULL WHERE segment=?",new Object[]{s.segment});
 
             JSONObject begin=EventStore.object(
                 "schema","aiv-journal/1",
