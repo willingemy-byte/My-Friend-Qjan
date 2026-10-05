@@ -11,6 +11,7 @@
     "journal.record": 1,
     "network.capture": 1,
     "permissions.audit": 1,
+    "appops.observe": 1,
     "analysis.local": 1,
     "export.local": 1,
     "anomaly.read": 1,

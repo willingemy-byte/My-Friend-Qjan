@@ -1,6 +1,6 @@
 {
   "schema": "aiv-endpoint-services/1",
-  "version": "2026-10-05-v2",
+  "version": "2026-10-05-v3",
   "sources": [
     {
       "id": "fcm-network",
@@ -49,6 +49,30 @@
       "url": "https://www.rfc-editor.org/rfc/rfc1035",
       "type": "standard_officiel",
       "verified_utc": "2026-10-05T02:25:09.837179+00:00"
+    },
+    {
+      "id": "openai-network",
+      "url": "https://help.openai.com/en/articles/9247338-network-recommendations-for-chatgpt-errors-on-web-and-apps",
+      "type": "documentation_officielle",
+      "verified_utc": "2026-10-05T02:59:23.934121+00:00"
+    },
+    {
+      "id": "revenuecat-api",
+      "url": "https://www.revenuecat.com/docs/api-v1",
+      "type": "documentation_officielle",
+      "verified_utc": "2026-10-05T02:59:23.934121+00:00"
+    },
+    {
+      "id": "sentry-sdk",
+      "url": "https://develop.sentry.dev/sdk/",
+      "type": "documentation_officielle",
+      "verified_utc": "2026-10-05T02:59:23.934121+00:00"
+    },
+    {
+      "id": "cloudflare-doh",
+      "url": "https://developers.cloudflare.com/1.1.1.1/encryption/dns-over-https/make-api-requests/",
+      "type": "documentation_officielle",
+      "verified_utc": "2026-10-05T02:59:23.934121+00:00"
     }
   ],
   "service_rules": [
@@ -353,6 +377,362 @@
       "identifies_local_app_recipient": false,
       "interpretation_note_fr": "Le port et le transport sont compatibles avec DNS. Sans message DNS analysé, ni la question ni la réponse ne sont connues; aucune connexion ultérieure vers Firebase ou un autre service n’est déduite.",
       "display_purpose_fr": "Port 53 · rôle présumé"
+    },
+    {
+      "id": "chatgpt-android",
+      "provider": "OpenAI",
+      "service": "ChatGPT — service Android",
+      "display_service_fr": "ChatGPT — service Android",
+      "documented_role_fr": "Hôte Android de ChatGPT publié dans les recommandations réseau OpenAI.",
+      "functional_category": "assistant_service",
+      "priority": 100,
+      "match": {
+        "exact_hosts": [
+          "android.chat.openai.com"
+        ],
+        "full_host_regex": [],
+        "documented_ports": [
+          443
+        ],
+        "port_alone_is_sufficient": false
+      },
+      "source_ids": [
+        "openai-network"
+      ],
+      "assessment_status": "DOCUMENTED_SERVICE_ROLE",
+      "flow_purpose_status": "INFERENCE_REQUIRED",
+      "identifies_remote_tenant": false,
+      "identifies_payload": false,
+      "identifies_local_app_recipient": false,
+      "interpretation_note_fr": "Lorsque le propriétaire est com.openai.chatgpt, les deux indices concordent avec un usage réseau de ChatGPT. Ce seul nom ne distingue pas un message, une synchronisation, une configuration ou une autre opération.",
+      "display_purpose_fr": "Usage de ChatGPT probable"
+    },
+    {
+      "id": "chatgpt-updates",
+      "provider": "OpenAI",
+      "service": "ChatGPT — mises à jour",
+      "display_service_fr": "ChatGPT — mises à jour",
+      "documented_role_fr": "Destination WebSocket documentée pour les mises à jour des conversations et les notifications de ChatGPT.",
+      "functional_category": "conversation_updates",
+      "priority": 100,
+      "match": {
+        "exact_hosts": [
+          "ws.chatgpt.com"
+        ],
+        "full_host_regex": [],
+        "documented_ports": [
+          443
+        ],
+        "port_alone_is_sufficient": false
+      },
+      "source_ids": [
+        "openai-network"
+      ],
+      "assessment_status": "DOCUMENTED_SERVICE_ROLE",
+      "flow_purpose_status": "INFERENCE_REQUIRED",
+      "identifies_remote_tenant": false,
+      "identifies_payload": false,
+      "identifies_local_app_recipient": false,
+      "interpretation_note_fr": "Le rôle du service est documenté. Le SNI seul ne prouve ni la négociation WebSocket, ni une notification précise, ni la livraison d’un message.",
+      "display_purpose_fr": "Conversations / notifications"
+    },
+    {
+      "id": "openai-content",
+      "provider": "OpenAI",
+      "service": "OpenAI — contenus et fichiers",
+      "display_service_fr": "OpenAI — contenus et fichiers",
+      "documented_role_fr": "Famille oaiusercontent.com publiée par OpenAI pour le fonctionnement de ChatGPT, notamment les transferts de fichiers.",
+      "functional_category": "content_transfer",
+      "priority": 100,
+      "match": {
+        "exact_hosts": [],
+        "full_host_regex": [
+          "(?:[a-z0-9-]+\\.)*oaiusercontent\\.com"
+        ],
+        "documented_ports": [
+          443
+        ],
+        "port_alone_is_sufficient": false
+      },
+      "source_ids": [
+        "openai-network"
+      ],
+      "assessment_status": "ROLE_INFERENCE",
+      "flow_purpose_status": "INFERENCE_REQUIRED",
+      "identifies_remote_tenant": false,
+      "identifies_payload": false,
+      "identifies_local_app_recipient": false,
+      "interpretation_note_fr": "La famille de domaines est documentée. Le rôle de transfert est une déduction; le type du fichier, sa provenance et son contenu ne sont pas observés. Les compteurs indiquent le sens des paquets au VPN, pas une opération applicative.",
+      "display_purpose_fr": "Transfert de fichiers probable"
+    },
+    {
+      "id": "openai-auth",
+      "provider": "OpenAI",
+      "service": "OpenAI — authentification probable",
+      "display_service_fr": "OpenAI — authentification probable",
+      "documented_role_fr": "Hôtes auth de la famille OpenAI publiée; rôle présumé à partir de leur nom.",
+      "functional_category": "authentication",
+      "priority": 100,
+      "match": {
+        "exact_hosts": [
+          "auth.openai.com",
+          "auth0.openai.com",
+          "setup.auth.openai.com"
+        ],
+        "full_host_regex": [
+          "[a-z0-9-]+(?:\\.[a-z0-9-]+)*\\.auth\\.openai\\.com"
+        ],
+        "documented_ports": [
+          443
+        ],
+        "port_alone_is_sufficient": false
+      },
+      "source_ids": [
+        "openai-network"
+      ],
+      "assessment_status": "ROLE_INFERENCE",
+      "flow_purpose_status": "INFERENCE_REQUIRED",
+      "identifies_remote_tenant": false,
+      "identifies_payload": false,
+      "identifies_local_app_recipient": false,
+      "interpretation_note_fr": "Le nom suggère un service d’authentification. Il ne prouve pas une connexion réussie, une identité de compte ou le contenu d’un jeton.",
+      "display_purpose_fr": "Connexion / session probable"
+    },
+    {
+      "id": "openai-files",
+      "provider": "OpenAI",
+      "service": "OpenAI — fichiers probables",
+      "display_service_fr": "OpenAI — fichiers probables",
+      "documented_role_fr": "Hôte files de la famille OpenAI publiée; rôle présumé à partir de son nom.",
+      "functional_category": "content_transfer",
+      "priority": 100,
+      "match": {
+        "exact_hosts": [
+          "files.openai.com"
+        ],
+        "full_host_regex": [],
+        "documented_ports": [
+          443
+        ],
+        "port_alone_is_sufficient": false
+      },
+      "source_ids": [
+        "openai-network"
+      ],
+      "assessment_status": "ROLE_INFERENCE",
+      "flow_purpose_status": "INFERENCE_REQUIRED",
+      "identifies_remote_tenant": false,
+      "identifies_payload": false,
+      "identifies_local_app_recipient": false,
+      "interpretation_note_fr": "Le rôle précis de cet hôte n’est pas établi par la liste réseau. Aucun fichier précis ni transfert applicatif n’est déduit du seul nom.",
+      "display_purpose_fr": "Service de fichiers présumé"
+    },
+    {
+      "id": "openai-static",
+      "provider": "OpenAI",
+      "service": "OpenAI — ressources statiques probables",
+      "display_service_fr": "OpenAI — ressources statiques probables",
+      "documented_role_fr": "Hôtes CDN et oaistatic publiés dans la liste réseau OpenAI; rôle présumé de distribution de ressources.",
+      "functional_category": "static_content",
+      "priority": 100,
+      "match": {
+        "exact_hosts": [
+          "cdn.openai.com",
+          "cdn.openaimerge.com"
+        ],
+        "full_host_regex": [
+          "(?:[a-z0-9-]+\\.)*oaistatic\\.com"
+        ],
+        "documented_ports": [
+          443
+        ],
+        "port_alone_is_sufficient": false
+      },
+      "source_ids": [
+        "openai-network"
+      ],
+      "assessment_status": "ROLE_INFERENCE",
+      "flow_purpose_status": "INFERENCE_REQUIRED",
+      "identifies_remote_tenant": false,
+      "identifies_payload": false,
+      "identifies_local_app_recipient": false,
+      "interpretation_note_fr": "Famille de destinations reconnue. Sans URL ni contenu, le type de ressource et sa fonction restent indéterminés.",
+      "display_purpose_fr": "Ressources de l’application probables"
+    },
+    {
+      "id": "openai-api-family",
+      "provider": "OpenAI",
+      "service": "OpenAI — service API possible",
+      "display_service_fr": "OpenAI — service API possible",
+      "documented_role_fr": "Sous-domaines api.openai.com de la famille OpenAI publiée; fonction précise non documentée par cette source.",
+      "functional_category": "provider_service",
+      "priority": 40,
+      "match": {
+        "exact_hosts": [],
+        "full_host_regex": [
+          "(?:[a-z0-9-]+\\.)*api\\.openai\\.com"
+        ],
+        "documented_ports": [
+          443
+        ],
+        "port_alone_is_sufficient": false
+      },
+      "source_ids": [
+        "openai-network"
+      ],
+      "assessment_status": "SERVICE_FAMILY_ONLY",
+      "flow_purpose_status": "INFERENCE_REQUIRED",
+      "identifies_remote_tenant": false,
+      "identifies_payload": false,
+      "identifies_local_app_recipient": false,
+      "interpretation_note_fr": "Le nom contient api et appartient à la famille OpenAI. Il ne suffit pas à distinguer conversation, voix, configuration ou expérimentation.",
+      "display_purpose_fr": "Rôle précis indéterminé"
+    },
+    {
+      "id": "chatgpt-family",
+      "provider": "OpenAI",
+      "service": "ChatGPT — service réseau",
+      "display_service_fr": "ChatGPT — service réseau",
+      "documented_role_fr": "Famille chatgpt.com publiée par OpenAI; rôle précis des sous-domaines non déterminé.",
+      "functional_category": "assistant_service",
+      "priority": 10,
+      "match": {
+        "exact_hosts": [],
+        "full_host_regex": [
+          "(?:[a-z0-9-]+\\.)*chatgpt\\.com"
+        ],
+        "documented_ports": [
+          443
+        ],
+        "port_alone_is_sufficient": false
+      },
+      "source_ids": [
+        "openai-network"
+      ],
+      "assessment_status": "SERVICE_FAMILY_ONLY",
+      "flow_purpose_status": "INFERENCE_REQUIRED",
+      "identifies_remote_tenant": false,
+      "identifies_payload": false,
+      "identifies_local_app_recipient": false,
+      "interpretation_note_fr": "La connexion est compatible avec l’usage réseau de ChatGPT. Ne pas attribuer une fonction précise à ab.chatgpt.com ou à un autre sous-domaine à partir du seul préfixe.",
+      "display_purpose_fr": "Usage de ChatGPT possible"
+    },
+    {
+      "id": "openai-family",
+      "provider": "OpenAI",
+      "service": "OpenAI — service réseau",
+      "display_service_fr": "OpenAI — service réseau",
+      "documented_role_fr": "Famille openai.com publiée par OpenAI; fonction précise non déterminée.",
+      "functional_category": "provider_service",
+      "priority": 10,
+      "match": {
+        "exact_hosts": [],
+        "full_host_regex": [
+          "(?:[a-z0-9-]+\\.)*openai\\.com"
+        ],
+        "documented_ports": [
+          443
+        ],
+        "port_alone_is_sufficient": false
+      },
+      "source_ids": [
+        "openai-network"
+      ],
+      "assessment_status": "SERVICE_FAMILY_ONLY",
+      "flow_purpose_status": "INFERENCE_REQUIRED",
+      "identifies_remote_tenant": false,
+      "identifies_payload": false,
+      "identifies_local_app_recipient": false,
+      "interpretation_note_fr": "Le nom situe le service dans la famille OpenAI. Il ne prouve ni une requête au modèle ni le contenu échangé.",
+      "display_purpose_fr": "Rôle précis indéterminé"
+    },
+    {
+      "id": "sentry-ingest",
+      "provider": "Sentry",
+      "service": "Sentry — diagnostics",
+      "display_service_fr": "Sentry — diagnostics",
+      "documented_role_fr": "Les SDK Sentry envoient des erreurs et d’autres événements vers leur service de traitement.",
+      "functional_category": "diagnostics",
+      "priority": 100,
+      "match": {
+        "exact_hosts": [],
+        "full_host_regex": [
+          "[a-z0-9-]+(?:\\.[a-z0-9-]+)*\\.ingest\\.sentry\\.io"
+        ],
+        "documented_ports": [
+          443
+        ],
+        "port_alone_is_sufficient": false
+      },
+      "source_ids": [
+        "sentry-sdk",
+        "openai-network"
+      ],
+      "assessment_status": "DOCUMENTED_SERVICE_ROLE",
+      "flow_purpose_status": "INFERENCE_REQUIRED",
+      "identifies_remote_tenant": false,
+      "identifies_payload": false,
+      "identifies_local_app_recipient": false,
+      "interpretation_note_fr": "OpenAI publie notamment o33249.ingest.sentry.io parmi ses destinations réseau. Cela rend un échange de diagnostics plausible lorsqu’il est attribué à ChatGPT; un plantage, un événement particulier ou les données envoyées ne sont pas établis.",
+      "display_purpose_fr": "Erreurs / télémétrie possibles"
+    },
+    {
+      "id": "revenuecat-api",
+      "provider": "RevenueCat",
+      "service": "RevenueCat — abonnements",
+      "display_service_fr": "RevenueCat — abonnements",
+      "documented_role_fr": "API documentée pour les informations clients, les offres, les droits d’accès et les transactions liés aux achats intégrés.",
+      "functional_category": "subscriptions",
+      "priority": 100,
+      "match": {
+        "exact_hosts": [
+          "api.revenuecat.com"
+        ],
+        "full_host_regex": [],
+        "documented_ports": [
+          443
+        ],
+        "port_alone_is_sufficient": false
+      },
+      "source_ids": [
+        "revenuecat-api"
+      ],
+      "assessment_status": "DOCUMENTED_SERVICE_ROLE",
+      "flow_purpose_status": "INFERENCE_REQUIRED",
+      "identifies_remote_tenant": false,
+      "identifies_payload": false,
+      "identifies_local_app_recipient": false,
+      "interpretation_note_fr": "La fonction générale est documentée. Le flux peut correspondre à une consultation de droits ou d’offres; il ne prouve pas un achat, un paiement ou une transaction précise.",
+      "display_purpose_fr": "Offres / droits d’abonnement"
+    },
+    {
+      "id": "cloudflare-doh",
+      "provider": "Cloudflare",
+      "service": "Cloudflare — DNS chiffré probable",
+      "display_service_fr": "Cloudflare — DNS chiffré probable",
+      "documented_role_fr": "Résolveur DNS sur HTTPS publié à cloudflare-dns.com/dns-query.",
+      "functional_category": "name_resolution",
+      "priority": 100,
+      "match": {
+        "exact_hosts": [
+          "cloudflare-dns.com"
+        ],
+        "full_host_regex": [],
+        "documented_ports": [
+          443
+        ],
+        "port_alone_is_sufficient": false
+      },
+      "source_ids": [
+        "cloudflare-doh"
+      ],
+      "assessment_status": "DOCUMENTED_SERVICE_ROLE",
+      "flow_purpose_status": "INFERENCE_REQUIRED",
+      "identifies_remote_tenant": false,
+      "identifies_payload": false,
+      "identifies_local_app_recipient": false,
+      "interpretation_note_fr": "Le SNI est compatible avec le service DoH documenté. Sans chemin HTTP ni message DNS analysé, la requête DNS et le domaine recherché ne sont pas observés.",
+      "display_purpose_fr": "Résolution de noms probable"
     }
   ]
 }

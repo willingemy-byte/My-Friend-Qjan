@@ -94,16 +94,20 @@ public final class EventStore extends SQLiteOpenHelper {
                 "elapsed_ms",observedElapsedMs>=0?observedElapsedMs:SystemClock.elapsedRealtime(),"persisted_at_ms",storedMs, "app", actor, "action", action,
                 "destination", destination, "transport", transport, "category", category,
                 "source", source, "scope", ("trafic".equals(category)||"dns".equals(category)) ? "Métadonnées réseau observées par le VPN local; contenu des échanges non enregistré" : "Événement ou état fourni par une API Android; aucune capture du contenu des autres applications", "details", details);
+            event.put("wall_ms",now).put("clock_scope_id",PROCESS_SESSION);
+            if("frontend".equals(category))event.put("scope","Snapshot sémantique borné; champs éditables et mots de passe masqués; aucune archive d’écran.");
             for(String key:new String[]{"protocol","port","bytes","direction","result"}) if(details.has(key)) event.put(key,details.get(key));
             ContentValues values = new ContentValues();
             values.put("timestamp_ms",now);values.put("app",actor);values.put("action",action);values.put("destination",destination);values.put("transport",transport);values.put("category",category);
             values.put("payload",event.toString());values.put("search_text",event.toString().toLowerCase(Locale.ROOT));
-            getWritableDatabase().insertOrThrow("events",null,values);
+            long rowId=getWritableDatabase().insertOrThrow("events",null,values);event.put("id",rowId);
             // Analysis errors have their own status and must never stop successful source recording.
-            AnomalyMonitor.request(context);JournalSegments.request(context);TrackerIndex.get(context).request();
+            try{AnomalyMonitor.observe(context,event);}catch(Exception ignored){}
+            try{AnomalyMonitor.request(context);JournalSegments.request(context);TrackerIndex.get(context).request();}catch(Exception ignored){}
             return true;
         } catch(Exception e) { lastError = "Écriture du journal impossible : " + e.getClass().getSimpleName(); return false; }
     }
+    static String clockScope(){return PROCESS_SESSION;}
     private static String literalLike(String text) { return text.replace("\\","\\\\").replace("%","\\%").replace("_","\\_"); }
     public synchronized JSONObject page(String search, String transport, int offset, int limit, long beforeId, String actor, String kind, boolean quiet) throws Exception {
         return pageFiltered(search,transport,offset,limit,beforeId,actor,kind,quiet,"","");

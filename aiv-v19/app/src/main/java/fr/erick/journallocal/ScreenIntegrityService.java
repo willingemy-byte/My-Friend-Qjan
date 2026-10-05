@@ -1,289 +1,130 @@
 package fr.erick.journallocal;
 
 import android.accessibilityservice.AccessibilityService;
-import android.graphics.Rect;
-import android.graphics.Color;
-import android.graphics.PixelFormat;
-import android.graphics.Typeface;
-import android.graphics.drawable.GradientDrawable;
-import android.view.Gravity;
-import android.view.WindowManager;
-import android.widget.TextView;
+import android.app.AlertDialog;
 import android.content.Intent;
-import android.view.accessibility.AccessibilityEvent;
-import android.view.accessibility.AccessibilityNodeInfo;
-import android.os.Handler;
-import android.os.Looper;
-import android.text.Spannable;
+import android.content.pm.*;
+import android.graphics.*;
+import android.graphics.drawable.GradientDrawable;
+import android.hardware.HardwareBuffer;
+import android.os.*;
 import android.text.SpannableString;
+import android.text.Spannable;
 import android.text.style.ForegroundColorSpan;
-import org.json.JSONObject;
+import android.view.*;
+import android.view.accessibility.*;
+import android.widget.*;
+import org.json.*;
+import java.io.*;
 import java.security.MessageDigest;
-import java.util.ArrayDeque;
-import java.util.Locale;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.*;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/**
- * Read-only semantic observation channel for AIV display integrity.
- * No clicks, gestures, screenshots, overlays or raw page text are persisted.
- */
+/** Event-driven semantic sensor, ephemeral visual channel, and persistent AIV status rail. */
 public final class ScreenIntegrityService extends AccessibilityService {
-    private static volatile boolean connected;
-    private static volatile String observedPackage="";
-    private static volatile String observedClass="";
-    private static volatile long observedMs;
-    private static volatile int nodeCount;
-    private static volatile int textNodeCount;
-    private static volatile String semanticHash="";
-    private static volatile String status="Service non activé";
-    private static volatile boolean overlayVisible;
-    private static volatile boolean coreActive;
-    private static volatile boolean anomalyActive;
-    private static volatile boolean coverageGapActive;
-    private static volatile long unreadAnomalies;
-    private static volatile boolean collectorActive;
-    private static volatile boolean correlationActive;
-    private static volatile boolean vpnExpected;
-    private static volatile boolean vpnActive;
-    private static volatile boolean shizukuExpected;
-    private static volatile boolean shizukuActive;
-    private WindowManager windowManager;
-    private TextView badge;
+    private static volatile ScreenIntegrityService active;
+    private static volatile boolean connected,overlayVisible,coreActive,visualAvailable;
+    private static volatile String observedPackage="",observedClass="",semanticHash="",status="Service non activé",visualReason="NOT_CAPTURED";
+    private static volatile long observedMs,visualMs;private static volatile int nodeCount,textNodeCount;
     private final Handler main=new Handler(Looper.getMainLooper());
-    private final ExecutorService statusWorker=Executors.newSingleThreadExecutor();
-    private final AtomicBoolean statusRefreshBusy=new AtomicBoolean();
-    private final Runnable statusPulse=new Runnable(){@Override public void run(){
-        refreshBadgeStateAsync();
-        main.postDelayed(this,3000);
-    }};
-
-    @Override protected void onServiceConnected(){
-        connected=true;
-        status="Observation sémantique active";
-        showBadge();
-        main.removeCallbacks(statusPulse);
-        main.post(statusPulse);
-    }
-
+    private final ExecutorService worker=Executors.newSingleThreadExecutor();
+    private final AtomicBoolean refreshing=new AtomicBoolean();
+    private WindowManager windows;private LinearLayout rail;private TextView health;private View highlight;private AlertDialog panel;
+    private volatile JSONObject healthState=new JSONObject();private JSONArray alerts=new JSONArray();private long unread;
+    private int currentWindow=-1;private long lastSemanticElapsed,lastCaptureElapsed,lastCoverageMs;
+    private String previousHash="";private JSONObject previousSnapshot;private boolean captureBusy;
+    private Frame frame;private final LinkedHashMap<Long,JSONObject> pendingProofs=new LinkedHashMap<>();private String lastVisualPackage="",lastVisualSemantic="";private int lastVisualWindow=-1;
+    private JSONObject highlightedSource;
+    private static final class Frame {Bitmap bitmap;String hash,pkg,semantic;int window;long elapsed,wall;Rect windowBounds;}
+    private final Runnable pulse=new Runnable(){public void run(){refresh();main.postDelayed(this,3000);}};
+    @Override protected void onServiceConnected(){active=this;connected=true;status="Observation sémantique active";windows=(WindowManager)getSystemService(WINDOW_SERVICE);showRail();main.post(pulse);worker.execute(()->VisualEvidencePolicy.prune(new File(getFilesDir(),"finding-visual"),System.currentTimeMillis(),Continuous.prefs(this).getLong("visual_retention_ms",VisualEvidencePolicy.RETENTION_MS),VisualEvidencePolicy.MAX_BYTES,VisualEvidencePolicy.MAX_FILES));}
+    static void findingsChanged(){ScreenIntegrityService s=active;if(s!=null)s.main.post(s::refresh);}
+    static void findingCommitted(long id,JSONObject finding){ScreenIntegrityService s=active;if(s!=null)s.main.post(()->s.proofAndHighlight(id,finding));}
     @Override public void onAccessibilityEvent(AccessibilityEvent event){
-        if(event==null)return;
-        CharSequence pkg=event.getPackageName();
-        if(pkg!=null&&getPackageName().contentEquals(pkg))return;
-        AccessibilityNodeInfo root=null;
+        if(event==null)return;String pkg=event.getPackageName()==null?"":event.getPackageName().toString();if(pkg.isEmpty()||getPackageName().equals(pkg))return;
+        long elapsed=SystemClock.elapsedRealtime(),uptime=SystemClock.uptimeMillis(),wall=System.currentTimeMillis();boolean packageChanged=!pkg.equals(observedPackage);String oldPackage=observedPackage;String kind=eventKind(event.getEventType(),packageChanged);
+        boolean important=kind.equals("CLICK")||kind.equals("WINDOW_CHANGE")||!pkg.equals(observedPackage);
+        if(!important&&elapsed-lastSemanticElapsed<750)return;
+        AccessibilityNodeInfo root=null,source=null;
         try{
-            root=getRootInActiveWindow();
-            if(root==null){status="Fenêtre active sans arbre accessible";return;}
-            Snapshot s=snapshot(root);
-            observedPackage=pkg==null?"":pkg.toString();
-            CharSequence cls=event.getClassName();
-            observedClass=cls==null?"":cls.toString();
-            observedMs=System.currentTimeMillis();
-            nodeCount=s.nodes;
-            textNodeCount=s.textNodes;
-            semanticHash=s.hash;
-            status="Couche sémantique observée";
-        }catch(Throwable t){
-            status="Observation interrompue : "+t.getClass().getSimpleName();
-        }finally{
-            if(root!=null)root.recycle();
-        }
+            root=getRootInActiveWindow();if(root==null){status="Fenêtre sans arbre accessible";visualAvailable=false;return;}
+            if(root.getPackageName()==null||!pkg.contentEquals(root.getPackageName()))return;
+            source=event.getSource();JSONObject snapshot=snapshot(root);String hash=snapshot.optString("hash");
+            observedPackage=pkg;observedClass=event.getClassName()==null?"":event.getClassName().toString();observedMs=wall;nodeCount=snapshot.optInt("nodes");textNodeCount=snapshot.optInt("text_nodes");semanticHash=hash;currentWindow=root.getWindowId();
+            visualAvailable=lastVisualWindow==currentWindow&&pkg.equals(lastVisualPackage)&&hash.equals(lastVisualSemantic)&&visualMs>0;
+            status="Couche sémantique observée";if(!important&&hash.equals(previousHash)&&!kind.equals("TEXT_CHANGE")&&!kind.equals("SELECTION"))return;lastSemanticElapsed=elapsed;
+            JSONObject d=EventStore.object("schema","aiv-frontend/1","package_name",pkg,"previous_package",oldPackage,"package_changed",packageChanged,"profile_id",JSONObject.NULL,"uid",-1,"packages",new JSONArray().put(pkg),"event_kind",kind,"android_event_type",event.getEventType(),"event_uptime_ms",event.getEventTime(),"captured_elapsed_ms",elapsed,"window_id",currentWindow,"window_class",observedClass,"semantic",snapshot,"before",previousSnapshot==null?JSONObject.NULL:previousSnapshot,"element_source",source==null?"ROOT_FALLBACK":"EVENT_NODE","element",source==null?node(root):node(source),"correlation_id",UUID.randomUUID().toString(),"visual_state",visualAvailable?"VISUAL_CAPTURE_ONLY":"SEMANTIC_ONLY","comparison_confirmed",false,"source","AccessibilityService events");
+            try{PackageInfo p=getPackageManager().getPackageInfo(pkg,Build.VERSION.SDK_INT>=28?PackageManager.GET_SIGNING_CERTIFICATES:PackageManager.GET_SIGNATURES);JSONObject identity=AppIdentity.forPackage(this,p);d.put("uid",p.applicationInfo.uid).put("profile_id",p.applicationInfo.uid/100000).put("app_identity",identity);}catch(Exception unavailable){d.put("identity_status","UNAVAILABLE");}
+            previousHash=hash;previousSnapshot=snapshot;
+            long age=uptime-event.getEventTime();long atElapsed=eventElapsed(elapsed,uptime,event.getEventTime());d.put("event_time_basis",age>=0&&age<10000?"ANDROID_UPTIME_CONVERTED":"CAPTURE_ELAPSED_REALTIME");
+            final long recordElapsed=atElapsed;final int window=currentWindow;Rect bounds=new Rect();root.getBoundsInScreen(bounds);
+            if(RecorderService.running)worker.execute(()->{EventStore.get(this).addObserved("frontend",pkg,kind,"Fenêtre "+window,"Écran","AccessibilityService",d,wall-(elapsed-recordElapsed),recordElapsed);if(important)PermissionUsage.requestPriority(this);});
+            capture(window,pkg,hash,bounds);
+            if(highlight!=null&&!highlightStillPresent(highlightedSource))removeHighlight();
+        }catch(Throwable error){status="Observation interrompue : "+error.getClass().getSimpleName();}
+        finally{if(source!=null)source.recycle();if(root!=null)root.recycle();}
     }
-
-    @Override public void onInterrupt(){status="Service interrompu";}
-
-    private void showBadge(){
-        try{
-            if(badge!=null)return;
-            windowManager=(WindowManager)getSystemService(WINDOW_SERVICE);
-            badge=new TextView(this);
-            badge.setTextColor(Color.WHITE);
-            badge.setTextSize(13);
-            badge.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
-            badge.setGravity(Gravity.CENTER);
-            int pad=(int)(8*getResources().getDisplayMetrics().density);
-            badge.setPadding(pad,pad/2,pad,pad/2);
-            applyBadgeVisual();
-            badge.setOnClickListener(v->{
-                try{
-                    Intent i=new Intent(this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_SINGLE_TOP);
-                    startActivity(i);
-                }catch(Throwable ignored){}
-            });
-            WindowManager.LayoutParams lp=new WindowManager.LayoutParams(
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-                PixelFormat.TRANSLUCENT);
-            lp.gravity=Gravity.TOP|Gravity.END;
-            lp.x=12;lp.y=96;
-            windowManager.addView(badge,lp);
-            overlayVisible=true;
-        }catch(Throwable t){
-            overlayVisible=false;
-            status="Observation active; badge indisponible : "+t.getClass().getSimpleName();
-        }
+    static String kind(int type){switch(type){case AccessibilityEvent.TYPE_VIEW_CLICKED:return "CLICK";case AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED:case AccessibilityEvent.TYPE_WINDOWS_CHANGED:return "WINDOW_CHANGE";case AccessibilityEvent.TYPE_VIEW_SELECTED:return "SELECTION";case AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED:return "TEXT_CHANGE";case AccessibilityEvent.TYPE_VIEW_SCROLLED:return "SCROLL";case AccessibilityEvent.TYPE_VIEW_FOCUSED:return "FOCUS";default:return "CONTENT_CHANGE";}}
+    static long eventElapsed(long elapsed,long uptime,long eventUptime){long age=uptime-eventUptime;return age>=0&&age<10000?elapsed-age:elapsed;}
+    static String eventKind(int type,boolean packageChanged){return packageChanged&&type!=AccessibilityEvent.TYPE_VIEW_CLICKED?"PACKAGE_CHANGE":kind(type);}
+    private static String clean(CharSequence s){if(s==null)return "";String t=s.toString().replaceAll("\\s+"," ").trim();return t.substring(0,Math.min(160,t.length()));}
+    static JSONObject node(AccessibilityNodeInfo n){Rect r=new Rect();n.getBoundsInScreen(r);JSONArray actions=new JSONArray();for(AccessibilityNodeInfo.AccessibilityAction a:n.getActionList())if(actions.length()<20)actions.put(a.getId());boolean privateText=n.isPassword()||n.isEditable();return EventStore.object("class",clean(n.getClassName()),"text",privateText?"[CHAMP MASQUÉ]":clean(n.getText()),"content_description",privateText?"":clean(n.getContentDescription()),"view_id",n.getViewIdResourceName(),"bounds",new JSONArray().put(r.left).put(r.top).put(r.right).put(r.bottom),"clickable",n.isClickable(),"scrollable",n.isScrollable(),"editable",n.isEditable(),"selected",n.isSelected(),"checked",n.isChecked(),"checkable",n.isCheckable(),"focused",n.isFocused(),"enabled",n.isEnabled(),"visible",n.isVisibleToUser(),"password",n.isPassword(),"actions",actions);}
+    static JSONObject snapshot(AccessibilityNodeInfo root)throws Exception{
+        ArrayDeque<AccessibilityNodeInfo> q=new ArrayDeque<>();q.add(AccessibilityNodeInfo.obtain(root));JSONArray tree=new JSONArray();MessageDigest md=MessageDigest.getInstance("SHA-256");int nodes=0,texts=0;
+        try{while(!q.isEmpty()&&nodes<256){AccessibilityNodeInfo n=q.removeFirst();try{JSONObject part=node(n);nodes++;if(!part.optString("text").isEmpty())texts++;md.update(part.toString().getBytes("UTF-8"));if(tree.length()<48)tree.put(part);for(int i=0;i<Math.min(64,n.getChildCount())&&q.size()<256;i++){AccessibilityNodeInfo child=n.getChild(i);if(child!=null)q.addLast(child);}}finally{n.recycle();}}}finally{while(!q.isEmpty())q.removeFirst().recycle();}
+        return EventStore.object("hash",hex(md.digest()),"nodes",nodes,"text_nodes",texts,"tree",tree,"tree_limit",48,"walk_limit",256,"bounded",true);
     }
-
-    private void refreshBadgeStateAsync(){
-        if(!statusRefreshBusy.compareAndSet(false,true))return;
-        statusWorker.execute(()->{
-            try{
-                collectorActive=RecorderService.running;
-                correlationActive=WatcherService.running;
-                vpnExpected=Continuous.prefs(this).getBoolean("vpn_enabled",false);
-                vpnActive=NetworkCaptureService.running;
-
-                shizukuExpected=ProductAccess.demoTier(this)>=ProductAccess.PAID;
-                shizukuActive=false;
-                try{
-                    JSONObject shizuku=ShizukuCleanup.state(this);
-                    shizukuActive=shizuku.optBoolean("binder")&&shizuku.optBoolean("authorized");
-                }catch(Throwable ignored){}
-
-                unreadAnomalies=0;
-                try{
-                    JSONObject summary=AnomalyMonitor.get(this).summary();
-                    unreadAnomalies=summary.optLong("unread",0);
-                }catch(Throwable ignored){}
-                coverageGapActive=NetworkCaptureService.coverageGapActive();
-                anomalyActive=unreadAnomalies>0||coverageGapActive;
-
-                coreActive=connected
-                    && collectorActive
-                    && correlationActive
-                    && (!vpnExpected||vpnActive)
-                    && (!shizukuExpected||shizukuActive);
-            }finally{
-                statusRefreshBusy.set(false);
-                main.post(this::applyBadgeVisual);
+    private void capture(int window,String pkg,String semantic,Rect windowBounds){
+        if(!RecorderService.running)return;
+        if(Build.VERSION.SDK_INT<30){visualFailure(-30,"API_BELOW_30");return;}
+        long now=SystemClock.elapsedRealtime();if(captureBusy||now-lastCaptureElapsed<2000)return;captureBusy=true;lastCaptureElapsed=now;
+        TakeScreenshotCallback callback=new TakeScreenshotCallback(){
+            public void onSuccess(ScreenshotResult result){HardwareBuffer buffer=result.getHardwareBuffer();Bitmap image=null;try{Bitmap wrapped=Bitmap.wrapHardwareBuffer(buffer,result.getColorSpace());if(wrapped==null)throw new IOException("Bitmap indisponible");try{image=wrapped.copy(Bitmap.Config.ARGB_8888,false);}finally{wrapped.recycle();}if(image==null)throw new IOException("Copie indisponible");Bitmap retained=image;image=null;if(worker.isShutdown()){retained.recycle();captureBusy=false;return;}long at=SystemClock.elapsedRealtime();worker.execute(()->{
+                String hash="";try{MessageDigest digest=MessageDigest.getInstance("SHA-256");int[] row=new int[retained.getWidth()];for(int y=0;y<retained.getHeight();y++){retained.getPixels(row,0,row.length,0,y,row.length,1);for(int pixel:row){digest.update((byte)(pixel>>>24));digest.update((byte)(pixel>>>16));digest.update((byte)(pixel>>>8));digest.update((byte)pixel);}}hash=hex(digest.digest());}catch(Exception ignored){}final String computed=hash;
+                main.post(()->{captureBusy=false;if(active!=ScreenIntegrityService.this||window!=currentWindow||!pkg.equals(observedPackage)||!semantic.equals(semanticHash)){retained.recycle();return;}discardFrame();Frame f=new Frame();f.bitmap=retained;f.hash=computed;f.window=window;f.pkg=pkg;f.semantic=semantic;f.elapsed=at;f.wall=System.currentTimeMillis();f.windowBounds=new Rect(windowBounds);frame=f;visualMs=f.wall;lastVisualWindow=window;lastVisualPackage=pkg;lastVisualSemantic=semantic;visualAvailable=!computed.isEmpty();visualReason=visualAvailable?"CAPTURE_AND_HASH_ONLY":"HASH_FAILED";for(Map.Entry<Long,JSONObject> pending:new ArrayList<>(pendingProofs.entrySet()))proofAndHighlight(pending.getKey(),pending.getValue());pendingProofs.clear();discardFrame();refresh();});
+            });}catch(Throwable failure){visualFailure(-1,failure.getClass().getSimpleName());}finally{if(image!=null)image.recycle();buffer.close();if(rail!=null)rail.setVisibility(View.VISIBLE);}}
+            public void onFailure(int error){captureBusy=false;if(rail!=null)rail.setVisibility(View.VISIBLE);visualFailure(error,VisualEvidencePolicy.failure(error));}
+        };
+        try{if(Build.VERSION.SDK_INT>=34)takeScreenshotOfWindow(window,main::post,callback);else{if(rail!=null)rail.setVisibility(View.INVISIBLE);main.postDelayed(()->takeScreenshot(Display.DEFAULT_DISPLAY,main::post,callback),80);}}
+        catch(Throwable error){captureBusy=false;if(rail!=null)rail.setVisibility(View.VISIBLE);visualFailure(-1,error.getClass().getSimpleName());}
+    }
+    private void visualFailure(int code,String reason){visualAvailable=false;visualReason=reason;captureBusy=false;if(System.currentTimeMillis()-lastCoverageMs<60000)return;lastCoverageMs=System.currentTimeMillis();worker.execute(()->EventStore.get(this).add("sensor-health","All In Visible","VISUAL_COVERAGE_UNAVAILABLE","Canal visuel","Écran","AccessibilityService.takeScreenshot",EventStore.object("category","SENSOR_HEALTH","coverage","VISUAL_COVERAGE_UNAVAILABLE","error_code",code,"error",reason,"window_id",currentWindow,"scope","Refus ou limite Android; aucun comportement suspect attribué à l’application observée.")));}
+    private void discardFrame(){if(frame!=null){frame.bitmap.recycle();frame=null;}}
+    private void showRail(){try{rail=new LinearLayout(this);rail.setOrientation(LinearLayout.HORIZONTAL);rail.setGravity(Gravity.CENTER_VERTICAL);GradientDrawable bg=new GradientDrawable();bg.setColor(0xff071827);bg.setCornerRadius(60);bg.setStroke(dp(2),0xffed9945);rail.setBackground(bg);rail.setPadding(dp(5),dp(2),dp(5),dp(2));health=chip("● AIV",Color.LTGRAY);health.setOnClickListener(v->showStatus());rail.addView(health);WindowManager.LayoutParams lp=params(WindowManager.LayoutParams.WRAP_CONTENT,WindowManager.LayoutParams.WRAP_CONTENT,false);lp.gravity=Gravity.TOP|Gravity.END;lp.x=dp(8);lp.y=dp(48);windows.addView(rail,lp);overlayVisible=true;}catch(Throwable error){overlayVisible=false;status="Pastille indisponible : "+error.getClass().getSimpleName();}}
+    private WindowManager.LayoutParams params(int width,int height,boolean untouchable){return new WindowManager.LayoutParams(width,height,WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN|(untouchable?WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE:0),PixelFormat.TRANSLUCENT);}
+    private int dp(int n){return Math.max(1,(int)(n*getResources().getDisplayMetrics().density));}
+    private TextView chip(String label,int color){TextView v=new TextView(this);v.setText(label);v.setTextColor(color);v.setTextSize(13);v.setTypeface(Typeface.DEFAULT,Typeface.BOLD);v.setPadding(dp(6),dp(5),dp(6),dp(5));return v;}
+    private void refresh(){if(!refreshing.compareAndSet(false,true))return;worker.execute(()->{try{
+        JSONObject analysis=AnomalyMonitor.get(this).summary(),appops=PermissionUsage.get(this).status(),shizuku=ShizukuCleanup.state(this);boolean shizukuActive=shizuku.optBoolean("binder")&&shizuku.optBoolean("authorized");boolean opActive=appops.optLong("last_success_ms")>0&&EventStore.clockScope().equals(appops.optString("last_success_clock_scope_id"))&&SystemClock.elapsedRealtime()-appops.optLong("last_success_elapsed_ms")<150000&&shizukuActive&&!Arrays.asList("INDISPONIBLE","FORMAT_NON_RECONNU").contains(appops.optString("state"));boolean corr=analysis.optString("error").isEmpty()&&analysis.optLong("last_live_ms")>0&&analysis.optLong("dropped_live")==0;
+        boolean vpnExpected=Continuous.prefs(this).getBoolean("vpn_enabled",false);coreActive=OverlayRules.healthy(connected,RecorderService.running,corr,opActive,visualAvailable,vpnExpected,NetworkCaptureService.running);unread=analysis.optLong("unread");alerts=AnomalyMonitor.get(this).alerts();healthState=EventStore.object("collector_active",RecorderService.running,"correlation_active",corr,"appops_active",opActive,"appops",appops,"shizuku_expected",true,"shizuku_active",shizukuActive,"vpn_expected",vpnExpected,"vpn_active",NetworkCaptureService.running,"coverage_gap",NetworkCaptureService.coverageGapActive(),"anomaly_engine",analysis,"unread_anomalies",unread);
+    }catch(Exception error){coreActive=false;status="État incomplet : "+error.getClass().getSimpleName();}finally{refreshing.set(false);main.post(this::renderRail);}});}
+    private void renderRail(){if(rail==null)return;SpannableString label=new SpannableString("● AIV");label.setSpan(new ForegroundColorSpan(coreActive?0xff65df70:0xff8b98a5),0,1,Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);health.setTextColor(Color.WHITE);health.setText(label);health.setContentDescription("AIV santé : "+(coreActive?"sous-systèmes attendus opérationnels":"couverture partielle")+". Ouvrir le statut.");while(rail.getChildCount()>1)rail.removeViewAt(1);JSONArray shown=OverlayRules.visible(alerts);for(int i=0;i<shown.length();i++){JSONObject a=shown.optJSONObject(i);long id=a.optLong("id");TextView item=chip("● #"+id,"critical".equals(a.optString("severity"))?Color.RED:0xffff9a3c);item.setContentDescription("Finding #"+id+" : "+a.optString("title"));item.setOnClickListener(v->open(id,false));rail.addView(item);}int remaining=OverlayRules.remaining(unread,shown);if(remaining>0){TextView more=chip("+"+remaining,0xffff9a3c);more.setOnClickListener(v->open(0,true));rail.addView(more);}}
+    private void showStatus(){try{if(panel!=null)panel.dismiss();JSONObject s=state();String text="Collecte : "+yes(s.optBoolean("collector_active"))+"\nCorrélation : "+yes(s.optBoolean("correlation_active"))+"\nAccessibilité : "+yes(connected)+"\nIntégrité sémantique : "+(nodeCount>0?"observée":"en attente")+"\nCanal visuel : "+s.optString("comparison_status")+"\nAppOps : "+appOpsLabel()+"\nShizuku : "+yes(s.optBoolean("shizuku_active"))+"\nVPN/réseau : "+yes(s.optBoolean("vpn_active"))+"\nMoteur anomalies : "+(s.optBoolean("correlation_active")?"actif":"à vérifier")+"\nAnomalies non consultées : "+unread+"\nLimites : "+visualReason+". Capture et hash; comparaison du texte visuel non implémentée. Aucun contenu réseau déchiffré.";panel=new AlertDialog.Builder(this).setTitle("État All In Visible").setMessage(text).setPositiveButton("OUVRIR ALL IN VISIBLE",(d,w)->open(0,false)).setNegativeButton("FERMER",null).create();panel.getWindow().setType(WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY);panel.show();}catch(Throwable error){status="Panneau indisponible : "+error.getClass().getSimpleName();}}
+    private String appOpsLabel(){JSONObject o=healthState.optJSONObject("appops");if(o==null)return "non observé";long success=o.optLong("last_success_ms");return o.optString("state")+" · "+(success>0?"dernier relevé "+java.text.DateFormat.getTimeInstance().format(new Date(success)):"aucun relevé réussi");}
+    private static String yes(boolean b){return b?"ACTIF":"INACTIF / NON OBSERVÉ";}
+    private void open(long id,boolean onlyUnread){Intent intent=new Intent(this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_SINGLE_TOP|Intent.FLAG_ACTIVITY_CLEAR_TOP);if(id>0)intent.putExtra("finding_id",id);if(id>0||onlyUnread)intent.putExtra("open_anomalies",true);intent.putExtra("only_unread",onlyUnread);try{startActivity(intent);}catch(Throwable error){status="Ouverture AIV : "+error.getClass().getSimpleName();}}
+    private void proofAndHighlight(long id,JSONObject finding){
+        JSONObject frontend=finding.optJSONObject("frontend");if(frontend==null||"ROOT_FALLBACK".equals(frontend.optString("element_source")))return;JSONObject element=frontend.optJSONObject("element");JSONArray b=element==null?null:element.optJSONArray("bounds");if(b==null||b.length()!=4)return;Rect bounds=new Rect(b.optInt(0),b.optInt(1),b.optInt(2),b.optInt(3));boolean same=currentWindow==frontend.optInt("window_id",-2)&&observedPackage.equals(frontend.optString("package_name"));Frame f=frame;
+        if(f==null&&same&&SystemClock.elapsedRealtime()-frontend.optLong("captured_elapsed_ms")<3000){
+            pendingProofs.put(id,finding);while(pendingProofs.size()>4)pendingProofs.remove(pendingProofs.keySet().iterator().next());
+            main.postDelayed(()->{JSONObject pending=pendingProofs.get(id);if(pending==null)return;AccessibilityNodeInfo root=getRootInActiveWindow();if(root!=null)try{if(root.getWindowId()==currentWindow&&observedPackage.equals(frontend.optString("package_name"))){Rect r=new Rect();root.getBoundsInScreen(r);capture(currentWindow,observedPackage,semanticHash,r);}}finally{root.recycle();}main.postDelayed(()->pendingProofs.remove(id),3000);},Math.max(0,2000-(SystemClock.elapsedRealtime()-lastCaptureElapsed)));
+        }
+        if(f!=null&&Continuous.prefs(this).getLong("visual_retention_ms",VisualEvidencePolicy.RETENTION_MS)>0&&VisualEvidencePolicy.retain(id,same&&f.window==currentWindow,SystemClock.elapsedRealtime()-f.elapsed<=5000&&Math.abs(f.elapsed-frontend.optLong("captured_elapsed_ms"))<=3000&&highlightStillPresent(frontend))&&!bounds.isEmpty()){
+            Rect crop=new Rect(bounds);boolean mapping=Build.VERSION.SDK_INT<34||(f.bitmap.getWidth()==f.windowBounds.width()&&f.bitmap.getHeight()==f.windowBounds.height());if(Build.VERSION.SDK_INT>=34)crop.offset(-f.windowBounds.left,-f.windowBounds.top);if(mapping&&crop.intersect(0,0,f.bitmap.getWidth(),f.bitmap.getHeight())&&!crop.isEmpty()){
+                Bitmap region=Bitmap.createBitmap(f.bitmap,crop.left,crop.top,crop.width(),crop.height());Bitmap proof=region.copy(Bitmap.Config.ARGB_8888,false);if(region!=f.bitmap)region.recycle();if(proof==null)return;String hash=f.hash;worker.execute(()->{File dir=new File(getFilesDir(),"finding-visual");File target=new File(dir,"finding-"+id+".png");try{dir.mkdirs();try(FileOutputStream out=new FileOutputStream(target)){if(!proof.compress(Bitmap.CompressFormat.PNG,100,out))throw new IOException("Crop non enregistré");}AnomalyMonitor.get(this).visual(id,EventStore.object("status","VISUAL_CAPTURE_ONLY","comparison_confirmed",false,"crop_path",target.getAbsolutePath(),"capture_sha256",hash,"file_sha256",fileHash(target),"captured_wall_ms",f.wall,"captured_elapsed_ms",f.elapsed,"clock_scope_id",EventStore.clockScope(),"window_id",f.window,"bounds",b,"scope","Crop du même écran proche de l’observation; aucune comparaison OCR ou preuve du contenu réseau."));VisualEvidencePolicy.prune(dir,System.currentTimeMillis(),Continuous.prefs(this).getLong("visual_retention_ms",VisualEvidencePolicy.RETENTION_MS),VisualEvidencePolicy.MAX_BYTES,VisualEvidencePolicy.MAX_FILES);}catch(Exception error){target.delete();}finally{proof.recycle();}});
             }
-        });
-    }
-
-    private void applyBadgeVisual(){
-        if(badge==null)return;
-        SpannableString label=new SpannableString("● AIV");
-        label.setSpan(new ForegroundColorSpan(coreActive?0xff65df70:0xff8b98a5),0,1,Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
-        badge.setText(label);
-
-        GradientDrawable bg=new GradientDrawable();
-        bg.setColor(0xff071827);
-        int ring=anomalyActive?0xffff9a3c:0xff58b8ff;
-        bg.setStroke(Math.max(1,(int)(2*getResources().getDisplayMetrics().density)),ring);
-        bg.setCornerRadius(999f);
-        badge.setBackground(bg);
-
-        StringBuilder desc=new StringBuilder("All In Visible. ");
-        desc.append(coreActive?"Surveillance attendue active. ":"Un ou plusieurs modules attendus sont inactifs. ");
-        if(coverageGapActive)desc.append("Couverture réseau incomplète détectée par le relais AIV. ");
-        desc.append(unreadAnomalies>0?unreadAnomalies+" anomalie(s) à examiner.":"Aucune autre anomalie non lue.");
-        badge.setContentDescription(desc.toString());
-    }
-
-    private void removeBadge(){
-        main.removeCallbacks(statusPulse);
-        try{if(windowManager!=null&&badge!=null)windowManager.removeView(badge);}catch(Throwable ignored){}
-        badge=null;overlayVisible=false;
-    }
-
-    @Override public boolean onUnbind(android.content.Intent intent){
-        connected=false;
-        removeBadge();
-        status="Service désactivé";
-        return super.onUnbind(intent);
-    }
-
-    @Override public void onDestroy(){
-        removeBadge();
-        connected=false;
-        statusWorker.shutdownNow();
-        super.onDestroy();
-    }
-
-    public static JSONObject state(){
-        return EventStore.object(
-            "schema","aiv-display-integrity/1",
-            "connected",connected,
-            "status",status,
-            "observed_package",observedPackage,
-            "observed_class",observedClass,
-            "observed_ms",observedMs,
-            "node_count",nodeCount,
-            "text_node_count",textNodeCount,
-            "semantic_hash",semanticHash,
-            "overlay_visible",overlayVisible,
-            "core_active",coreActive,
-            "collector_active",collectorActive,
-            "correlation_active",correlationActive,
-            "vpn_expected",vpnExpected,
-            "vpn_active",vpnActive,
-            "shizuku_expected",shizukuExpected,
-            "shizuku_active",shizukuActive,
-            "anomaly_active",anomalyActive,
-            "coverage_gap_active",coverageGapActive,
-            "coverage_gap_label",NetworkCaptureService.lastCoverageGapLabel,
-            "coverage_gap_count",NetworkCaptureService.lastCoverageGapCount,
-            "coverage_gap_ms",NetworkCaptureService.lastCoverageGapMs,
-            "unread_anomalies",unreadAnomalies,
-            "comparison_status","SEMANTIC_ONLY",
-            "comparison_mode","ONE_PASS",
-            "free_tier",true,
-            "visual_signal_available",false,
-            "scope","Une seule observation suffit; aucune seconde visite n'est requise. Le service actuel fournit l'arbre d'accessibilité Android. Tant qu'un canal visuel indépendant n'est pas comparé au même moment, AIV ne doit pas affirmer qu'un affichage diffère de sa sémantique."
-        );
-    }
-
-    private Snapshot snapshot(AccessibilityNodeInfo root)throws Exception{
-        MessageDigest digest=MessageDigest.getInstance("SHA-256");
-        ArrayDeque<AccessibilityNodeInfo> queue=new ArrayDeque<>();
-        queue.add(AccessibilityNodeInfo.obtain(root));
-        int nodes=0,textNodes=0;
-        while(!queue.isEmpty()&&nodes<4000){
-            AccessibilityNodeInfo n=queue.removeFirst();
-            try{
-                nodes++;
-                Rect r=new Rect();
-                n.getBoundsInScreen(r);
-                String cls=clean(n.getClassName());
-                String text=clean(n.getText());
-                String desc=clean(n.getContentDescription());
-                String viewId=clean(n.getViewIdResourceName());
-                if(!text.isEmpty()||!desc.isEmpty())textNodes++;
-                update(digest,cls);
-                update(digest,text);
-                update(digest,desc);
-                update(digest,viewId);
-                update(digest,n.isVisibleToUser()?"1":"0");
-                update(digest,r.left+","+r.top+","+r.right+","+r.bottom);
-                int children=Math.min(n.getChildCount(),100);
-                for(int i=0;i<children;i++){
-                    AccessibilityNodeInfo child=n.getChild(i);
-                    if(child!=null)queue.addLast(child);
-                }
-            }finally{n.recycle();}
         }
-        return new Snapshot(nodes,textNodes,hex(digest.digest()));
+        if(same&&highlightStillPresent(frontend)){
+            removeHighlight();highlightedSource=frontend;highlight=new View(this){protected void onDraw(Canvas c){Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);p.setColor(0xffff9a3c);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(3));c.drawRect(dp(2),dp(2),getWidth()-dp(2),getHeight()-dp(2),p);p.setStyle(Paint.Style.FILL);p.setTextSize(dp(12));c.drawText("AIV #"+id+" · À vérifier",dp(6),dp(18),p);}};WindowManager.LayoutParams lp=params(bounds.width(),bounds.height(),true);lp.gravity=Gravity.TOP|Gravity.LEFT;lp.x=bounds.left;lp.y=bounds.top;try{windows.addView(highlight,lp);main.postDelayed(this::removeHighlight,5000);}catch(Throwable ignored){highlight=null;}
+        }
     }
-
-    private static String clean(CharSequence value){
-        if(value==null)return "";
-        String s=value.toString().replaceAll("\\s+"," ").trim();
-        return s.length()>512?s.substring(0,512):s;
-    }
-    private static void update(MessageDigest d,String value){
-        d.update(value.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-        d.update((byte)0);
-    }
-    private static String hex(byte[] b){
-        StringBuilder s=new StringBuilder(b.length*2);
-        for(byte x:b)s.append(String.format(Locale.ROOT,"%02x",x&255));
-        return s.toString();
-    }
-    private static final class Snapshot{
-        final int nodes,textNodes;final String hash;
-        Snapshot(int n,int t,String h){nodes=n;textNodes=t;hash=h;}
-    }
+    private boolean highlightStillPresent(JSONObject frontend){if(frontend==null||currentWindow!=frontend.optInt("window_id",-2)||!observedPackage.equals(frontend.optString("package_name")))return false;JSONObject target=frontend.optJSONObject("element");if(target==null)return false;AccessibilityNodeInfo root=getRootInActiveWindow();if(root==null)return false;ArrayDeque<AccessibilityNodeInfo> nodes=new ArrayDeque<>();nodes.add(root);boolean found=false;int count=0;try{while(!nodes.isEmpty()&&count++<256){AccessibilityNodeInfo n=nodes.removeFirst();try{JSONObject now=node(n);if(n.isVisibleToUser()&&now.optString("bounds").equals(target.optString("bounds"))&&now.optString("class").equals(target.optString("class"))&&now.optString("text").equals(target.optString("text"))){found=true;break;}for(int i=0;i<Math.min(64,n.getChildCount())&&nodes.size()<256;i++){AccessibilityNodeInfo child=n.getChild(i);if(child!=null)nodes.add(child);}}finally{n.recycle();}}}finally{while(!nodes.isEmpty())nodes.removeFirst().recycle();}return found;}
+    private void removeHighlight(){try{if(highlight!=null)windows.removeView(highlight);}catch(Throwable ignored){}highlight=null;highlightedSource=null;}
+    @Override public void onInterrupt(){status="Service interrompu";coreActive=false;}
+    @Override public void onDestroy(){active=null;connected=false;overlayVisible=false;main.removeCallbacksAndMessages(null);if(panel!=null)panel.dismiss();removeHighlight();try{if(rail!=null)windows.removeView(rail);}catch(Throwable ignored){}discardFrame();worker.shutdown();super.onDestroy();}
+    @Override public boolean onUnbind(Intent intent){connected=false;coreActive=false;return super.onUnbind(intent);}
+    public static JSONObject state(){JSONObject s=EventStore.object("schema","aiv-display-integrity/2","connected",connected,"status",status,"observed_package",observedPackage,"observed_class",observedClass,"observed_ms",observedMs,"node_count",nodeCount,"text_node_count",textNodeCount,"semantic_hash",semanticHash,"overlay_visible",overlayVisible,"core_active",coreActive,"visual_signal_available",visualAvailable,"visual_last_success_ms",visualMs,"visual_reason",visualReason,"comparison_status",visualAvailable?"VISUAL_CAPTURE_ONLY":nodeCount>0?"SEMANTIC_ONLY":"VISUAL_UNAVAILABLE","comparison_confirmed",false,"visual_retention","Image détruite après hash/analyse; crop uniquement pour finding enregistré; 7 jours / 100 fichiers / 20 Mio maximum","scope","Observation sémantique et capture/hash indépendants. Comparaison du texte visuel non implémentée; absence de capture = couverture limitée.");ScreenIntegrityService service=active;if(service!=null)try{Iterator<String> keys=service.healthState.keys();while(keys.hasNext()){String key=keys.next();s.put(key,service.healthState.opt(key));}}catch(Exception ignored){}return s;}
+    private static String fileHash(File file)throws Exception{MessageDigest md=MessageDigest.getInstance("SHA-256");try(InputStream in=new FileInputStream(file)){byte[] buffer=new byte[8192];int n;while((n=in.read(buffer))!=-1)md.update(buffer,0,n);}return hex(md.digest());}
+    private static String hex(byte[] bytes){StringBuilder s=new StringBuilder();for(byte b:bytes)s.append(String.format(Locale.ROOT,"%02x",b&255));return s.toString();}
 }

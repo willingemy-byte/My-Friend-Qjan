@@ -38,7 +38,7 @@ public class EventStore extends SQLiteOpenHelper{
  public void onUpgrade(SQLiteDatabase db,int old,int next){throw new IllegalStateException();}
  __METHODS__
 }
-class AnomalyMonitor{static void request(Context c){}}
+class AnomalyMonitor{static void request(Context c){}static void observe(Context c,JSONObject e){}}
 class TrackerIndex{static TrackerIndex get(Context c){return new TrackerIndex();}void request(){}}
 '''.replace('__METHODS__', methods)
 stubs['fr/erick/journallocal/JournalSegments.java'] = '''package fr.erick.journallocal;

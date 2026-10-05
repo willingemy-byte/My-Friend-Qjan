@@ -74,6 +74,34 @@ public final class EndpointContextRulesTest {
         check(EndpointContextRules.explain(fcmEvent).contains("Google Ads")&&EndpointContextRules.explain(fcmEvent).contains("Correspondance partielle"),"partial Exodus evidence silently discarded");
         JSONObject support=event("android.apis.google.com");support.getJSONObject("details").put("ech_extension_present",true);r=analyze(rules,support);
         check(r.getString("summary").startsWith("Nom TLS externe")&&r.getString("summary").contains("possible"),"compact support label hides ECH ambiguity");
+        JSONObject chat=event("android.chat.openai.com").put("app","ChatGPT");JSONObject cd=chat.getJSONObject("details");
+        cd.put("uid",10371).put("packages",new JSONArray().put("com.openai.chatgpt")).put("app_identity",EndpointContextRules.object("uid",10371,"package_name","com.openai.chatgpt","app_identity_id","fixture-signer"));
+        r=analyze(rules,chat);JSONObject relation=r.getJSONObject("owner_service_relation");
+        check(firstService(r).getString("id").equals("chatgpt-android")&&r.getJSONArray("services").length()==1,"generic OpenAI fallback obscures Android role");
+        check(relation.getString("status").equals("OBSERVED_OWNER_HOST_LINK")&&relation.getString("owner_package").equals("com.openai.chatgpt"),"observed app/endpoint link missing");
+        check(relation.getString("interpretation").contains("ChatGPT")&&relation.getString("interpretation").contains("déduction"),"app/endpoint explanation omits inference");
+        check(r.getString("local_recipient_status").equals("NOT_OBSERVED")&&relation.getString("local_delivery_status").equals("NOT_OBSERVED"),"owner/endpoint link invented application delivery");
+        chat.put("network_context",r);check(EndpointContextRules.explain(chat).contains("com.openai.chatgpt"),"app/service link absent from detail");
+        cd.put("tls_sni","ws.chatgpt.com");r=analyze(rules,chat);
+        check(firstService(r).getString("id").equals("chatgpt-updates")&&r.getJSONArray("services").length()==1&&r.getString("summary").contains("Conversations"),"specific updates role hidden by family rule");
+        cd.put("ech_extension_present",true);r=analyze(rules,chat);
+        check(firstService(r).getString("connection_status").equals("CANDIDATE")&&r.getJSONObject("owner_service_relation").getString("status").equals("CANDIDATE_OWNER_SERVICE_LINK"),"ECH link promoted to inner service");
+        cd.put("ech_extension_present",false);chat.put("category","dns");cd.put("question","ws.chatgpt.com");r=analyze(rules,chat);
+        check(r.getJSONObject("owner_service_relation").getString("status").equals("CANDIDATE_OWNER_SERVICE_LINK")&&r.getString("interpretation").contains("aucune connexion"),"DNS became ChatGPT connection");
+        chat.put("category","trafic");cd.remove("question");cd.put("uid",1000).put("packages",new JSONArray().put("com.openai.chatgpt"));r=analyze(rules,chat);
+        check(!r.getJSONObject("owner_service_relation").getBoolean("owner_attribution_unique")&&r.getJSONObject("owner_service_relation").isNull("owner_package"),"reserved UID assigned to ChatGPT");
+        cd.put("uid",10371).put("packages",new JSONArray().put("com.openai.chatgpt").put("example.shared"));r=analyze(rules,chat);
+        check(r.getJSONObject("owner_service_relation").getString("status").equals("OWNER_UNRESOLVED"),"shared UID assigned to precise package");
+        cd.put("uid",10268).put("packages",new JSONArray().put("com.android.chrome")).put("app_identity",EndpointContextRules.object("uid",10268,"package_name","com.android.chrome"));chat.put("app","Chrome");r=analyze(rules,chat);
+        check(r.getJSONObject("owner_service_relation").getString("owner_package").equals("com.android.chrome"),"OpenAI host replaced Chrome owner with ChatGPT");
+        cd.put("identity_conflict",true);check(!analyze(rules,chat).getJSONObject("owner_service_relation").getBoolean("owner_attribution_unique"),"conflicting identity accepted");cd.remove("identity_conflict");
+        cd.getJSONObject("app_identity").put("uid",10371);check(!analyze(rules,chat).getJSONObject("owner_service_relation").getBoolean("owner_attribution_unique"),"identity UID mismatch accepted");
+        for(String h:new String[]{"aw.api.openai.com","ab.chatgpt.com"}){r=analyze(rules,event(h));check(firstService(r).getString("role_status").equals("SERVICE_FAMILY_ONLY"),"unknown OpenAI subdomain assigned precise role");}
+        for(String h:new String[]{"sdmntprcentralus.oaiusercontent.com","auth.openai.com","files.openai.com","cdn.openai.com"}){r=analyze(rules,event(h));check(firstService(r).getString("role_status").equals("ROLE_INFERENCE"),"inferred family role labeled documented");}
+        for(String h:new String[]{"chatgpt.com.attacker.test","evilopenai.com","files.oaiusercontent.com.attacker.test","notcloudflare-dns.com"})check(analyze(rules,event(h)).getJSONArray("services").length()==0,"new service rule accepted impersonation");
+        check(firstService(analyze(rules,event("o33249.ingest.sentry.io"))).getString("category").equals("diagnostics"),"Sentry role unknown");
+        check(firstService(analyze(rules,event("api.revenuecat.com"))).getString("category").equals("subscriptions"),"RevenueCat role unknown");
+        check(firstService(analyze(rules,event("cloudflare-dns.com"))).getString("category").equals("name_resolution"),"Cloudflare resolver unknown");
         for(TrackerMatcher.Hit h:matcher.network("firebaselogging-pa.googleapis.com"))matches.put(EndpointContextRules.object("tracker_id",h.signature.id,"name",h.signature.name,"categories",rows.get(h.signature.id).getJSONArray("categories"),"domain_boundary_match",h.boundary));
         r=rules.analyze(event("firebaselogging-pa.googleapis.com"),matches,new JSONArray());
         check(r.getString("summary").contains("Analyse d’usage"),"Exodus purpose missing");

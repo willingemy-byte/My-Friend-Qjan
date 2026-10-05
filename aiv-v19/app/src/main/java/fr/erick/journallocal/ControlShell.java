@@ -32,12 +32,26 @@ final class ControlShell {
         if(outputLimit<1||outputLimit>1024*1024)throw new IllegalArgumentException("Limite de sortie invalide");
         if(!AccessPolicy.allows("shizuku.control",AccessPolicy.DISTRIBUTION_TIER))
             throw new SecurityException("Contrôle indisponible dans cette édition");
+        return execute(new String[]{"/system/bin/sh","-c",command},outputLimit);
+    }
+
+    /** Observation capability: fixed argv, no shell and no permission mutation. */
+    static Result readAppOps(String pkg,int user,int outputLimit)throws Exception{
+        if(!AccessPolicy.allows("appops.observe",AccessPolicy.DISTRIBUTION_TIER))throw new SecurityException("Observation indisponible");
+        if(user<0||user>21474)throw new IllegalArgumentException("Profil invalide");
+        if(pkg==null)return execute(new String[]{"/system/bin/dumpsys","appops"},outputLimit);
+        if(!pkg.matches("[a-zA-Z0-9_]+(?:\\.[a-zA-Z0-9_]+)+"))throw new IllegalArgumentException("Paquet invalide");
+        return execute(new String[]{"/system/bin/cmd","appops","get","--user",String.valueOf(user),pkg},outputLimit);
+    }
+
+    private static Result execute(String[] argv,int outputLimit)throws Exception{
+        if(outputLimit<1||outputLimit>1024*1024)throw new IllegalArgumentException("Limite de sortie invalide");
         if(!Shizuku.pingBinder()||Shizuku.checkSelfPermission()!=PackageManager.PERMISSION_GRANTED)
             throw new IllegalStateException("Shizuku arrêté ou non autorisé");
 
         Method method=Shizuku.class.getDeclaredMethod("newProcess",String[].class,String[].class,String.class);
         method.setAccessible(true);
-        Process process=(Process)method.invoke(null,new Object[]{new String[]{"/system/bin/sh","-c",command},null,null});
+        Process process=(Process)method.invoke(null,new Object[]{argv,null,null});
 
         Collector out=new Collector(process.getInputStream(),outputLimit),err=new Collector(process.getErrorStream(),AivConfig.CONTROL_OUTPUT_MAX_BYTES);
         Thread stdout=new Thread(out,"aiv-control-stdout"),stderr=new Thread(err,"aiv-control-stderr");

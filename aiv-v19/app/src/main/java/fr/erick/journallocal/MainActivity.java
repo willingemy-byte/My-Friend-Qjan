@@ -89,6 +89,8 @@ public final class MainActivity extends Activity {
         if(code!=SHIZUKU_PERMISSION_REQUEST)return;
         main.post(()->{
             if(result!=PackageManager.PERMISSION_GRANTED){toast("AIV n’est pas autorisée dans Shizuku");return;}
+            PermissionUsage.requestPriority(this);
+            if("integrity".equals(currentPage))renderIntegrity();
             if("shizuku".equals(currentPage)){
                 if(permissionPackage.isEmpty())renderPermissionApps(permissionQuery,permissionOffset);
                 else openPermissions(permissionPackage,"",0);
@@ -117,6 +119,18 @@ public final class MainActivity extends Activity {
         buildShell();
         prepareLocalData();
         showPage(getIntent().getBooleanExtra("open_maintenance",false)?"shizuku":"presentation");
+        openFindingIntent(getIntent());
+    }
+    private boolean anomaliesUnreadOnly=false;
+    private String anomalyKind="anomaly";
+    private int anomalyOffset=0;
+    private String anomalyQuery="";
+    @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);openFindingIntent(intent);}
+    private void openFindingIntent(Intent intent){
+        if(intent==null||!intent.getBooleanExtra("open_anomalies",false))return;
+        anomaliesUnreadOnly=intent.getBooleanExtra("only_unread",false);anomalyOffset=0;anomalyKind="anomaly";showPage("anomalies");long id=intent.getLongExtra("finding_id",0);
+        if(id>0)new Thread(()->{try{JSONObject f=AnomalyMonitor.get(this).finding(id);main.post(()->showAnomalyDetail(f,""));}catch(Exception absent){main.post(()->Toast.makeText(this,"Finding #"+id+" indisponible",Toast.LENGTH_LONG).show());}},"aiv-open-finding").start();
+        intent.removeExtra("finding_id");intent.removeExtra("open_anomalies");
     }
 
     private void buildShell(){
@@ -653,6 +667,7 @@ public final class MainActivity extends Activity {
     }
 
     private void renderAnomalies(String query){
+        if(!query.equals(anomalyQuery)){anomalyOffset=0;anomalyQuery=query;}
         int ticket=generation.incrementAndGet();
         page.removeAllViews();
         page.addView(sectionTitle("Anomalies"));
@@ -661,16 +676,19 @@ public final class MainActivity extends Activity {
         page.addView(search);
         page.addView(action("Actualiser",v->{AnomalyMonitor.request(this);renderAnomalies(search.getText().toString());}));
         page.addView(action("Exporter les anomalies",v->beginAnalysisExport()));
+        page.addView(action(anomaliesUnreadOnly?"Afficher tous les findings":"Afficher les non consultés",v->{anomalyOffset=0;anomaliesUnreadOnly=!anomaliesUnreadOnly;renderAnomalies(search.getText().toString());}));
+        page.addView(action("coverage".equals(anomalyKind)?"Comportements des applications":"Santé et limites du capteur AIV",v->{anomalyOffset=0;anomalyKind="coverage".equals(anomalyKind)?"anomaly":"coverage";renderAnomalies(search.getText().toString());}));
         page.addView(note("Double-tape une valeur utile pour filtrer. Ouvrir affiche le détail complet de l'anomalie."));
         TextView loading=text("Lecture de l'analyse…",14,MUTED,false);page.addView(loading);
         new Thread(()->{
             try{
-                JSONObject data=AnomalyMonitor.get(this).page("anomaly",false,0,100,query);
+                JSONObject data=AnomalyMonitor.get(this).page(anomalyKind,anomaliesUnreadOnly,anomalyOffset,100,query);
                 JSONArray rows=data.optJSONArray("rows");
                 main.post(()->{
                     if(ticket!=generation.get()||!"anomalies".equals(currentPage))return;
                     page.removeView(loading);
                     page.addView(text(data.optLong("total")+" groupe(s)",14,MUTED,true));
+                    if(data.optBoolean("recalculating"))page.addView(note("Recalcul historique en cours : "+data.optLong("checkpoint")+" / "+data.optLong("target")+". Les findings déjà enregistrés restent consultables."));
                     if(rows==null)return;
                     String[] headers={"Niv.","Heure","Application","Règle","Accès rapprochés","Destination / sujet","Occ.","Sévérité","Détail"};
                     int[] widths={64,135,190,220,250,310,80,110,100};
@@ -695,6 +713,8 @@ public final class MainActivity extends Activity {
                             v->showAnomalyDetail(x,pkg));
                     }
                     page.addView(tableScroller(table));
+                    if(data.optInt("offset")>0)page.addView(action("Page précédente",v->{anomalyOffset=Math.max(0,data.optInt("offset")-100);renderAnomalies(search.getText().toString());}));
+                    if(data.optInt("offset")+(rows==null?0:rows.length())<data.optLong("total"))page.addView(action("Page suivante",v->{anomalyOffset=data.optInt("offset")+100;renderAnomalies(search.getText().toString());}));
                 });
             }catch(Exception e){main.post(()->{if(ticket==generation.get()){page.removeView(loading);page.addView(card("Erreur anomalies",e.getClass().getSimpleName()+": "+String.valueOf(e.getMessage())));}});}
         },"aiv-native-anomalies").start();
@@ -714,7 +734,7 @@ public final class MainActivity extends Activity {
                 "Réglages accessibilité",()->openSetting(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
         addTableRow(table,new String[]{"Badge AIV",s.optBoolean("overlay_visible")?"ACTIF":"INACTIF","Le badge en haut à droite confirme que le service d’accessibilité AIV est connecté."},null,widths,0,null,null,
             v->showJsonDetail("Intégrité · badge AIV",s,null));
-        addTableRow(table,new String[]{"État global",s.optBoolean("core_active")?"TOUT ACTIF":"À VÉRIFIER",
+        addTableRow(table,new String[]{"État global",s.optBoolean("core_active")?"CAPTEURS OPÉRATIONNELS":"COUVERTURE PARTIELLE",
             "Collecte "+yesNo(s.optBoolean("collector_active"))+
             " · Corrélation "+yesNo(s.optBoolean("correlation_active"))+
             " · VPN "+(s.optBoolean("vpn_expected")?yesNo(s.optBoolean("vpn_active")):"OPTIONNEL")+
@@ -727,11 +747,21 @@ public final class MainActivity extends Activity {
             v->showJsonDetail("Intégrité · état complet",s,null));
         addTableRow(table,new String[]{"Arbre sémantique",s.optInt("node_count")+" nœuds",s.optInt("text_node_count")+" nœuds texte"},null,widths,0,null,null,
             v->showJsonDetail("Intégrité · arbre sémantique",s,null));
-        addTableRow(table,new String[]{"Comparaison",s.optString("comparison_status","—"),"Une seule occurrence suffit. État actuel : la couche sémantique est active; le canal visuel simultané reste à brancher pour confirmer un écart affichage/sémantique."},null,widths,0,null,null,
+        addTableRow(table,new String[]{"Canal visuel",s.optString("comparison_status","—"),s.optString("scope")+" · "+s.optString("visual_reason")},null,widths,0,null,null,
             v->showJsonDetail("Intégrité · comparaison",s,null));
+        addTableRow(table,new String[]{"AppOps",s.optBoolean("appops_active")?"OBSERVÉ":"NON DISPONIBLE",String.valueOf(s.optJSONObject("appops"))},null,widths,0,null,null,v->showJsonDetail("AppOps · état réel",PermissionUsage.get(this).status(),null));
         page.addView(tableScroller(table));
         page.addView(action("Actualiser l'état",v->renderIntegrity()));
+        page.addView(action("Autoriser l’observation AppOps dans Shizuku",v->authorizeShizukuObservation()));
+        page.addView(action("Lire AppOps maintenant",v->{PermissionUsage.requestPriority(this);toast("Lecture AppOps demandée; consulte son état après le relevé.");}));
+        page.addView(action("Rétention des preuves visuelles",v->new AlertDialog.Builder(this).setTitle("Crops liés aux findings")
+            .setItems(new String[]{"Ne conserver aucune image","24 heures","7 jours"},(d,which)->{long retention=which==0?0:which==1?86400000L:VisualEvidencePolicy.RETENTION_MS;Continuous.prefs(this).edit().putLong("visual_retention_ms",retention).apply();VisualEvidencePolicy.prune(new java.io.File(getFilesDir(),"finding-visual"),System.currentTimeMillis(),retention,VisualEvidencePolicy.MAX_BYTES,VisualEvidencePolicy.MAX_FILES);toast("Rétention enregistrée");}).setNegativeButton("Fermer",null).show()));
     }
+    private void authorizeShizukuObservation(){try{
+        if(!rikka.shizuku.Shizuku.pingBinder()){showDetail("Observation AppOps","Démarre Shizuku puis autorise AIV pour lire AppOps.","Ouvrir Shizuku",()->openPackage("moe.shizuku.privileged.api"));return;}
+        if(rikka.shizuku.Shizuku.shouldShowRequestPermissionRationale()){showDetail("Observation AppOps","Autorise AIV dans Shizuku. Le lecteur AIV utilise uniquement les commandes AppOps de lecture.","Ouvrir Shizuku",()->openPackage("moe.shizuku.privileged.api"));return;}
+        rikka.shizuku.Shizuku.requestPermission(SHIZUKU_PERMISSION_REQUEST);
+    }catch(Exception e){showDetail("Observation AppOps",String.valueOf(e.getMessage()),null,null);}}
 
     private void renderApplications(String query){
         int ticket=generation.incrementAndGet();
@@ -1676,6 +1706,13 @@ public final class MainActivity extends Activity {
             body.addView(text(anomaly.optString("explanation",""),13,MUTED,false));
             body.addView(text("Occurrences : "+anomaly.optLong("occurrences",1)+" · "+anomaly.optString("severity","—"),13,MUTED,false));
             body.addView(note("Services et accès rapprochés : "+PermissionUsage.brief(anomaly)));
+            JSONObject conclusion=anomaly.optJSONObject("conclusion");if(conclusion!=null)body.addView(note("ÉTABLI : "+conclusion.optJSONArray("established")+"\nCORRÉLÉ : "+conclusion.optJSONArray("correlated")+"\nINCONNU : "+conclusion.optJSONArray("unknown")));
+            if(anomaly.has("timeline"))body.addView(action("Dossier de preuve et ligne du temps",v->showJsonDetail("Finding #"+anomaly.optLong("id"),anomaly,null)));
+            JSONObject visual=anomaly.optJSONObject("visual");if(visual!=null&&!visual.optString("crop_path").isEmpty())try{
+                java.io.File file=new java.io.File(visual.optString("crop_path"));java.io.File folder=new java.io.File(getFilesDir(),"finding-visual");if(file.getCanonicalFile().getParentFile().equals(folder.getCanonicalFile())&&file.isFile()){
+                    android.graphics.Bitmap image=android.graphics.BitmapFactory.decodeFile(file.getAbsolutePath());if(image!=null){ImageView crop=new ImageView(this);crop.setImageBitmap(image);crop.setAdjustViewBounds(true);body.addView(crop);body.addView(note("Crop conservé pour ce finding. Comparaison visuelle du texte non confirmée."));}
+                }
+            }catch(Exception ignored){}
 
             long id=anomaly.optLong("id",-1);
             if(id>0){
@@ -1696,7 +1733,9 @@ public final class MainActivity extends Activity {
             }
 
             ScrollView scroll=new ScrollView(this);scroll.addView(body);
-            new AlertDialog.Builder(this).setTitle("Anomalie · détail").setView(scroll).setPositiveButton("Fermer",null).show();
+            AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Anomalie · détail").setView(scroll).setPositiveButton("Fermer",null).show();
+            if(id>0)AnomalyMonitor.get(this).change("review",String.valueOf(id));
+            dialog.setOnDismissListener(d->{if("anomalies".equals(currentPage))renderAnomalies(anomalyQuery);});
         }catch(Exception e){
             showJsonDetail("Anomalie",anomaly,fallbackPkg);
         }

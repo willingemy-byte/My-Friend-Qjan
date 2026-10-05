@@ -208,7 +208,7 @@ public final class TrackerIndex extends SQLiteOpenHelper {
         ObservationValues.mergeCounters(f,d);
         for(String n:new String[]{"remote_ip","local_ip","local_port","protocol","port","tls_sni","first_outbound_ms","first_inbound_ms","outbound_observed","inbound_observed","closed","last_packet_ms","ech_extension_present","app_identity","provenance"})if(d.has(n)&&!d.isNull(n))f.put(n,d.get(n));
         ObservationValues.mergeIdentity(f,d,e.optString("app"));
-        f.put("latest_event_id",e.getLong("id")).put("latest_timestamp_ms",e.optLong("timestamp_ms")).put("catalog_revision",catalog.revision());
+        f.put("latest_event_id",e.getLong("id")).put("latest_timestamp_ms",e.optLong("timestamp_ms")).put("elapsed_ms",e.optLong("elapsed_ms",-1)).put("clock_scope_id",e.optString("clock_scope_id")).put("catalog_revision",catalog.revision());
         f.put("attribution_unique",ObservationValues.uniquePackage(f));
         f.put("attribution_status",ObservationValues.attribution(f)).put("confidence",ObservationValues.confidence(f));
 

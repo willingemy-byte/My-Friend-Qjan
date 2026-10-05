@@ -24,6 +24,11 @@ public final class ControlShellTest {
         check(result.code==0&&result.complete&&result.out.equals("flags verified"),"Completed remote process returns complete stdout");
         check(normal.exitCalls==0,"Regression: do not poll RemoteProcess.exitValue()");
         check(normal.destroyed,"Process handles are released");
+        Shizuku.process=new Remote("No operations.".getBytes("UTF-8"),empty(),false);ControlShell.readAppOps("example.chat",0,65536);
+        check(java.util.Arrays.equals(Shizuku.argv,new String[]{"/system/bin/cmd","appops","get","--user","0","example.chat"}),"read executes fixed argv, no shell");
+        Shizuku.process=new Remote(new byte[0],empty(),false);ControlShell.readAppOps(null,0,1024);check(Shizuku.argv[0].equals("/system/bin/dumpsys")&&Shizuku.argv.length==2,"global read shell introduced");
+        check(AccessPolicy.allows("appops.observe",1)&&!AccessPolicy.allows("shizuku.control",1),"free observation gates mutation");
+        int before=Shizuku.calls;boolean injection=false;try{ControlShell.readAppOps("example.chat; appops set x CAMERA deny",0,1024);}catch(IllegalArgumentException refusedPackage){injection=true;}check(injection&&Shizuku.calls==before,"arbitrary shell passed reader");
         Remote large=new Remote(new byte[2048],empty(),false);Shizuku.process=large;result=ControlShell.run("read",1024);
         check(result.out.length()==1024&&!result.complete,"Truncated evidence cannot authorize permission changes");
         Remote broken=new Remote(new byte[0],new InputStream(){public int read()throws IOException{throw new IOException("remote pipe lost");}},false);

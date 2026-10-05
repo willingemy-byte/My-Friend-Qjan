@@ -6,6 +6,7 @@ ROOT=Path(__file__).resolve().parents[1]
 JAVA=ROOT/'app/src/main/java/fr/erick/journallocal'
 jar=os.environ['AIV_JSON_JAR']
 stubs={
+ 'fr/erick/journallocal/AnomalyMonitor.java':'package fr.erick.journallocal;import android.content.Context;import org.json.*;class AnomalyMonitor{static AnomalyMonitor get(Context c){return new AnomalyMonitor();}void pedigree(JSONObject e,boolean record){}}',
  'android/content/Context.java':'package android.content;import java.io.File;public class Context{final File assets;public Context(File f){assets=f;}public android.content.res.AssetManager getAssets(){return new android.content.res.AssetManager(assets);}}',
  'android/content/res/AssetManager.java':'package android.content.res;import java.io.*;public class AssetManager{final File root;public AssetManager(File f){root=f;}public InputStream open(String n)throws IOException{return new FileInputStream(new File(root,n));}}',
  'android/os/Build.java':'package android.os;public class Build{public static class VERSION{public static int SDK_INT=36;}}',
@@ -39,7 +40,10 @@ public class NetworkReportProbe{
   check(NetworkReport.brief(dns).startsWith("Recherche DNS"),"wrapper promoted DNS inquiry");
   JSONObject local=EndpointContextRules.object("category","acces","details",EndpointContextRules.object("permission","android.permission.READ_CONTACTS"));NetworkReport.enrich(c,local);check(!local.has("network_context"),"wrapper network-enriched unrelated local access");
   JSONObject aggregate=NetworkReport.anomalyContext(new JSONArray().put(e).put(analytics).put(local));check(aggregate.getJSONArray("events").length()==2,"anomaly source contexts incorrect");
-  check(NetworkReport.catalogueSummary(c).getJSONArray("sources").length()==8,"report sources incomplete");
+  JSONObject chat=event("android.chat.openai.com").put("app","ChatGPT");chat.getJSONObject("details").put("uid",10371).put("packages",new JSONArray().put("com.openai.chatgpt"));NetworkReport.enrich(c,chat);
+  check(NetworkReport.brief(chat).contains("ChatGPT")&&NetworkReport.explain(chat).contains("Propriétaire du flux : ChatGPT"),"real catalogue missing application/service link");
+  check(chat.getJSONObject("network_context").getJSONObject("owner_service_relation").getString("owner_package").equals("com.openai.chatgpt"),"structured application/service link absent");
+  check(NetworkReport.catalogueSummary(c).getJSONArray("sources").length()==12,"report sources incomplete");
   System.out.println("Network-report integration: "+checks+" checks passed");
  }
 }'''

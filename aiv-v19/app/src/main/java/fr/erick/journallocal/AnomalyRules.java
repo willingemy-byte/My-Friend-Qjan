@@ -6,7 +6,7 @@ import java.util.*;
 
 /** Deterministic metadata rules. No network, Android, or content decryption dependency. */
 public final class AnomalyRules implements Serializable {
-    private static final long serialVersionUID = 3L;
+    private static final long serialVersionUID = 4L;
     public static final long WINDOW = AivConfig.ANOMALY_WINDOW_MS, GROUP = AivConfig.ANOMALY_GROUP_MS;
     public static final class Settings implements Serializable {
         private static final long serialVersionUID = 1L;
@@ -22,9 +22,9 @@ public final class AnomalyRules implements Serializable {
         }
     }
     public static final class Event {
-        public long id, wall, elapsed=-1, tx=-1;
+        public long id, wall, elapsed=-1, tx=-1,rx=-1;
         public int uid=-1, error, port;
-        public String category="", actor="", action="", destination="", source="", flow="", result="", problem="", query="";
+        public String category="", actor="", action="", destination="", source="", flow="", result="", problem="", query="",clock="",actorIdentity="";
         public String[] packages=new String[0], resolvers=null;
         public boolean closed, coverageGap;
         public long interval;
@@ -67,10 +67,13 @@ public final class AnomalyRules implements Serializable {
     private final Map<String,Flow> flows=new HashMap<>();
     private final Map<String,Window> uploads=new HashMap<>(), failures=new HashMap<>();
     private final Map<String,Dns> networks=new HashMap<>();
-    public void resetWindows(){uploads.clear();failures.clear();}
+    private final Map<String,Long> successful=new HashMap<>();
+    private String clockScope="";
+    public void resetWindows(){uploads.clear();failures.clear();successful.clear();}
     public void accept(Event e,Settings settings,Sink sink){
         if(e.id<=checkpoint)return;
         processed++;checkpoint=e.id;lastWall=e.wall;if(firstWall==0)firstWall=e.wall;
+        if(!e.clock.isEmpty()&&!e.clock.equals(clockScope)){epoch++;flows.clear();networks.clear();resetWindows();lastElapsed=-1;clockScope=e.clock;}
         if(e.category.equals("collecteur")&&e.action.equals("Collecte démarrée")){
             // Older logs have no boot identifier. Do not compare across collection sessions,
             // even when the first uptime of a new boot exceeds the previous saved uptime.
@@ -82,7 +85,8 @@ public final class AnomalyRules implements Serializable {
         }
         boolean clock=e.elapsed>=0;
         String appKey=e.uid<0?"":e.uid+":"+String.join(",",e.packages);
-        if(e.packages.length!=1||e.uid==1000)appKey=""; // A shared UID does not identify an individual application.
+        if(e.packages.length!=1||e.uid<0||e.uid%100000<10000)appKey="";
+        if(!e.actorIdentity.isEmpty())appKey=e.actorIdentity;
         if(("trafic".equals(e.category)||"dns".equals(e.category))&&appKey.isEmpty())unknownAttribution++;
         if(clock&&"trafic".equals(e.category)&&!e.flow.isEmpty())traffic(e,appKey,settings,sink);
         if(clock&&"ConnectivityManager.onLinkPropertiesChanged".equals(e.source)&&e.resolvers!=null){
@@ -112,11 +116,11 @@ public final class AnomalyRules implements Serializable {
                 }}
             }
         }
-        if(settings.collection&&"collecteur".equals(e.category)){
+        if(settings.collection&&("collecteur".equals(e.category)||"sensor-health".equals(e.category))){
             boolean gap=e.interval>150000;
             boolean problem=!e.problem.isEmpty()||e.action.contains("non relayés")||e.action.contains("non décodés")||e.action.equals("Erreurs de relais")||e.action.startsWith("Limite de sockets");
-            if(gap||problem){
-                Finding f=finding(e,"collection","anomaly",problem?"attention":"information",problem?"Collecte à vérifier":"Intervalle de collecte à vérifier",e.action,
+            if(gap||problem||"sensor-health".equals(e.category)){
+                Finding f=finding(e,"collection","coverage",problem?"attention":"information",problem?"Collecte à vérifier":"Couverture AIV",e.action,
                     "Le collecteur a enregistré : "+e.action+". Les interactions manquantes ne peuvent pas être reconstituées par cette règle.",
                     "Consulter Sources. Une veille, une limite du relais ou un problème de connexion peut expliquer ce signalement.");
                 if(gap)f.facts.put("Intervalle",String.valueOf(e.interval/1000)+" secondes");
@@ -127,6 +131,7 @@ public final class AnomalyRules implements Serializable {
     }
     private void traffic(Event e,String appKey,Settings s,Sink sink){
         Flow previous=flows.get(e.flow);boolean open=e.tx<0;
+        if(!appKey.isEmpty()&&e.error==0&&e.rx>=65536&&e.tx>0)successful.put(appKey,time);
         boolean portTrace=previous!=null&&previous.portTrace;
         if(s.research&&!portTrace&&(e.port==4317||e.port==4318)){
             Finding f=finding(e,"research-port","trace","information","Port compatible avec OTLP observé",appKey+":"+e.destination,
@@ -151,9 +156,11 @@ public final class AnomalyRules implements Serializable {
            (e.error!=0||e.result.startsWith("erreur")||e.result.equals("injoignable"))){
             String key=appKey+":"+e.destination;Window w=failures.get(key);if(w==null){w=new Window();failures.put(key,w);}w.add(time,1,e.id);
             if(w.total()>=s.failureCount){
-                Finding f=finding(e,"failures","anomaly","attention","Échecs de connexion répétés",key,
-                    "Plusieurs flux distincts de cette application vers la même destination se sont terminés avec une erreur en cinq minutes.",
-                    "Vérifier le réseau, le serveur et le relais local. Les fermetures normales et les réinitialisations de démarrage sans erreur sont exclues.");
+                Finding f=finding(e,"failures","anomaly","attention","Chemin réseau en échec",key,
+                    "Plusieurs flux distincts vers cette destination se sont terminés avec une erreur. Cela ne suffit pas à conclure à un échec global de l’application.",
+                    "Comparer les autres endpoints, IP et familles IPv4/IPv6. Les fermetures normales sont exclues.");
+                f.facts.put("connectivity_status","PATH_FAILURE");Long success=successful.get(appKey);f.facts.put("other_substantial_flow_observed",String.valueOf(success!=null&&time-success<=WINDOW));
+                f.facts.put("application_failure","NOT_ESTABLISHED");
                 f.facts.put("Échecs",String.valueOf(w.total()));f.facts.put("Seuil",s.failureCount+" / 5 minutes");f.facts.put("Destination contactée",e.destination);f.evidence.addAll(w.evidence());sink.emit(f);
             }
         }
