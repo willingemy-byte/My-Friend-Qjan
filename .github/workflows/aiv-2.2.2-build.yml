@@ -2,6 +2,9 @@ name: AIV 2.2.2 contextual network regression and build
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - aiv-2.2.2-contextual-network
