@@ -70,6 +70,17 @@ jobs:
           test -s /tmp/aiv-test-deps/sqlite-jdbc.jar
           test -s /tmp/aiv-test-deps/slf4j-api.jar
 
+      - name: Watcher coherence regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/aiv-watcher-rules
+          mkdir -p /tmp/aiv-watcher-rules
+          javac -encoding UTF-8 -d /tmp/aiv-watcher-rules \
+            aiv-v19/app/src/main/java/fr/erick/journallocal/WatcherContextRules.java \
+            aiv-v19/tests/WatcherContextRulesTest.java
+          java -cp /tmp/aiv-watcher-rules fr.erick.journallocal.WatcherContextRulesTest
+
       - name: Verified purge receipt regression
         shell: bash
         run: |
