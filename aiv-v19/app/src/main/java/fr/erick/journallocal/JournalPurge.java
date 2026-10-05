@@ -109,7 +109,7 @@ public final class JournalPurge {
             try(Cursor c=db.rawQuery("SELECT first_id,last_id,event_count,sealed FROM journal_segments WHERE segment=?",new String[]{String.valueOf(segment)})){
                 if(!c.moveToFirst()||c.getInt(3)==0||c.getLong(0)!=first||c.getLong(1)!=last||c.getLong(2)!=expected)throw new IOException("Métadonnées locales du segment différentes du reçu");
             }
-            try(Cursor c=db.rawQuery("SELECT active FROM journal_segment_state WHERE id=1",null)){if(c.moveToFirst()&&c.getLong(0)==segment)throw new IOException("Segment actif non purgeable");}
+            try(Cursor c=db.rawQuery("SELECT active FROM journal_segment_state WHERE id=1",null)){if(c.moveToFirst()&&c.getLong(0)==segment)return waiting(db,segment,"Segment encore actif");}
             long minLocal;
             try(Cursor c=db.rawQuery("SELECT COALESCE(MIN(id),0) FROM events",null)){c.moveToFirst();minLocal=c.getLong(0);}
             if(minLocal==0){
@@ -118,7 +118,7 @@ public final class JournalPurge {
                 markAlreadyPurged(db,segment);
                 return true;
             }
-            if(minLocal!=first)throw new IOException("Purge bloquée : segment non contigu au préfixe local");
+            if(minLocal!=first)return waiting(db,segment,"En attente du segment local précédent");
             long localCount;
             try(Cursor c=db.rawQuery("SELECT COUNT(*) FROM events WHERE id>=? AND id<=?",new String[]{String.valueOf(first),String.valueOf(last)})){c.moveToFirst();localCount=c.getLong(0);}
             if(localCount!=expected)throw new IOException("Segment local incomplet avant purge : "+localCount+" / "+expected);
@@ -127,24 +127,21 @@ public final class JournalPurge {
 
             long mainCheckpoint=AivStore.number(db,"SELECT checkpoint FROM aiv_state WHERE id=1");
             long auditCheckpoint=AivStore.number(db,"SELECT checkpoint FROM audit_state WHERE id=1");
-            if(mainCheckpoint<last||auditCheckpoint<last)throw new IOException("Analyse locale pas encore rendue après le segment");
+            if(mainCheckpoint<last||auditCheckpoint<last)return waiting(db,segment,"En attente des analyses locales");
             long lastDecision=0;try(Cursor c=db.rawQuery("SELECT COALESCE(MAX(id),0) FROM decisions WHERE event_id>=? AND event_id<=?",new String[]{String.valueOf(first),String.valueOf(last)})){c.moveToFirst();lastDecision=c.getLong(0);}
             long statsCheckpoint=AivStore.number(db,"SELECT checkpoint FROM aiv_stats_state WHERE id=1");
-            if(lastDecision>0&&statsCheckpoint<lastDecision)throw new IOException("Statistiques AIV pas encore rendues après le segment");
-            try{if(AnomalyMonitor.get(context).summary().optLong("checkpoint",0)<last)throw new IOException("Analyse des anomalies pas encore rendue après le segment");}
-            catch(IOException e){throw e;}catch(Exception e){throw new IOException("État d’analyse des anomalies indisponible");}
-            try{if(!AivStore.verify(context).optBoolean("valid"))throw new IOException("Intégrité locale non valide avant purge");}
-            catch(IOException e){throw e;}catch(Exception e){throw new IOException("Vérification d’intégrité indisponible avant purge");}
+            if(lastDecision>0&&statsCheckpoint<lastDecision)return waiting(db,segment,"En attente des statistiques AIV");
+            try{if(AnomalyMonitor.get(context).summary().optLong("checkpoint",0)<last)return waiting(db,segment,"En attente de l’analyse des anomalies");}
+            catch(Exception e){return waiting(db,segment,"État d’analyse des anomalies temporairement indisponible");}
 
             JSONObject anchor=anchor(db);long anchorCount=anchor.getLong("chain_count");String anchorHead=anchor.getString("chain_head");
-            long chainFirst=0,chainLast=0,chainRows=0;String firstPrev="",lastHead="";
+            long chainFirst=0,chainLast=0,chainRows=0;
             try(Cursor c=db.rawQuery("SELECT MIN(id),MAX(id),COUNT(*) FROM journal_chain WHERE event_id>=? AND event_id<=?",new String[]{String.valueOf(first),String.valueOf(last)})){
                 c.moveToFirst();chainFirst=c.getLong(0);chainLast=c.getLong(1);chainRows=c.getLong(2);
             }
             if(chainRows!=expected*2L||chainFirst!=anchorCount+1)throw new IOException("Préfixe de chaîne non contigu");
-            try(Cursor c=db.rawQuery("SELECT hash_prev FROM journal_chain WHERE id=?",new String[]{String.valueOf(chainFirst)})){if(c.moveToFirst())firstPrev=c.getString(0);}
-            try(Cursor c=db.rawQuery("SELECT hash_self FROM journal_chain WHERE id=?",new String[]{String.valueOf(chainLast)})){if(c.moveToFirst())lastHead=c.getString(0);}
-            if(!anchorHead.equals(firstPrev)||lastHead.length()!=64)throw new IOException("Ancrage de chaîne incompatible");
+            String lastHead=verifyChainSegment(db,first,last,anchorCount,anchorHead);
+            if(chainLast!=anchorCount+chainRows||lastHead.length()!=64)throw new IOException("Ancrage de chaîne incompatible");
 
             db.beginTransaction();
             try{
@@ -168,6 +165,26 @@ public final class JournalPurge {
             try{db.execSQL("UPDATE journal_archive_state SET purge_state='PURGE_FAILED',purge_error=? WHERE segment=?",new Object[]{e.getMessage(),segment});}catch(Exception ignored){}
             throw e;
         }
+    }
+
+    private static boolean waiting(SQLiteDatabase db,long segment,String reason){
+        db.execSQL("UPDATE journal_archive_state SET purge_state='REMOTE_VERIFIED',purge_error=? WHERE segment=?",new Object[]{reason,segment});
+        lastError=reason;
+        return false;
+    }
+
+    private static String verifyChainSegment(SQLiteDatabase db,long first,long last,long anchorCount,String anchorHead)throws Exception{
+        long expectedSeq=anchorCount;String previous=anchorHead;long rows=0;
+        try(Cursor c=db.rawQuery("SELECT id,timestamp_ms,hash_prev,hash_self,payload FROM journal_chain WHERE event_id>=? AND event_id<=? ORDER BY id",new String[]{String.valueOf(first),String.valueOf(last)})){
+            while(c.moveToNext()){
+                long seq=c.getLong(0),timestamp=c.getLong(1);String prev=c.getString(2),self=c.getString(3),payload=c.getString(4);
+                if(seq!=++expectedSeq||!previous.equals(prev)||!ChainStore.hash(previous,payload,timestamp,seq).equals(self))
+                    throw new IOException("Chaîne locale altérée avant purge à "+seq);
+                previous=self;rows++;
+            }
+        }
+        if(rows==0)throw new IOException("Chaîne locale absente avant purge");
+        return previous;
     }
 
     private static void markAlreadyPurged(SQLiteDatabase db,long segment){
