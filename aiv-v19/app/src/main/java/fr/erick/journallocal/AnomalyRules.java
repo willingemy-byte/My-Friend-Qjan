@@ -67,6 +67,8 @@ public final class AnomalyRules implements Serializable {
     private final Map<String,Flow> flows=new HashMap<>();
     private final Map<String,Window> uploads=new HashMap<>(), failures=new HashMap<>();
     private final Map<String,Dns> networks=new HashMap<>();
+    // Last bidirectional successful network path per application and remote port.
+    // The map type is intentionally unchanged for backward-compatible serialized rule state.
     private final Map<String,Long> successful=new HashMap<>();
     private String clockScope="";
     public void resetWindows(){uploads.clear();failures.clear();successful.clear();}
@@ -129,9 +131,13 @@ public final class AnomalyRules implements Serializable {
         }
         if(clock&&time-pruneAt>60000){pruneAt=time;prune();}
     }
+    private static String successKey(String appKey,int port){return appKey+"|port="+port;}
+    private static boolean pathSucceeded(Event e){
+        return e.error==0&&e.tx>0&&e.rx>0&&!e.result.startsWith("erreur")&&!e.result.equals("injoignable");
+    }
     private void traffic(Event e,String appKey,Settings s,Sink sink){
         Flow previous=flows.get(e.flow);boolean open=e.tx<0;
-        if(!appKey.isEmpty()&&e.error==0&&e.rx>=65536&&e.tx>0)successful.put(appKey,time);
+        if(!appKey.isEmpty()&&pathSucceeded(e))successful.put(successKey(appKey,e.port),time);
         boolean portTrace=previous!=null&&previous.portTrace;
         if(s.research&&!portTrace&&(e.port==4317||e.port==4318)){
             Finding f=finding(e,"research-port","trace","information","Port compatible avec OTLP observé",appKey+":"+e.destination,
@@ -156,12 +162,19 @@ public final class AnomalyRules implements Serializable {
            (e.error!=0||e.result.startsWith("erreur")||e.result.equals("injoignable"))){
             String key=appKey+":"+e.destination;Window w=failures.get(key);if(w==null){w=new Window();failures.put(key,w);}w.add(time,1,e.id);
             if(w.total()>=s.failureCount){
-                Finding f=finding(e,"failures","anomaly","attention","Chemin réseau en échec",key,
-                    "Plusieurs flux distincts vers cette destination se sont terminés avec une erreur. Cela ne suffit pas à conclure à un échec global de l’application.",
-                    "Comparer les autres endpoints, IP et familles IPv4/IPv6. Les fermetures normales sont exclues.");
-                f.facts.put("connectivity_status","PATH_FAILURE");Long success=successful.get(appKey);f.facts.put("other_substantial_flow_observed",String.valueOf(success!=null&&time-success<=WINDOW));
-                f.facts.put("application_failure","NOT_ESTABLISHED");
-                f.facts.put("Échecs",String.valueOf(w.total()));f.facts.put("Seuil",s.failureCount+" / 5 minutes");f.facts.put("Destination contactée",e.destination);f.evidence.addAll(w.evidence());sink.emit(f);
+                Long success=successful.get(successKey(appKey,e.port));
+                boolean alternateSuccess=success!=null&&time-success<=WINDOW;
+                // A failed endpoint is still journal evidence, but it is not promoted to a user anomaly
+                // while another bidirectional path for the same app and port is succeeding in the same window.
+                if(!alternateSuccess){
+                    Finding f=finding(e,"failures","anomaly","attention","Chemin réseau en échec",key,
+                        "Plusieurs flux distincts vers cette destination se sont terminés avec une erreur et aucun autre chemin bidirectionnel réussi sur le même port n’a été observé dans la fenêtre. Cela ne suffit pas à conclure à un échec global de l’application.",
+                        "Comparer les autres endpoints, IP et familles IPv4/IPv6. Les fermetures normales et les basculements réussis sont exclus des alertes.");
+                    f.facts.put("connectivity_status","PATH_FAILURE");
+                    f.facts.put("other_substantial_flow_observed","false");
+                    f.facts.put("application_failure","NOT_ESTABLISHED");
+                    f.facts.put("Échecs",String.valueOf(w.total()));f.facts.put("Seuil",s.failureCount+" / 5 minutes");f.facts.put("Destination contactée",e.destination);f.evidence.addAll(w.evidence());sink.emit(f);
+                }
             }
         }
         Flow next=new Flow();next.tx=e.tx;next.elapsed=time;next.id=e.id;next.closed=e.closed;next.portTrace=portTrace;flows.put(e.flow,next);
