@@ -196,6 +196,7 @@ public final class MainActivity extends Activity {
         addTab("Flux","flows");
         addTab("Traqueurs","trackers");
         addTab("Anomalies","anomalies");
+        addTab("Watcher","watcher");
         addTab("Applications","applications");
         addTab("Accès","access");
         addTab("Intégrité","integrity");
@@ -271,6 +272,7 @@ public final class MainActivity extends Activity {
         else if("flows".equals(id))renderFlows("");
         else if("trackers".equals(id))renderTrackers("");
         else if("anomalies".equals(id))renderAnomalies("");
+        else if("watcher".equals(id))renderWatcher();
         else if("applications".equals(id))renderApplications("");
         else if("access".equals(id))renderSpecialAccess();
         else if("integrity".equals(id))renderIntegrity();
@@ -722,6 +724,91 @@ public final class MainActivity extends Activity {
                 });
             }catch(Exception e){main.post(()->{if(ticket==generation.get()){page.removeView(loading);page.addView(card("Erreur anomalies",e.getClass().getSimpleName()+": "+String.valueOf(e.getMessage())));}});}
         },"aiv-native-anomalies").start();
+    }
+
+    private void renderWatcher(){
+        page.removeAllViews();
+        page.addView(sectionTitle("Watcher · moteur AIV"));
+        page.addView(note("Vue native de ce qu’AIV sait déjà : progression, intégrité, décisions, règles R1–R6, anomalies, AppOps, Shizuku, affichage et archive. Cette page expose l’état des moteurs; elle n’invente pas de preuve manquante."));
+        try{
+            JSONObject aiv=AivStore.summary(this);
+            JSONObject anomalies=AnomalyMonitor.get(this).summary();
+            JSONObject appops=PermissionUsage.get(this).status();
+            JSONObject integrity=ScreenIntegrityService.state();
+            JSONObject shizuku=ShizukuCleanup.state(this);
+            JSONObject archive=ArchiveSync.state(this);
+            JSONObject purge=archive.optJSONObject("purge");if(purge==null)purge=JournalPurge.state(this);
+
+            String[] headers={"Moteur","État","Détail","Ouvrir"};int[] widths={190,170,500,100};
+            TableLayout table=dataTable(headers,widths);
+            long latest=aiv.optLong("latest_event_id"),checkpoint=aiv.optLong("checkpoint");
+            addTableRow(table,new String[]{"Watcher",aiv.optBoolean("watcher_running")?"ACTIF":"INACTIF",
+                aiv.optString("operation","—")+" · retard "+Math.max(0,latest-checkpoint)+" événement(s)"},null,widths,0,null,null,v->showJsonDetail("Watcher · état AIV",aiv,null));
+            addTableRow(table,new String[]{"Intégrité chaîne",aiv.optString("verification","NOT_CHECKED"),
+                "Checkpoint "+checkpoint+" / événement "+latest},null,widths,0,null,null,v->new Thread(()->{try{JSONObject verified=AivStore.verify(this);main.post(()->showJsonDetail("Watcher · intégrité",verified,null));}catch(Exception e){main.post(()->toast("Vérification : "+e.getMessage()));}},"aiv-verify-ui").start()));
+            addTableRow(table,new String[]{"AnomalyMonitor",anomalies.optBoolean("busy")?"ANALYSE":"PRÊT",
+                anomalies.optLong("anomalies")+" anomalie(s) · "+anomalies.optLong("coverage_findings")+" couverture · pending "+anomalies.optLong("pending_live")+" · dropped "+anomalies.optLong("dropped_live")},null,widths,0,null,null,v->showJsonDetail("Watcher · anomalies",anomalies,null));
+            addTableRow(table,new String[]{"AppOps",appops.optString("state","—"),
+                appops.optLong("packages_success")+" / "+appops.optLong("packages_attempted")+" paquet(s) · "+appops.optLong("ops_observed")+" opération(s)"},null,widths,0,null,null,v->showJsonDetail("Watcher · AppOps",appops,null));
+            addTableRow(table,new String[]{"Affichage",integrity.optString("comparison_status","—"),
+                "Sémantique "+integrity.optInt("node_count")+" nœuds · couverture "+(integrity.optBoolean("coverage_complete")?"COMPLÈTE":"PARTIELLE")},null,widths,0,null,null,v->showJsonDetail("Watcher · affichage",integrity,null));
+            addTableRow(table,new String[]{"Shizuku",shizuku.optBoolean("authorized")?"AUTORISÉ":"À VÉRIFIER",
+                "UID serveur "+shizuku.optInt("server_uid",-1)+" · candidats "+shizuku.optInt("candidates",-1)},null,widths,0,null,null,v->showJsonDetail("Watcher · Shizuku",shizuku,null));
+            JSONObject maintenance=PermissionMaintenance.state(this);
+            addTableRow(table,new String[]{"Maintien des droits",PermissionMaintenance.enabled(this)?"ACTIF":"PAUSE",
+                maintenance.optInt("rights")+" droit(s) suivis · "+maintenance.optLong("corrections")+" correction(s) · "+maintenance.optInt("user_exceptions")+" exception(s) utilisateur"},null,widths,0,null,null,v->showJsonDetail("Watcher · maintien des droits",maintenance,null));
+            addTableRow(table,new String[]{"Supabase / purge",purge.optString("last_error","").isEmpty()?"ACTIF":"BLOQUÉ",
+                archive.optLong("verified_segments")+" segment(s) VERIFIED · "+purge.optLong("purged_events")+" événement(s) purgé(s)"},null,widths,0,null,null,v->showJsonDetail("Watcher · archive",archive,null));
+            page.addView(tableScroller(table));
+
+            page.addView(sectionTitle("A1 → A5 · lecture des autorisations"));
+            String[][] levels={{"A1","Visible dans les autorisations"},{"A2","Visible dans Toutes les autorisations"},{"A3","Action possible sans intervention immédiate"},{"A4","Avertissement de vigilance Android / AOSP"},{"A5","Portée système ou inter-applications"}};
+            for(int i=0;i<levels.length;i++)page.addView(card(levels[i][0],levels[i][1]+" · classement calculé depuis l’inventaire et les références; ce niveau ne prouve pas l’usage effectif."));
+
+            page.addView(sectionTitle("R1 → R6 · règles du MainEngine"));
+            JSONArray rules=aiv.optJSONArray("rules");
+            String[] rh={"Règle","Décision","Priorité","Version","Active","Ouvrir"};int[] rw={90,140,110,100,100,100};
+            TableLayout ruleTable=dataTable(rh,rw);
+            if(rules!=null)for(int i=0;i<rules.length();i++){
+                JSONObject rule=rules.optJSONObject(i);if(rule==null)continue;
+                addTableRow(ruleTable,new String[]{rule.optString("name"),rule.optString("decision"),String.valueOf(rule.optInt("priority")),String.valueOf(rule.optInt("version")),rule.optInt("enabled")==1?"OUI":"NON","Modifier"},
+                    null,rw,0,null,null,v->editWatcherRule(rule));
+            }
+            page.addView(tableScroller(ruleTable));
+            page.addView(note("R1–R6 sont versionnées. Modifier une règle crée une nouvelle version et journalise « Règle AIV modifiée ». DENIED reste une décision logique tant que l’enforcement indiqué est NOT_ENFORCED."));
+
+            page.addView(sectionTitle("Dernières décisions"));
+            JSONObject decisions=AivStore.page(this,"",0);
+            JSONArray rows=decisions.optJSONArray("rows");
+            String[] dh={"Événement","Règle","Décision","Horodatage","Ouvrir"};int[] dw={120,100,140,210,100};
+            TableLayout decisionTable=dataTable(dh,dw);
+            if(rows!=null)for(int i=0;i<Math.min(20,rows.length());i++){
+                JSONObject row=rows.optJSONObject(i);if(row==null)continue;long eventId=row.optLong("event_id");
+                addTableRow(decisionTable,new String[]{"#"+eventId,row.optString("rule_name"),row.optString("decision"),String.valueOf(row.optLong("timestamp_ms")),"Détail"},
+                    null,dw,0,null,null,v->{try{showJsonDetail("Watcher · décision #"+eventId,AivStore.detail(this,eventId),null);}catch(Exception e){toast("Détail indisponible : "+e.getClass().getSimpleName());}});
+            }
+            page.addView(tableScroller(decisionTable));
+
+            page.addView(action("Vérifier l’intégrité maintenant",v->WatcherService.verify(this)));
+            page.addView(action("Relancer l’analyse AIV",v->WatcherService.start(this)));
+            page.addView(action("Réconcilier Supabase / purge",v->{ArchiveSync.request(this);JournalPurge.request(this);toast("Réconciliation demandée");main.postDelayed(this::renderWatcher,1200);}));
+        }catch(Exception e){
+            page.addView(card("Watcher indisponible",e.getClass().getSimpleName()+" · "+String.valueOf(e.getMessage())));
+        }
+    }
+
+    private void editWatcherRule(JSONObject rule){
+        try{
+            JSONObject condition=new JSONObject(rule.optString("condition","{}"));
+            JSONObject editable=EventStore.object("name",rule.optString("name"),"condition",condition,"decision",rule.optString("decision","WATCH"),"priority",rule.optInt("priority"),"enabled",rule.optInt("enabled")==1);
+            EditText input=new EditText(this);input.setText(editable.toString(2));input.setTextColor(TEXT);input.setHintTextColor(MUTED);input.setTextSize(14);input.setMinLines(10);input.setGravity(Gravity.TOP);input.setBackground(panelDrawable(PANEL,BORDER,10));input.setPadding(dp(12),dp(12),dp(12),dp(12));
+            new AlertDialog.Builder(this).setTitle("Modifier "+rule.optString("name"))
+                .setMessage("Configuration JSON versionnée. Les champs acceptés sont ceux du MainEngine actuel; aucune règle historique n’est réécrite.")
+                .setView(input).setNegativeButton("Annuler",null).setPositiveButton("Enregistrer",(d,w)->new Thread(()->{
+                    try{MainEngine.configure(this,input.getText().toString());main.post(()->{toast("Nouvelle version de "+rule.optString("name")+" enregistrée");if("watcher".equals(currentPage))renderWatcher();});}
+                    catch(Exception e){main.post(()->showDetail("Règle refusée",String.valueOf(e.getMessage()),null,null));}
+                },"aiv-rule-edit").start()).show();
+        }catch(Exception e){showDetail("Règle invalide",String.valueOf(e.getMessage()),null,null);}
     }
 
     private void renderIntegrity(){
