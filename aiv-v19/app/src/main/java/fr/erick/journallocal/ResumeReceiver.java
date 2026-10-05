@@ -6,6 +6,7 @@ public final class ResumeReceiver extends BroadcastReceiver {
             Continuous.start(c);
             ArchiveSync.requestAutomatic(c);
             JournalPurge.request(c);
+            ArchiveReconcileJob.schedule(c);
         }
     }
 }
