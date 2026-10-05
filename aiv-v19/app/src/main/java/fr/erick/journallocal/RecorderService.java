@@ -135,7 +135,11 @@ public final class RecorderService extends Service {
     private void registerNetwork(){
         connectivity=getSystemService(ConnectivityManager.class);health=new NetworkHealth(this);
         networkCallback=new ConnectivityManager.NetworkCallback(){
-            @Override public void onAvailable(Network network){sampleSoon();record("reseau","Android","Réseau par défaut disponible","Réseau "+network,"Inconnu","ConnectivityManager",EventStore.object("network_id",network.toString()));}
+            @Override public void onAvailable(Network network){
+                sampleSoon();record("reseau","Android","Réseau par défaut disponible","Réseau "+network,"Inconnu","ConnectivityManager",EventStore.object("network_id",network.toString()));
+                ArchiveSync.requestAutomatic(RecorderService.this);
+                JournalPurge.request(RecorderService.this);
+            }
             @Override public void onCapabilitiesChanged(Network network,NetworkCapabilities caps){
                 sampleSoon();String transport=kind(caps);networkKinds.put(network.toString(),transport);
                 record("reseau","Android","État du réseau par défaut reçu","Réseau "+network,transport,"ConnectivityManager.onCapabilitiesChanged",EventStore.object("internet_capability",caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET),"validated",caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED),"unmetered",caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED),"cellular_generation","Non déterminée","per_app_connections",false));
