@@ -113,6 +113,8 @@ public final class JournalPurge {
             long minLocal;
             try(Cursor c=db.rawQuery("SELECT COALESCE(MIN(id),0) FROM events",null)){c.moveToFirst();minLocal=c.getLong(0);}
             if(minLocal==0){
+                JSONObject existingAnchor=anchor(db);
+                if(existingAnchor.optLong("last_event_id",0)<last)throw new IOException("Journal vide sans ancre de purge correspondante");
                 markAlreadyPurged(db,segment);
                 return true;
             }
@@ -126,8 +128,13 @@ public final class JournalPurge {
             long mainCheckpoint=AivStore.number(db,"SELECT checkpoint FROM aiv_state WHERE id=1");
             long auditCheckpoint=AivStore.number(db,"SELECT checkpoint FROM audit_state WHERE id=1");
             if(mainCheckpoint<last||auditCheckpoint<last)throw new IOException("Analyse locale pas encore rendue après le segment");
+            long lastDecision=0;try(Cursor c=db.rawQuery("SELECT COALESCE(MAX(id),0) FROM decisions WHERE event_id>=? AND event_id<=?",new String[]{String.valueOf(first),String.valueOf(last)})){c.moveToFirst();lastDecision=c.getLong(0);}
+            long statsCheckpoint=AivStore.number(db,"SELECT checkpoint FROM aiv_stats_state WHERE id=1");
+            if(lastDecision>0&&statsCheckpoint<lastDecision)throw new IOException("Statistiques AIV pas encore rendues après le segment");
             try{if(AnomalyMonitor.get(context).summary().optLong("checkpoint",0)<last)throw new IOException("Analyse des anomalies pas encore rendue après le segment");}
             catch(IOException e){throw e;}catch(Exception e){throw new IOException("État d’analyse des anomalies indisponible");}
+            try{if(!AivStore.verify(context).optBoolean("valid"))throw new IOException("Intégrité locale non valide avant purge");}
+            catch(IOException e){throw e;}catch(Exception e){throw new IOException("Vérification d’intégrité indisponible avant purge");}
 
             JSONObject anchor=anchor(db);long anchorCount=anchor.getLong("chain_count");String anchorHead=anchor.getString("chain_head");
             long chainFirst=0,chainLast=0,chainRows=0;String firstPrev="",lastHead="";
