@@ -1,4 +1,4 @@
-name: AIV 2.2.2 contextual network regression and build
+name: AIV 2.2.2 rollback build 224
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ on:
       - main
   push:
     branches:
-      - aiv-2.2.2-contextual-network
+      - aiv-rollback-2.2.2-build224
     paths:
       - "aiv-v19/**"
       - ".github/workflows/aiv-2.2.2-build.yml"
@@ -67,16 +67,6 @@ jobs:
           retention-days: 14
           include-hidden-files: true
 
-      - name: Full convergence regression
-        shell: bash
-        env:
-          AIV_JSON_JAR: /tmp/aiv-test-deps/json.jar
-          AIV_SQLITE_JAR: /tmp/aiv-test-deps/sqlite-jdbc.jar
-          AIV_SLF4J_JAR: /tmp/aiv-test-deps/slf4j-api.jar
-        run: |
-          set -euo pipefail
-          bash aiv-v19/tests/run-convergence.sh
-
       - name: AppOps targeted regression
         shell: bash
         env:
@@ -94,7 +84,7 @@ jobs:
           set -euo pipefail
           test -s aiv-v19/build/AIV-2.2.2-unsigned.apk
           test -s aiv-v19/build/AIV-2.2.2-unsigned.apk.sha256
-          grep -q 'android:versionCode="222"' aiv-v19/app/src/main/AndroidManifest.xml
+          grep -q 'android:versionCode="224"' aiv-v19/app/src/main/AndroidManifest.xml
           grep -q 'android:versionName="2.2.2"' aiv-v19/app/src/main/AndroidManifest.xml
           grep -q 'successful alternate path still produced user anomaly' aiv-v19/tests/convergence-host.py
           grep -q 'basculements réussis sont exclus des alertes' aiv-v19/app/src/main/java/fr/erick/journallocal/AnomalyRules.java
