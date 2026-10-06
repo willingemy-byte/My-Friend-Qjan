@@ -1,4 +1,4 @@
-name: AIV 2.2.2 rollback build 224
+name: AIV 2.2.4 final ChatGPT - stable 2.2.2 base
 
 on:
   workflow_dispatch:
@@ -47,7 +47,7 @@ jobs:
           test -s /tmp/aiv-test-deps/sqlite-jdbc.jar
           test -s /tmp/aiv-test-deps/slf4j-api.jar
 
-      - name: Build AIV 2.2.2 unsigned
+      - name: Build AIV 2.2.4-final unsigned
         working-directory: aiv-v19
         env:
           AIV_BUILD_MODE: unsigned
@@ -56,13 +56,13 @@ jobs:
           chmod +x bootstrap-clean-build.sh
           ./bootstrap-clean-build.sh
 
-      - name: Upload AIV 2.2.2 build output
+      - name: Upload AIV 2.2.4-final build output
         uses: actions/upload-artifact@v4
         with:
           name: AIV-2.2.2-build
           path: |
-            aiv-v19/build/AIV-2.2.2-unsigned.apk
-            aiv-v19/build/AIV-2.2.2-unsigned.apk.sha256
+            aiv-v19/build/AIV-2.2.4-final-unsigned.apk
+            aiv-v19/build/AIV-2.2.4-final-unsigned.apk.sha256
             aiv-v19/.toolchain/sdk/build-tools/35.0.0/lib/apksigner.jar
           retention-days: 14
           include-hidden-files: true
@@ -78,25 +78,25 @@ jobs:
           javac -encoding UTF-8             -cp "$AIV_JSON_JAR"             -d /tmp/aiv-permission-rules             aiv-v19/app/src/main/java/fr/erick/journallocal/PermissionUsageRules.java             aiv-v19/tests/PermissionUsageRulesTest.java
           java -cp "/tmp/aiv-permission-rules:$AIV_JSON_JAR" fr.erick.journallocal.PermissionUsageRulesTest
 
-      - name: Verify AIV 2.2.2 artifact
+      - name: Verify AIV 2.2.4-final artifact
         shell: bash
         run: |
           set -euo pipefail
-          test -s aiv-v19/build/AIV-2.2.2-unsigned.apk
-          test -s aiv-v19/build/AIV-2.2.2-unsigned.apk.sha256
+          test -s aiv-v19/build/AIV-2.2.4-final-unsigned.apk
+          test -s aiv-v19/build/AIV-2.2.4-final-unsigned.apk.sha256
           grep -q 'android:versionCode="224"' aiv-v19/app/src/main/AndroidManifest.xml
-          grep -q 'android:versionName="2.2.2"' aiv-v19/app/src/main/AndroidManifest.xml
+          grep -q 'android:versionName="2.2.4-final"' aiv-v19/app/src/main/AndroidManifest.xml
           grep -q 'successful alternate path still produced user anomaly' aiv-v19/tests/convergence-host.py
           grep -q 'basculements réussis sont exclus des alertes' aiv-v19/app/src/main/java/fr/erick/journallocal/AnomalyRules.java
-          sha256sum -c aiv-v19/build/AIV-2.2.2-unsigned.apk.sha256
+          sha256sum -c aiv-v19/build/AIV-2.2.4-final-unsigned.apk.sha256
 
-      - name: Upload AIV 2.2.2 unsigned APK
+      - name: Upload AIV 2.2.4-final unsigned APK
         uses: actions/upload-artifact@v4
         with:
           name: AIV-2.2.2-unsigned
           path: |
-            aiv-v19/build/AIV-2.2.2-unsigned.apk
-            aiv-v19/build/AIV-2.2.2-unsigned.apk.sha256
+            aiv-v19/build/AIV-2.2.4-final-unsigned.apk
+            aiv-v19/build/AIV-2.2.4-final-unsigned.apk.sha256
             aiv-v19/.toolchain/sdk/build-tools/35.0.0/lib/apksigner.jar
           retention-days: 14
           include-hidden-files: true
