@@ -46,6 +46,7 @@ public final class NetworkCaptureService extends VpnService {
     private volatile boolean destroyed;
     private volatile String captureError="";
     private String observedSession="",observedTransport="Interne";
+    private static final long MAX_OBSERVER_STALL_MS=30000;
     private long lastIdentityPump;
     private native int runNative(int fd);
 
@@ -242,11 +243,10 @@ public final class NetworkCaptureService extends VpnService {
         }catch(IOException e){haltCapture("Socket non reliée au réseau physique : "+e.getClass().getSimpleName());return false;}
     }
     public boolean shouldStopNative(){
-        long stall=observations==null?0:observations.stalledAgeMs();
-        observationDelayMs=observations==null?0:observations.oldestAgeMs();
-        // A slow observer is a visibility/latency condition, not a reason to cut the user's VPN.
-        // Accepted observations keep their original capture timestamps and drain in order.
-        return NetworkCapturePolicy.shouldStopNative(stopped,reconfigure,stall);
+        if(stopped||reconfigure)return true;
+        observationDelayMs=observations.oldestAgeMs();
+        if(observations.stalledAgeMs()>MAX_OBSERVER_STALL_MS){haltCapture("Capture arrêtée : aucune progression de l’observateur depuis 30 secondes");return true;}
+        return false;
     }
     private void pumpIdentity(){
         long now=SystemClock.elapsedRealtime();if(now-lastIdentityPump<25)return;lastIdentityPump=now;
