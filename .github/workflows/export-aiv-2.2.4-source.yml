@@ -24,11 +24,21 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p export
-          git archive             --format=zip             --prefix=AIV-2.2.4-source/             -o export/AIV-2.2.4-source.zip             bf1e2264bd54bbbf9c45c2080531668777495f5d
 
-          git bundle create             export/AIV-2.2.4-history.bundle             bf1e2264bd54bbbf9c45c2080531668777495f5d
+          git archive \
+            --format=zip \
+            --prefix=AIV-2.2.4-source/ \
+            -o export/AIV-2.2.4-source.zip \
+            bf1e2264bd54bbbf9c45c2080531668777495f5d
 
-          git ls-tree -r --full-tree             bf1e2264bd54bbbf9c45c2080531668777495f5d             > export/TREE.txt
+          git branch -f aiv-2.2.4-exact bf1e2264bd54bbbf9c45c2080531668777495f5d
+          git bundle create \
+            export/AIV-2.2.4-history.bundle \
+            aiv-2.2.4-exact
+
+          git ls-tree -r --full-tree \
+            bf1e2264bd54bbbf9c45c2080531668777495f5d \
+            > export/TREE.txt
 
           {
             echo "AIV 2.2.4-final exact-source export"
@@ -40,10 +50,16 @@ jobs:
             echo "versionCode=224"
             echo "package=com.allinvisible.aiv"
             echo
-            git show -s --format='commit=%H%nparent=%P%nauthor=%an <%ae>%nauthor_date=%aI%ncommitter=%cn <%ce>%ncommit_date=%cI%nsubject=%s'               bf1e2264bd54bbbf9c45c2080531668777495f5d
+            git show -s --format='commit=%H%nparent=%P%nauthor=%an <%ae>%nauthor_date=%aI%ncommitter=%cn <%ce>%ncommit_date=%cI%nsubject=%s' \
+              bf1e2264bd54bbbf9c45c2080531668777495f5d
           } > export/AIV-2.2.4-IDENTITY.txt
 
-          sha256sum             export/AIV-2.2.4-source.zip             export/AIV-2.2.4-history.bundle             export/TREE.txt             export/AIV-2.2.4-IDENTITY.txt             > export/SHA256SUMS.txt
+          sha256sum \
+            export/AIV-2.2.4-source.zip \
+            export/AIV-2.2.4-history.bundle \
+            export/TREE.txt \
+            export/AIV-2.2.4-IDENTITY.txt \
+            > export/SHA256SUMS.txt
 
       - name: Upload exact source package
         uses: actions/upload-artifact@v4
