@@ -1,0 +1,54 @@
+name: Export AIV 2.2.4 exact source
+
+on:
+  push:
+    branches:
+      - aiv-export-2.2.4-20261006
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact AIV 2.2.4 commit
+        uses: actions/checkout@v4
+        with:
+          ref: bf1e2264bd54bbbf9c45c2080531668777495f5d
+          fetch-depth: 0
+
+      - name: Create exact source package
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p export
+          git archive             --format=zip             --prefix=AIV-2.2.4-source/             -o export/AIV-2.2.4-source.zip             bf1e2264bd54bbbf9c45c2080531668777495f5d
+
+          git bundle create             export/AIV-2.2.4-history.bundle             bf1e2264bd54bbbf9c45c2080531668777495f5d
+
+          git ls-tree -r --full-tree             bf1e2264bd54bbbf9c45c2080531668777495f5d             > export/TREE.txt
+
+          {
+            echo "AIV 2.2.4-final exact-source export"
+            echo "repository=willingemy-byte/My-Friend-Qjan"
+            echo "branch=aiv-rollback-2.2.2-build224"
+            echo "commit=bf1e2264bd54bbbf9c45c2080531668777495f5d"
+            echo "tree=ee3d3a6f9b70c2a2a36e23a8dd4ea13143355c12"
+            echo "versionName=2.2.4-final"
+            echo "versionCode=224"
+            echo "package=com.allinvisible.aiv"
+            echo
+            git show -s --format='commit=%H%nparent=%P%nauthor=%an <%ae>%nauthor_date=%aI%ncommitter=%cn <%ce>%ncommit_date=%cI%nsubject=%s'               bf1e2264bd54bbbf9c45c2080531668777495f5d
+          } > export/AIV-2.2.4-IDENTITY.txt
+
+          sha256sum             export/AIV-2.2.4-source.zip             export/AIV-2.2.4-history.bundle             export/TREE.txt             export/AIV-2.2.4-IDENTITY.txt             > export/SHA256SUMS.txt
+
+      - name: Upload exact source package
+        uses: actions/upload-artifact@v4
+        with:
+          name: AIV-2.2.4-source-complete
+          path: export/*
+          retention-days: 30
+          if-no-files-found: error
