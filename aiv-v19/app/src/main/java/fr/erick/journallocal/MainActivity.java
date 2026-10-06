@@ -168,7 +168,7 @@ public final class MainActivity extends Activity {
         brandText.setOrientation(LinearLayout.VERTICAL);
         TextView title=text("ALL IN VISIBLE",24,TEXT,true);
         title.setLetterSpacing(.09f);
-        TextView sub=text("AIV "+BuildMetadata.VERSION_NAME+" · interface Android native",13,MUTED,false);
+        TextView sub=text("AIV "+BuildMetadata.VERSION_NAME+" · version finale faite avec ChatGPT",13,MUTED,false);
         TextView nativeTag=text("●  NATIF · WebView absent",13,GREEN,true);
         nativeTag.setPadding(0,dp(4),0,0);
         brandText.addView(title);brandText.addView(sub);brandText.addView(nativeTag);
