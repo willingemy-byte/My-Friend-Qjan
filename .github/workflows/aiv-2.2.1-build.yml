@@ -1,10 +1,10 @@
-name: AIV 2.2.1 AppOps regression and build
+name: AIV 2.2.1 rollback build 224
 
 on:
   workflow_dispatch:
   push:
     branches:
-      - aiv-2.2.1-appops-temporal
+      - aiv-rollback-2.2.1-build224
     paths:
       - "aiv-v19/**"
       - ".github/workflows/aiv-2.2.1-build.yml"
@@ -66,7 +66,7 @@ jobs:
           set -euo pipefail
           test -s aiv-v19/build/AIV-2.2.1-unsigned.apk
           test -s aiv-v19/build/AIV-2.2.1-unsigned.apk.sha256
-          grep -q 'android:versionCode="221"' aiv-v19/app/src/main/AndroidManifest.xml
+          grep -q 'android:versionCode="224"' aiv-v19/app/src/main/AndroidManifest.xml
           grep -q 'android:versionName="2.2.1"' aiv-v19/app/src/main/AndroidManifest.xml
           grep -q 'static Operation operation' aiv-v19/app/src/main/java/fr/erick/journallocal/PermissionUsageRules.java
           sha256sum -c aiv-v19/build/AIV-2.2.1-unsigned.apk.sha256
