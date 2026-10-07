@@ -201,6 +201,16 @@ class Service:
         payload=json.dumps(claims,sort_keys=True,separators=(',',':')).encode()
         signature=self.private_key.sign(payload,padding.PKCS1v15(),hashes.SHA256())
         return {'active':True,'entitlement':{'payload':base64.b64encode(payload).decode(),'signature':base64.b64encode(signature).decode()}}
+    def owner_licenses(self,key):
+        allowed=os.environ.get('OWNER_KEY_ID','')
+        if len(allowed)!=64 or not secrets.compare_digest(key,allowed):raise Refused('Identité propriétaire non autorisée')
+        with self.store.db() as db:
+            # Single read snapshot; no phone logs, PayPal payer names or email addresses.
+            rows=[dict(r) for r in db.execute('SELECT number,reservation AS licence_id,key_id,state,payment_status,created_at,confirmed_at FROM slots ORDER BY number')]
+        return {'schema_version':1,'owner_verified':True,'generated_at':int(time.time()),
+          'mode':getattr(self.paypal,'mode','sandbox'),'sold_confirmed':sum(r['confirmed_at']>0 for r in rows),
+          'active':sum(r['state']=='ACTIVE' for r in rows),'revoked':sum(r['state']=='REVOKED' for r in rows),
+          'reserved':sum(r['state']=='RESERVED' for r in rows),'licenses':rows}
     def webhook(self,headers,event):
         if not self.paypal.verify_webhook(headers,event):raise Refused('Signature webhook invalide')
         kind=event.get('event_type');event_id=event.get('id')
@@ -243,12 +253,13 @@ class Handler(BaseHTTPRequestHandler):
                 if set(body)!={'public_key'} or not isinstance(body['public_key'],str) or len(body['public_key'])>512:raise Refused('Champs identité invalides')
                 result={'nonce':self.service.store.challenge(body['public_key'])}
             else:
-                fields={'/orders':{'request_id'},'/capture':{'order_id'},'/entitlement':set(),'/release':set()}.get(self.path)
+                fields={'/orders':{'request_id'},'/capture':{'order_id'},'/entitlement':set(),'/release':set(),'/owner/licenses':set()}.get(self.path)
                 if fields is None or set(body)!=fields:raise Refused('Seuls les champs de licence sont acceptés')
                 key=self.service.store.authenticate(self.path,raw,self.headers.get('X-AIV-Nonce',''),self.headers.get('X-AIV-Signature',''))
                 if self.path=='/orders':result=self.service.create_order(key,body['request_id'])
                 elif self.path=='/capture':result=self.service.capture(key,body['order_id'])
                 elif self.path=='/entitlement':result=self.service.entitlement(key)
+                elif self.path=='/owner/licenses':result=self.service.owner_licenses(key)
                 else:
                     if not self.service.store.active(key):raise Refused('Licence requise')
                     result=json.loads(open(os.environ['FOUNDER_RELEASE_MANIFEST']).read())
@@ -263,5 +274,5 @@ def main():
     import sys
     if '--reconcile' in sys.argv:
         print(json.dumps({'released_unpaid_voided_reservations':Handler.service.reconcile_reservations()}));return
-    ThreadingHTTPServer(('127.0.0.1',int(os.environ.get('PORT','8080'))),Handler).serve_forever()
+    ThreadingHTTPServer((os.environ.get('BIND_HOST','127.0.0.1'),int(os.environ.get('PORT','8080'))),Handler).serve_forever()
 if __name__=='__main__':main()

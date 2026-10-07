@@ -10,6 +10,7 @@ import java.security.MessageDigest;
 final class FounderUpgrade {
  static String hex(byte[] b){StringBuilder s=new StringBuilder();for(byte v:b)s.append(String.format(java.util.Locale.ROOT,"%02x",v&255));return s.toString();}
  static synchronized void download(Context c)throws Exception{
+  if(EditionConfig.TEST_PREVIEW)throw new SecurityException("Installer une édition publique depuis cet aperçu est désactivé");
   JSONObject release=LicenseClient.release(c);String url=release.getString("url");
   URI parsed=new URI(url),origin=new URI(EditionConfig.APK_ORIGIN);
   if(!"https".equals(parsed.getScheme())||parsed.getUserInfo()!=null||!parsed.getHost().equals(origin.getHost())||parsed.getPort()!=origin.getPort())throw new SecurityException("Source APK non officielle");
@@ -24,7 +25,7 @@ final class FounderUpgrade {
    android.content.pm.Signature[] signers=Build.VERSION.SDK_INT>=28?apk.signingInfo.getApkContentsSigners():apk.signatures;
    android.content.pm.Signature[] current=Build.VERSION.SDK_INT>=28?installed.signingInfo.getApkContentsSigners():installed.signatures;
    if(signers.length!=1||current.length!=1||!signers[0].equals(current[0])||!hex(MessageDigest.getInstance("SHA-256").digest(signers[0].toByteArray())).equalsIgnoreCase(EditionConfig.APK_CERTIFICATE))throw new SecurityException("Signature APK différente");
-   Intent intent=new Intent(Intent.ACTION_VIEW).setDataAndType(Uri.parse("content://com.allinvisible.aiv.upgrade/AIV-FOUNDER.apk"),"application/vnd.android.package-archive").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_ACTIVITY_NEW_TASK);
+   Intent intent=new Intent(Intent.ACTION_VIEW).setDataAndType(Uri.parse("content://"+c.getPackageName()+".upgrade/AIV-FOUNDER.apk"),"application/vnd.android.package-archive").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_ACTIVITY_NEW_TASK);
    c.startActivity(intent);
   }catch(Exception e){target.delete();throw e;}finally{h.disconnect();}
  }

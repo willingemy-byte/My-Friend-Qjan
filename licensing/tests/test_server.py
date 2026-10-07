@@ -75,6 +75,13 @@ class Tests(unittest.TestCase):
   with self.assertRaises(m.Refused):self.store.authenticate('/orders',body,nonce,sig)
   self.assertEqual(self.store.authenticate('/entitlement',body,nonce,sig),hashlib.sha256(raw).hexdigest())
   with self.assertRaises(m.Refused):self.store.authenticate('/entitlement',body,nonce,sig)
+ def test_owner_console_is_read_only_and_identity_gated(self):
+  self.buy();os.environ['OWNER_KEY_ID']='a'*64
+  try:
+   with self.assertRaises(m.Refused):self.service.owner_licenses('b'*64)
+   result=self.service.owner_licenses('a'*64);self.assertEqual(result['sold_confirmed'],1);self.assertEqual(result['active'],1)
+   self.assertEqual(result['licenses'][0]['key_id'],'k');self.assertNotIn('capture_id',result['licenses'][0]);self.assertEqual(self.store.active('k')['state'],'ACTIVE')
+  finally:os.environ.pop('OWNER_KEY_ID',None)
  def test_signed_entitlement(self):
   self.buy();envelope=self.service.entitlement('k')['entitlement'];payload=base64.b64decode(envelope['payload']);self.key.public_key().verify(base64.b64decode(envelope['signature']),payload,padding.PKCS1v15(),hashes.SHA256());claims=json.loads(payload);self.assertEqual(claims['founder_number'],1);self.assertEqual(claims['key_id'],'k')
 if __name__=='__main__':unittest.main(verbosity=2)

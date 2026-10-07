@@ -10,13 +10,15 @@ p=argparse.ArgumentParser()
 p.add_argument('--android-jar',required=True,type=Path)
 p.add_argument('--build-tools',required=True,type=Path)
 p.add_argument('--shizuku-dir',required=True,type=Path)
-p.add_argument('--edition',choices=['FREE','FOUNDER_FULL'])
+p.add_argument('--edition',choices=['FREE','FOUNDER_FULL','OWNER_INTERNAL'])
 p.add_argument('--version-code',type=int)
 p.add_argument('--license-config',type=Path)
+p.add_argument('--test-preview',action='store_true',help='Isolated UI preview; never a paid entitlement')
 native=p.add_mutually_exclusive_group(required=True)
 native.add_argument('--ndk',type=Path)
 native.add_argument('--reuse-native-apk',type=Path)
 native.add_argument('--reuse-native-apk-06',type=Path)
+native.add_argument('--reuse-baseline-apk',type=Path)
 signing=p.add_mutually_exclusive_group(required=True)
 signing.add_argument('--signing-dir',type=Path)
 signing.add_argument('--unsigned',action='store_true')
@@ -47,13 +49,21 @@ if a.edition:
         raise SystemExit('Public editions require a versionCode above baseline 224')
     manifest.set(android+'versionCode',str(a.version_code))
     manifest.set(android+'versionName','2.2.4-final')
+    if a.test_preview:
+        test_package='com.allinvisible.aiv.'+('free' if a.edition=='FREE' else 'founder')+'.test'
+        manifest.set('package',test_package)
+        manifest.find('application').set(android+'label','AIV '+('Free' if a.edition=='FREE' else 'Founder')+' Test')
+        for provider in manifest.findall('application/provider'):
+            provider.set(android+'authorities',test_package+'.shizuku')
     # Installation stays on Android's Package Installer; URI access is temporary.
     ET.SubElement(manifest,'uses-permission',{android+'name':'android.permission.REQUEST_INSTALL_PACKAGES'})
     app=manifest.find('application')
     app.set(android+'name','fr.erick.journallocal.AivApplication')
-    ET.SubElement(app,'provider',{android+'name':'fr.erick.journallocal.UpgradeFileProvider',android+'authorities':'com.allinvisible.aiv.upgrade',android+'exported':'false',android+'grantUriPermissions':'true'})
+    ET.SubElement(app,'provider',{android+'name':'fr.erick.journallocal.UpgradeFileProvider',android+'authorities':manifest.get('package')+'.upgrade',android+'exported':'false',android+'grantUriPermissions':'true'})
     build_manifest=build/'edition-manifest.xml'
     ET.ElementTree(manifest).write(build_manifest,encoding='utf-8',xml_declaration=True)
+if a.test_preview and a.edition=='OWNER_INTERNAL': raise SystemExit('Owner is never a preview or public edition')
+if a.test_preview and not a.edition: raise SystemExit('Preview requires an edition')
 settings=json.loads(a.license_config.read_text()) if a.license_config else {}
 if set(settings)-{'base_url','public_key_spki_b64','apk_origin','apk_certificate_sha256'}:
     raise SystemExit('Only public license configuration is accepted')
@@ -63,6 +73,7 @@ for key in ('base_url','apk_origin'):
 edition_source=build/'generated/fr/erick/journallocal/EditionConfig.java'
 edition_source.parent.mkdir(parents=True,exist_ok=True)
 edition_source.write_text('package fr.erick.journallocal;\nfinal class EditionConfig {\n'+
+    'static final boolean TEST_PREVIEW='+str(a.test_preview).lower()+';\n'+
     'static final String EDITION='+json.dumps(a.edition or 'LEGACY_OWNER')+';\n'+
     '\n'.join('static final String '+name+'='+json.dumps(settings.get(key,''))+';' for name,key in
         [('LICENSE_URL','base_url'),('LICENSE_PUBLIC_KEY','public_key_spki_b64'),('APK_ORIGIN','apk_origin'),('APK_CERTIFICATE','apk_certificate_sha256')])+'\n}\n')
@@ -82,13 +93,13 @@ metadata.write_text('package fr.erick.journallocal;\nfinal class BuildMetadata {
     'static final String SOURCE_SHA256='+json.dumps(source_hash.hexdigest())+';\n'+
     'static final String BUILD_UTC='+json.dumps(datetime.datetime.now(datetime.timezone.utc).isoformat())+';\n}\n')
 
-reuse_apk=a.reuse_native_apk_06 or a.reuse_native_apk
+reuse_apk=a.reuse_baseline_apk or a.reuse_native_apk_06 or a.reuse_native_apk
 vendor=root/'third_party/zdtun'
 cpp=root/'app/src/main/cpp'
 clang=a.ndk/'toolchains/llvm/prebuilt/linux-x86_64/bin/clang' if a.ndk else None
 
 if reuse_apk:
-    pin=json.loads((root/('tools/native-reuse-0.6.json' if a.reuse_native_apk_06 else 'tools/native-reuse.json')).read_text())
+    pin=json.loads((root/('tools/native-reuse-224.json' if a.reuse_baseline_apk else 'tools/native-reuse-0.6.json' if a.reuse_native_apk_06 else 'tools/native-reuse.json')).read_text())
     assert hashlib.sha256(reuse_apk.read_bytes()).hexdigest()==pin['apk_sha256']
     for filename,digest in pin['source_sha256'].items():
         assert hashlib.sha256((root/filename).read_bytes()).hexdigest()==digest, 'Native source changed: '+filename
@@ -197,6 +208,8 @@ certificate=subprocess.check_output([
 ])
 actual=hashlib.sha256(certificate).hexdigest()
 expected=pin_file.read_text().strip().lower()
+if a.edition=='OWNER_INTERNAL' and actual!='3c6b7dbdaecd823b512408d6442328cde2464c8d0b074ec714858e64f5bf08ff':
+    raise SystemExit('Owner requires the existing owner certificate')
 if actual!=expected:
     raise SystemExit('All In Visible signing certificate differs from the private recorded certificate.')
 

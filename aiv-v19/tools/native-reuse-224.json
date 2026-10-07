@@ -1,0 +1,26 @@
+{
+  "source": "Original signed AIV 2.2.4-final; unchanged native relay",
+  "apk_sha256": "a020f138541d485d42f6557fc4554b8e72580682983eb775510d4933cf5c0fcc",
+  "source_sha256": {
+    "app/src/main/cpp/jni.c": "6001d4a654f9b492a00217efeb2dee99a36b7face0ec66d74ee8956363805b82",
+    "app/src/main/cpp/relay.c": "fcdc67d65913d7ab984711482be93804a30aef6cfffed8c7dc8d3d5571f9ee58",
+    "app/src/main/cpp/relay.h": "11baee8da406be85370e8a315192d8464a491bb03ca764b0ffc23438d366c677",
+    "app/src/main/cpp/tls_sni.c": "3acc56de6997bf92fa90fda46c70265bce09a3d4c1d58f448db10a3a3036cf55",
+    "app/src/main/cpp/tls_sni.h": "ed56757f145e6c05b084a95ec39f9301be8aa402b7c3c986f2958142c5055ab6",
+    "app/src/main/cpp/zdtun.exports": "87060f548b15688e16410f600af87484585869b5cfdb32ecadd4f1750a408643",
+    "third_party/zdtun/socks5.c": "bb2e7f57c1b70f7e530d19cdd1759bfd172d8ee6efb1e051398398d18d9529c7",
+    "third_party/zdtun/socks5.h": "86f87aebeae9c6758d4c2c5fb21765e3f413ab969f992376b252544576309484",
+    "third_party/zdtun/third_party/net_headers.h": "941e8f24182e735aadaf197d6171179b98fe9f74345617efe0f5210d8a4a71e6",
+    "third_party/zdtun/third_party/uthash.h": "a18268af4e5a2153b1f8a3bbba5732133c212eb49b17c3dc622c176ce6c7e53f",
+    "third_party/zdtun/utils.c": "56c9cc1564f536396644cea778d956eb25c1c059dcad42280a5f727ec5f480fc",
+    "third_party/zdtun/utils.h": "9e92f1be1a0a5514abce43236a53f045319ec59132832e76e62fafa64d0a3284",
+    "third_party/zdtun/zdtun.c": "e7bf4d3968480358ed1133ca6aba4d09d8b36a076601fa30efb1feae9a34279a",
+    "third_party/zdtun/zdtun.h": "cb1d918a90ff4499b371d53958268f9b4e1136f7e29831c7ee1a66b5d35f9a15"
+  },
+  "libraries_sha256": {
+    "arm64-v8a/libjournal_zdtun.so": "74bc193f18a53f55c25ac500d18bbbede320ef33e2a6a6017b70f18aac4b05cb",
+    "arm64-v8a/libjournalrelay.so": "d2a8a90c78965dce666a109f9d1892533258a0d174dd0d909bf2186844546d90",
+    "x86_64/libjournal_zdtun.so": "b69730c1eaad48fd7f24a2ce8807b6dcfe4bef1d5441ebf276cd1b2dcd6a79c3",
+    "x86_64/libjournalrelay.so": "4c07c45bb7382d2b3f6c2a6548cedb7f314c0b013cc93fb98e0ee79179d8bc3c"
+  }
+}

@@ -1,0 +1,42 @@
+services:
+  license:
+    build:
+      context: ../..
+      dockerfile: deploy/alibaba/Dockerfile
+    restart: unless-stopped
+    env_file: ./license.env
+    environment:
+      BIND_HOST: 0.0.0.0
+      PORT: 8080
+      LICENSE_DB_FILE: /state/licenses.sqlite
+      LICENSE_SIGNING_KEY_FILE: /run/secrets/license-signing.pem
+      FOUNDER_RELEASE_MANIFEST: /releases/founder.json
+    volumes:
+      - license_state:/state
+      - ./private/license-signing.pem:/run/secrets/license-signing.pem:ro
+      - ./releases:/releases:ro
+  setup:
+    build:
+      context: ../..
+      dockerfile: deploy/alibaba/Dockerfile
+    command: [python, supabase/setup/server.py]
+    restart: unless-stopped
+    env_file: ./setup.env
+    environment:
+      BIND_HOST: 0.0.0.0
+      PORT: 8081
+  gateway:
+    image: caddy:2.10.2-alpine
+    restart: unless-stopped
+    env_file: ./domains.env
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../../web:/srv/site:ro
+      - ./releases:/srv/releases:ro
+      - caddy_data:/data
+      - caddy_config:/config
+volumes:
+  license_state:
+  caddy_data:
+  caddy_config:

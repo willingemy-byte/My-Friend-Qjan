@@ -170,7 +170,7 @@ public final class MainActivity extends Activity {
         brandText.setOrientation(LinearLayout.VERTICAL);
         TextView title=text("ALL IN VISIBLE",24,TEXT,true);
         title.setLetterSpacing(.09f);
-        TextView sub=text("AIV "+BuildMetadata.VERSION_NAME+" · version finale faite avec ChatGPT",13,MUTED,false);
+        TextView sub=text("AIV "+BuildMetadata.VERSION_NAME+(EditionConfig.TEST_PREVIEW?" · "+getApplicationInfo().loadLabel(getPackageManager()):" · version finale faite avec ChatGPT"),13,MUTED,false);
         TextView nativeTag=text("●  NATIF · WebView absent",13,GREEN,true);
         nativeTag.setPadding(0,dp(4),0,0);
         brandText.addView(title);brandText.addView(sub);brandText.addView(nativeTag);
@@ -202,7 +202,7 @@ public final class MainActivity extends Activity {
         addTab("Applications","applications");
         addTab("Accès","access");
         addTab("Intégrité","integrity");
-        addTab(ProductAccess.paidEnabled(this)?"Shizuku":"🔒 Shizuku","shizuku");
+        addTab(ProductAccess.fullUi(this)?"Shizuku":"🔒 Shizuku","shizuku");
         addTab("Supabase","supabase");
         scroller.addView(nav);
         root.addView(scroller,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -277,7 +277,7 @@ public final class MainActivity extends Activity {
         else if("applications".equals(id))renderApplications("");
         else if("access".equals(id))renderSpecialAccess();
         else if("integrity".equals(id))renderIntegrity();
-        else if("shizuku".equals(id)){ if(ProductAccess.paidEnabled(this))renderShizuku(); else renderUpgradeGate(); }
+        else if("shizuku".equals(id)){ if(ProductAccess.fullUi(this))renderShizuku(); else renderUpgradeGate(); }
         else if("supabase".equals(id))renderSupabase();
         else if("licence".equals(id))renderUpgradeCheckout();
         else if("status".equals(id))renderAivStatus();
@@ -900,7 +900,7 @@ public final class MainActivity extends Activity {
         page.removeAllViews();
         page.addView(sectionTitle("Réglages > Sauvegarde personnelle > Supabase"));
         page.addView(note("Vos données restent sur cet appareil sauf export volontaire."));
-        if(!ProductAccess.paidEnabled(this)){page.addView(note("Sauvegarde personnelle optionnelle disponible avec AIV Founder."));page.addView(action("Exporter le journal local",v->beginJournalExport()));return;}
+        if(!ProductAccess.fullUi(this)){page.addView(note("Sauvegarde personnelle optionnelle disponible avec AIV Founder."));page.addView(action("Exporter le journal local",v->beginJournalExport()));return;}
         personalBackupControls();
         if(!PersonalBackup.enabled(this)){page.addView(note("Sauvegarde distante désactivée. Aucune connexion testée."));return;}
         page.addView(sectionTitle("Supabase · archive"));
@@ -951,7 +951,26 @@ public final class MainActivity extends Activity {
         }
     }
 
+    private static final int PERSONAL_CONFIG_REQUEST=8091;
+    private void importPersonalConfig(Uri uri){
+        new Thread(()->{try{
+            if(!ProductAccess.paidEnabled(this))throw new SecurityException("Aperçu seulement : licence Founder requise pour connecter une sauvegarde");
+            java.io.ByteArrayOutputStream bytes=new java.io.ByteArrayOutputStream();
+            try(java.io.InputStream in=getContentResolver().openInputStream(uri)){if(in==null)throw new java.io.IOException("Fichier absent");byte[] buffer=new byte[1024];int n;while((n=in.read(buffer))!=-1){if(bytes.size()+n>4096)throw new java.io.IOException("Configuration trop grande");bytes.write(buffer,0,n);}}
+            JSONObject config=new JSONObject(new String(bytes.toByteArray(),"UTF-8"));
+            if(config.length()!=3||!"aiv-backup-config/1".equals(config.getString("schema")))throw new SecurityException("Format de configuration refusé");
+            String url=PersonalBackup.validateUrl(config.getString("project_url"));String key=config.getString("publishable_key");
+            main.post(()->new AlertDialog.Builder(this).setTitle("Votre projet Supabase").setMessage("Configurer et tester : "+url+" ? La sauvegarde restera désactivée jusqu’à votre activation.").setNegativeButton("Annuler",null).setPositiveButton("Configurer et tester",(d,w)->new Thread(()->{try{PersonalBackup.configure(this,url,key);JSONObject result=PersonalBackup.test(this);main.post(()->{renderSupabase();showJsonDetail("Tests réels Supabase",result,null);});}catch(Exception e){main.post(()->showDetail("Connexion non validée",e.getMessage(),null,null));}},"aiv-setup-test").start()).show());
+        }catch(Exception e){main.post(()->showDetail("Configuration refusée",e.getMessage(),null,null));}},"aiv-setup-import").start();
+    }
     private void personalBackupControls(){
+        if(ProductAccess.founderPreview())page.addView(note("APERÇU : les réglages sont visibles; une licence réelle sera nécessaire pour activer une sauvegarde."));
+        page.addView(action("Connecter Supabase · assistant automatique",v->{
+            EditText origin=new EditText(this);origin.setSingleLine(true);origin.setHint("https://setup.votre-domaine");
+            new AlertDialog.Builder(this).setTitle("Assistant AIV sur votre site officiel").setMessage("L’assistant doit être déployé et l’intégration OAuth AIV enregistrée. Aucun mot de passe Supabase à entrer ici.").setView(origin).setNegativeButton("Annuler",null).setPositiveButton("Ouvrir l’assistant",(d,w)->{try{String url=OwnerConsole.url(origin.getText().toString());startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(url)));}catch(Exception e){showDetail("Assistant non configuré",e.getMessage(),null,null);}}).show();
+        }));
+        page.addView(action("Importer la configuration créée par l’assistant",v->startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("application/json"),PERSONAL_CONFIG_REQUEST)));
+
         page.addView(note("1. Créer votre projet Supabase.\n2. Exécuter la migration SQL AIV fournie.\n3. Activer les connexions anonymes dans Supabase Auth (session privée, RLS par utilisateur).\n4. Entrer l’URL et la publishable key.\n5. Tester puis activer volontairement la sauvegarde. Purge automatique désactivée."));
         page.addView(action("Exporter le schéma Supabase personnel v1",v->startActivityForResult(new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("text/plain").putExtra(Intent.EXTRA_TITLE,"AIV-Supabase-schema-v1.sql"),PERSONAL_SCHEMA_REQUEST)));
         try{JSONObject test=PersonalBackup.testStatus(this);page.addView(note(test.optBoolean("tested")?"Test réussi · Schéma v"+test.optInt("schema_version")+" · Lecture : "+yesNo(test.optBoolean("read_ok"))+" · Écriture : "+yesNo(test.optBoolean("write_ok")):"Connexion non testée / non validée"));}catch(Exception e){page.addView(note("Connexion non validée"));}
@@ -973,6 +992,7 @@ public final class MainActivity extends Activity {
     }
 
     private void permissionControls(){
+        if(ProductAccess.founderPreview()){page.addView(note("APERÇU FOUNDER · Aucune licence achetée. Commandes Shizuku verrouillées dans cet essai."));}
         TextView state=text((PermissionControl.authorized()?"Shizuku autorisé":"Shizuku à autoriser")+" · "+PermissionControl.status(),15,BLUE,true);
         permissionStatusView=state;page.addView(state);
         maintenanceStatusView=text(maintenanceSummary(),15,BLUE,true);page.addView(maintenanceStatusView);
@@ -1355,12 +1375,19 @@ public final class MainActivity extends Activity {
         page.addView(card("AIV Free","Journal, flux, inventaire, permissions publiques, anomalies, intégrité et export local."));
         page.addView(note("Information supplémentaire disponible avec AIV complet / Shizuku"));
         page.addView(card("AIV Founder","Analyse AppOps, contrôle Shizuku, maintien des refus et corrélations avancées. Les décisions manuelles restent prioritaires."));
-        page.addView(action("Débloquer AIV complet",v->renderUpgradeCheckout()));
+        page.addView(action("Prenez le contrôle",v->renderUpgradeCheckout()));
     }
     private void renderUpgradeCheckout(){
         page.removeAllViews();
+        if(ProductAccess.ownerBuild()){
+            page.addView(sectionTitle("AIV Propriétaire · Console de vente"));
+            page.addView(note("Votre identité cryptographique locale reste celle utilisée par le serveur pour autoriser le suivi. Aucun secret PayPal dans l’APK."));
+            page.addView(action("Configurer l’accès et consulter les licences",v->OwnerConsole.open(this)));
+            page.addView(note("Les identifiants privés PayPal sont configurés sur Alibaba Cloud. Le suivi affiche les ventes réellement confirmées par le serveur, sans journaux des clients."));return;
+        }
         boolean active=LicenseClient.active(this);
-        page.addView(sectionTitle(ProductAccess.paidEnabled(this)?"AIV Founder — Lifetime Updates":"AIV Free"));
+        if(EditionConfig.TEST_PREVIEW)page.addView(note("VERSION DE TEST · données séparées de ton AIV propriétaire. Un seul VPN Android à la fois."));
+        page.addView(sectionTitle(ProductAccess.founderPreview()?"AIV Founder Test · Aperçu":ProductAccess.paidEnabled(this)?"AIV Founder — Lifetime Updates":"AIV Free"));
         page.addView(note("ALL IN VISIBLE · AIV 2.2.4-final"));
         page.addView(card("Offre fondateur","Débloquer AIV complet\n50 $ CAD une seule fois\nMises à jour à vie\nOffre fondateur limitée aux 1 000 premières licences"));
         if(active){
@@ -1369,6 +1396,7 @@ public final class MainActivity extends Activity {
             if(number>0)page.addView(note("Licence fondateur : "+number+" / 1000"));
             if(!ProductAccess.paidEnabled(this))page.addView(action("Installer AIV Founder signé",v->licenseJob(()->FounderUpgrade.download(this),"APK vérifié : installation Android proposée")));
         }
+        page.addView(action("Console propriétaire · suivi des licences",v->OwnerConsole.open(this)));
         page.addView(action("Continuer vers PayPal",v->licenseJob(()->{
             JSONObject order=LicenseClient.createOrder(this);
             String approval=order.getString("approve_url");
@@ -1495,6 +1523,7 @@ public final class MainActivity extends Activity {
 
     @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){
         super.onActivityResult(requestCode,resultCode,data);
+        if(requestCode==PERSONAL_CONFIG_REQUEST&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){importPersonalConfig(data.getData());return;}
         if(requestCode==PERSONAL_SCHEMA_REQUEST&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){
             try(java.io.InputStream in=getAssets().open("aiv-supabase-schema-v1.sql");java.io.OutputStream out=getContentResolver().openOutputStream(data.getData())){if(out==null)throw new java.io.IOException("Destination indisponible");byte[] buffer=new byte[8192];int n;while((n=in.read(buffer))!=-1)out.write(buffer,0,n);toast("Schéma SQL v1 exporté");}catch(Exception e){showDetail("Export SQL",e.getMessage(),null,null);}return;
         }

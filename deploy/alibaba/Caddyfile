@@ -1,0 +1,19 @@
+{$AIV_DOMAIN} {
+  header Referrer-Policy no-referrer
+  header X-Content-Type-Options nosniff
+  header Content-Security-Policy "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+  handle_path /downloads/* {
+    root * /srv/releases
+    file_server
+  }
+  handle {
+    root * /srv/site
+    file_server
+  }
+}
+{$LICENSE_DOMAIN} {
+  reverse_proxy license:8080
+}
+{$SETUP_DOMAIN} {
+  reverse_proxy setup:8081
+}
