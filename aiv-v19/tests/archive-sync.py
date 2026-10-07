@@ -13,6 +13,8 @@ for name in list(stubs):
     if name.startswith('fr/erick/') or name.endswith(('SQLiteOpenHelper.java','ContentValues.java','PackageInfo.java','PackageManager.java')):del stubs[name]
 stubs['android/content/ContentValues.java']='package android.content;public class ContentValues extends java.util.LinkedHashMap<String,Object>{}'
 stubs.update({
+'fr/erick/journallocal/PersonalBackup.java':'''package fr.erick.journallocal;import android.content.Context;import org.json.JSONObject;class PersonalBackup{static boolean allowed=true;static String dest="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";static boolean enabled(Context c){return allowed;}static JSONObject auth(Context c){return new JSONObject();}static String destination(Context c){return dest;}static JSONObject rpc(Context c,JSONObject body){throw new AssertionError("Unexpected real HTTP");}}''',
+
 'android/os/Looper.java':'package android.os;public class Looper{public static Looper getMainLooper(){return new Looper();}}',
 'android/os/Handler.java':'package android.os;public class Handler{public Handler(Object l){}public void post(Runnable r){r.run();}public void postDelayed(Runnable r,long d){}}',
 'android/content/Intent.java':'package android.content;public class Intent{public Intent(Context c,Class<?> t){}}',

@@ -40,6 +40,7 @@ public Context(File f,File a){files=f;assets=new AssetManager(a);}public File ge
 "rikka/shizuku/Shizuku.java": '''package rikka.shizuku;public class Shizuku {public static boolean available=true;public static boolean pingBinder(){return available;}public static boolean isPreV11(){return false;}public static int checkSelfPermission(){return 0;}public static int getUid(){return 2000;}}''',
 "fr/erick/journallocal/FixtureDependencies.java": '''package fr.erick.journallocal;import android.content.*;import android.content.pm.*;import org.json.*;import java.util.*;
 class AivConfig {static final int CONTROL_REPORT_MAX_BYTES=8388608,CONTROL_BATCH_MAX_APPS=50,REFERENCE_MAX_APPS=20000,CONTROL_WATCH_MAX_FAILURES=3;static final long CONTROL_PREVIEW_VALID_MS=300000;}
+class ProductAccess {static int verifiedTier(){return 3;}static void requireFounder(){}}
 class AccessPolicy {static final int DISTRIBUTION_TIER=3;static boolean allows(String s,int t){return true;}}
 class AppIdentity {static JSONObject forPackage(Context c,PackageInfo p){return EventStore.object("app_identity_id",p.packageName+":"+p.signer,"current_signer_sha256",p.signer.isEmpty()?new JSONArray():new JSONArray().put(p.signer));}}
 class DeveloperControl {static String permissionTargetReason(Context c,String p){return c.pm.guards.getOrDefault(p,"");}}

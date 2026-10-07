@@ -26,7 +26,7 @@ public final class DeveloperControl {
     private static synchronized boolean acquire(){if(busy||!ControlCoordinator.acquire())return false;busy=true;return true;}
     private static synchronized void release(){busy=false;ControlCoordinator.release();}
     private static void access()throws Exception{
-        if(!AccessPolicy.allows("shizuku.control",AccessPolicy.DISTRIBUTION_TIER))throw new SecurityException("Contrôle indisponible dans cette édition");
+        if(!AccessPolicy.allows("shizuku.control",ProductAccess.verifiedTier()))throw new SecurityException("Contrôle indisponible dans cette édition");
         if(!Shizuku.pingBinder()||Shizuku.checkSelfPermission()!=PackageManager.PERMISSION_GRANTED)throw new IllegalStateException("Démarre Shizuku et autorise AIV");
     }
     private static SharedPreferences prefs(Context c){return c.getSharedPreferences(AivConfig.PATHS_CONTROL_PREFERENCES,Context.MODE_PRIVATE);}

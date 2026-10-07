@@ -847,3 +847,8 @@ Public License instead of this License.  But first, please read
 
 V22: bundled Bayton/AOSP and Exodus Privacy reference datasets.
 See catalogs/NOTICE.txt and catalogs/BAYTON-LICENSE.txt for provenance and terms.
+
+APK upgrade signature verification: Android Open Source Project apksig,
+Copyright The Android Open Source Project. Apache License, Version 2.0.
+Source: https://android.googlesource.com/platform/tools/apksig/
+License: https://www.apache.org/licenses/LICENSE-2.0

@@ -14,5 +14,6 @@ javac -encoding UTF-8 -d "$TEST_CLASSES" \
     aiv-v19/tests/shell-stubs/android/content/pm/PackageManager.java \
     aiv-v19/tests/shell-stubs/rikka/shizuku/Shizuku.java \
     aiv-v19/app/src/main/java/fr/erick/journallocal/{AivConfig,AccessPolicy,ControlShell}.java \
-    aiv-v19/tests/ControlShellTest.java
+    aiv-v19/tests/ControlShellTest.java \
+    aiv-v19/tests/shell-stubs/fr/erick/journallocal/ProductAccess.java
 java -cp "$TEST_CLASSES" fr.erick.journallocal.ControlShellTest

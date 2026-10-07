@@ -28,6 +28,7 @@ final class PermissionUsage extends SQLiteOpenHelper {
     }
     @Override public void onUpgrade(SQLiteDatabase db,int a,int b){throw new IllegalStateException("Migration des observations requise");}
     static synchronized void request(Context c){
+        if(!ProductAccess.paidEnabled(c))return;
         long now=SystemClock.elapsedRealtime();if(now-requestedAt<INTERVAL_MS&&requestedAt>0)return;
         if(!BUSY.compareAndSet(false,true))return;requestedAt=now;
         Context app=c.getApplicationContext();new Thread(()->{try{get(app).sample();}catch(Exception e){try{get(app).setStatus("INDISPONIBLE",e.getClass().getSimpleName()+": "+String.valueOf(e.getMessage()),0,0);}catch(Exception ignored){}}finally{BUSY.set(false);}},"aiv-permission-usage").start();
@@ -37,6 +38,7 @@ final class PermissionUsage extends SQLiteOpenHelper {
         requestedAt=0;request(c);
     }
     synchronized JSONObject status(){
+        if(!ProductAccess.paidEnabled(context))return EventStore.object("state","VERROUILLE","scope","Information supplémentaire disponible avec AIV complet / Shizuku");
         try(Cursor c=getReadableDatabase().rawQuery("SELECT payload FROM state WHERE id=1",null)){if(c.moveToFirst())return new JSONObject(c.getString(0));}
         catch(Exception ignored){}return EventStore.object("state","INDISPONIBLE","scope",SCOPE);
     }
@@ -174,6 +176,7 @@ final class PermissionUsage extends SQLiteOpenHelper {
         }
         String status=!unique?"CORRELATION_UNAVAILABLE":observations.length()>0?"TEMPORAL_MATCHES_PRESENT":"NO_MATCHING_OBSERVATIONS";
         String scope=!unique?"Rapprochement avec les accès aux données indisponible. "+reasonText+" Aucun accès ni absence d’accès n’est déduit.":observations.length()>0?"Même application, UID, signature et installation; accès à moins d’une minute de l’événement, ou encore en cours. Ce rapprochement ne prouve pas que les données ont été envoyées dans ce flux.":"Aucun accès AppOps correspondant dans les observations conservées, à moins d’une minute de cet événement ou encore en cours. Cela ne démontre pas l’absence d’accès aux données ni le contenu du flux.";
+        if(!ProductAccess.paidEnabled(context))scope+=" Information supplémentaire disponible avec AIV complet / Shizuku. Aucun nouveau relevé Shizuku dans AIV Free.";
         return EventStore.object("schema","aiv-permission-context/1","status",status,"reason",reason.isEmpty()?JSONObject.NULL:reason,"observations",observations,"has_more",more,"time_window_ms",PermissionUsageRules.NEAR_MS,"event_time_ms",point,"actor_verified",unique,"scope",scope);
     }
     static void enrich(Context c,JSONArray rows)throws Exception{

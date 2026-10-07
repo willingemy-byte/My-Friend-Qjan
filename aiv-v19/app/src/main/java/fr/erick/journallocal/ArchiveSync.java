@@ -25,11 +25,16 @@ import android.os.Looper;
  * for local pruning. This class does not prune by itself.
  */
 public final class ArchiveSync {
-    private static final String ENDPOINT="https://poqahjwwjcidznxmyquv.supabase.co/functions/v1/aiv-journal-ingest";
-    // Supabase publishable keys are intentionally client-visible and are not secrets.
-    private static final String API_KEY="sb_publishable_sEccKZAXT0xzHm_13LqNXA_L0q9OOvZ";
     private static final int MAX_EVENTS_PER_REQUEST=100;
     private static final int MAX_REQUEST_CHARS=700000;
+    private static final ThreadLocal<Context> syncContext=new ThreadLocal<>();
+    private static final ThreadLocal<String> destination=new ThreadLocal<>();
+    public static boolean isRunning(){return running.get();}
+    private static String table(){String id=destination.get();if(id==null||!id.matches("[a-f0-9]{64}"))throw new IllegalStateException("Destination non configurée");return "personal_archive_"+id;}
+    private static void prepare(Context c,boolean authenticate)throws Exception{
+        if(authenticate)PersonalBackup.auth(c);destination.set(PersonalBackup.destination(c));syncContext.set(c);
+        EventStore.get(c).getWritableDatabase().execSQL("CREATE TABLE IF NOT EXISTS "+table()+"(segment INTEGER PRIMARY KEY,remote_state TEXT NOT NULL DEFAULT 'PENDING',client_sha256 TEXT,uploaded_through_id INTEGER NOT NULL DEFAULT 0,verified_at_ms INTEGER NOT NULL DEFAULT 0,error TEXT)");
+    }
     private static final AtomicBoolean running=new AtomicBoolean();
 
     public static volatile String lastError="";
@@ -44,6 +49,7 @@ public final class ArchiveSync {
     public static void request(Context context){request(context,true);}
     public static void requestAutomatic(Context context){request(context,false);}
     private static synchronized void request(Context context,boolean manual){
+        if(!PersonalBackup.enabled(context))return;
         SharedPreferences saved=status(context);
         if(!manual&&System.currentTimeMillis()<saved.getLong("next_attempt_ms",0))return;
         if(!running.compareAndSet(false,true))return;
@@ -51,6 +57,7 @@ public final class ArchiveSync {
         new Thread(()->{
             long delay=0;
             try{
+                prepare(app,true);
                 sync(app,ArchiveSync::post);
                 lastError="";
                 saved.edit().putString("last_error","").putInt("failures",0).putLong("next_attempt_ms",0).commit();
@@ -59,7 +66,7 @@ public final class ArchiveSync {
                 int failures=Math.min(6,saved.getInt("failures",0)+1);
                 delay=Math.min(RETRY_MAX_MS,RETRY_MIN_MS*(1L<<(failures-1)));
                 saved.edit().putString("last_error",lastError).putInt("failures",failures).putLong("next_attempt_ms",System.currentTimeMillis()+delay).commit();
-                try{EventStore.get(app).getWritableDatabase().execSQL("UPDATE journal_archive_state SET remote_state='PENDING',error=? WHERE segment=? AND remote_state!='VERIFIED'",new Object[]{lastError,currentSegment});}catch(Exception ignored){}
+                try{EventStore.get(app).getWritableDatabase().execSQL("UPDATE "+table()+" SET remote_state='PENDING',error=? WHERE segment=? AND remote_state!='VERIFIED'",new Object[]{lastError,currentSegment});}catch(Exception ignored){}
             }finally{
                 phase=lastError.isEmpty()?"IDLE":"RETRY";
                 running.set(false);
@@ -75,6 +82,8 @@ public final class ArchiveSync {
     }
 
     public static JSONObject state(Context context){
+        if(!PersonalBackup.enabled(context))return EventStore.object("enabled",false,"remote","Supabase personnel","segment_size",JournalSegments.LIMIT);
+        try{prepare(context,false);}catch(Exception e){return EventStore.object("enabled",false,"last_error","Connexion personnelle non vérifiée");}
         JSONObject out=EventStore.object(
             "running",running.get(),
             "last_error",lastError.isEmpty()?status(context).getString("last_error",""):lastError,
@@ -85,17 +94,17 @@ public final class ArchiveSync {
         );
         try{
             SQLiteDatabase db=EventStore.get(context).getReadableDatabase();
-            try(Cursor c=db.rawQuery("SELECT COUNT(*),COALESCE(SUM(CASE WHEN remote_state='VERIFIED' THEN 1 ELSE 0 END),0),COALESCE(MAX(CASE WHEN remote_state='VERIFIED' THEN segment ELSE 0 END),0) FROM journal_archive_state",null)){
+            try(Cursor c=db.rawQuery("SELECT COUNT(*),COALESCE(SUM(CASE WHEN remote_state='VERIFIED' THEN 1 ELSE 0 END),0),COALESCE(MAX(CASE WHEN remote_state='VERIFIED' THEN segment ELSE 0 END),0) FROM "+table()+"",null)){
                 if(c.moveToFirst()){
                     out.put("tracked_segments",c.getLong(0));
                     out.put("verified_segments",c.getLong(1));
                     out.put("last_verified_segment",c.getLong(2));
                 }
             }
-            try(Cursor c=db.rawQuery("SELECT COUNT(*),COALESCE(SUM(s.event_count),0) FROM journal_segments s LEFT JOIN journal_archive_state a ON a.segment=s.segment WHERE s.sealed=1 AND COALESCE(a.remote_state,'')!='VERIFIED'",null)){
+            try(Cursor c=db.rawQuery("SELECT COUNT(*),COALESCE(SUM(s.event_count),0) FROM journal_segments s LEFT JOIN "+table()+" a ON a.segment=s.segment WHERE s.sealed=1 AND COALESCE(a.remote_state,'')!='VERIFIED'",null)){
                 if(c.moveToFirst()){out.put("pending_segments",c.getLong(0));out.put("pending_events",c.getLong(1));}
             }
-            try(Cursor c=db.rawQuery("SELECT segment,uploaded_through_id,error FROM journal_archive_state WHERE remote_state!='VERIFIED' ORDER BY segment LIMIT 1",null)){
+            try(Cursor c=db.rawQuery("SELECT segment,uploaded_through_id,error FROM "+table()+" WHERE remote_state!='VERIFIED' ORDER BY segment LIMIT 1",null)){
                 if(c.moveToFirst()){out.put("pending_segment",c.getLong(0));out.put("uploaded_through_id",c.getLong(1));}
             }
         }catch(Exception e){
@@ -106,6 +115,8 @@ public final class ArchiveSync {
 
     interface Transport {JSONObject send(Identity identity,JSONObject body)throws Exception;}
     static void sync(Context context,Transport transport)throws Exception{
+        if(!PersonalBackup.enabled(context))throw new IOException("Sauvegarde personnelle désactivée");
+        prepare(context,false);
         currentSegment=0;phase="START";
         Identity identity=identity(context);
         SQLiteDatabase db=EventStore.get(context).getWritableDatabase();
@@ -116,14 +127,14 @@ public final class ArchiveSync {
 
             String manifest=segmentManifest(db,s);
             long through=0;
-            try(Cursor c=db.rawQuery("SELECT client_sha256,uploaded_through_id FROM journal_archive_state WHERE segment=?",new String[]{String.valueOf(s.segment)})){
+            try(Cursor c=db.rawQuery("SELECT client_sha256,uploaded_through_id FROM "+table()+" WHERE segment=?",new String[]{String.valueOf(s.segment)})){
                 if(c.moveToFirst()){
                     if(!manifest.equalsIgnoreCase(c.getString(0)))throw new IOException("Manifeste local modifié : segment "+s.segment);
                     through=c.getLong(1);
                 }
             }
-            db.execSQL("INSERT OR IGNORE INTO journal_archive_state(segment,client_sha256) VALUES(?,?)",new Object[]{s.segment,manifest});
-            db.execSQL("UPDATE journal_archive_state SET remote_state='UPLOADING',error=NULL WHERE segment=?",new Object[]{s.segment});
+            db.execSQL("INSERT OR IGNORE INTO "+table()+"(segment,client_sha256) VALUES(?,?)",new Object[]{s.segment,manifest});
+            db.execSQL("UPDATE "+table()+" SET remote_state='UPLOADING',error=NULL WHERE segment=?",new Object[]{s.segment});
 
             JSONObject begin=EventStore.object(
                 "schema","aiv-journal/1",
@@ -142,7 +153,8 @@ public final class ArchiveSync {
             phase="BEGIN";
             JSONObject beginReply=transport.send(identity,begin);
             if("VERIFIED".equals(beginReply.optString("state"))){
-                requireReceipt(beginReply,s,manifest);
+                JSONObject verified=transport.send(identity,EventStore.object("schema","aiv-journal/1","action","finalize","segment_no",s.segment));
+                requireReceipt(verified,s,manifest);
                 markVerified(db,s.segment,manifest);
                 return;
             }
@@ -175,7 +187,7 @@ public final class ArchiveSync {
         String sql="SELECT s.segment,s.first_id,s.last_id,s.event_count,"+
             "(SELECT MIN(timestamp_ms) FROM events WHERE id BETWEEN s.first_id AND s.last_id),"+
             "(SELECT MAX(timestamp_ms) FROM events WHERE id BETWEEN s.first_id AND s.last_id) "+
-            "FROM journal_segments s LEFT JOIN journal_archive_state a ON a.segment=s.segment "+
+            "FROM journal_segments s LEFT JOIN "+table()+" a ON a.segment=s.segment "+
             "WHERE s.sealed=1 AND s.event_count>0 AND COALESCE(a.remote_state,'')!='VERIFIED' "+
             "ORDER BY s.segment LIMIT 1";
         try(Cursor c=db.rawQuery(sql,null)){
@@ -256,38 +268,20 @@ public final class ArchiveSync {
     }
 
     private static void saveProgress(SQLiteDatabase db,long segment,long eventId){
-        db.execSQL("UPDATE journal_archive_state SET uploaded_through_id=?,remote_state='UPLOADING',error=NULL WHERE segment=?",
+        db.execSQL("UPDATE "+table()+" SET uploaded_through_id=?,remote_state='UPLOADING',error=NULL WHERE segment=?",
             new Object[]{eventId,segment});
     }
 
     private static void markVerified(SQLiteDatabase db,long segment,String sha){
         long now=System.currentTimeMillis();
-        db.execSQL("UPDATE journal_archive_state SET remote_state='VERIFIED',client_sha256=?,verified_at_ms=?,error=NULL WHERE segment=?",
+        db.execSQL("UPDATE "+table()+" SET remote_state='VERIFIED',client_sha256=?,verified_at_ms=?,error=NULL WHERE segment=?",
             new Object[]{sha,now,segment});
         lastVerifiedSegment=segment;
     }
 
     private static JSONObject post(Identity identity,JSONObject body)throws Exception{
-        HttpURLConnection h=(HttpURLConnection)new URL(ENDPOINT).openConnection();
-        h.setConnectTimeout(15000);
-        h.setReadTimeout(60000);
-        h.setRequestMethod("POST");
-        h.setDoOutput(true);
-        h.setRequestProperty("Content-Type","application/json; charset=utf-8");
-        h.setRequestProperty("Accept","application/json");
-        h.setRequestProperty("apikey",API_KEY);
-        h.setRequestProperty("x-aiv-install-id",identity.id);
-        h.setRequestProperty("x-aiv-install-secret",identity.secret);
-        byte[] bytes=body.toString().getBytes(StandardCharsets.UTF_8);
-        h.setFixedLengthStreamingMode(bytes.length);
-        try(OutputStream out=h.getOutputStream()){out.write(bytes);}
-        int code=h.getResponseCode();
-        InputStream in=code>=200&&code<300?h.getInputStream():h.getErrorStream();
-        String response=read(in);
-        h.disconnect();
-        JSONObject result=response.isEmpty()?new JSONObject():new JSONObject(response);
-        if(code<200||code>=300)throw new IOException("HTTP "+code+" · "+result.optString("error","erreur distante"));
-        return result;
+        Context c=syncContext.get();if(c==null||!PersonalBackup.enabled(c))throw new IOException("Sauvegarde personnelle désactivée");
+        return PersonalBackup.rpc(c,body);
     }
 
     private static Identity identity(Context context){

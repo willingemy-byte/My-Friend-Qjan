@@ -49,6 +49,7 @@ public final class MainActivity extends Activity {
     private static final int JSONL_EXPORT_REQUEST=1207,SQLITE_EXPORT_REQUEST=1208;
     private static final int ANALYSIS_EXPORT_REQUEST=1204;
     private static final int NETWORK_REPORT_REQUEST=1209;
+    private static final int PERSONAL_SCHEMA_REQUEST=1210;
     private static final int SHIZUKU_PERMISSION_REQUEST=1205;
     private static final int PERMISSION_EXPORT_REQUEST=1206;
     private static final int BG=0xff04102f;
@@ -107,6 +108,7 @@ public final class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle state){
         super.onCreate(state);
+        ProductAccess.initialize(this);
         if(Build.VERSION.SDK_INT>=21){
             getWindow().setStatusBarColor(BG);
             getWindow().setNavigationBarColor(BG);
@@ -192,6 +194,7 @@ public final class MainActivity extends Activity {
         nav.setPadding(dp(10),dp(8),dp(10),dp(8));
         nav.setBackgroundColor(0xff050b12);
         addTab("Présentation","presentation");
+        addTab("À propos / Licence","licence");
         addTab("Journal","journal");
         addTab("Flux","flows");
         addTab("Traqueurs","trackers");
@@ -199,7 +202,7 @@ public final class MainActivity extends Activity {
         addTab("Applications","applications");
         addTab("Accès","access");
         addTab("Intégrité","integrity");
-        addTab("Shizuku","shizuku");
+        addTab(ProductAccess.paidEnabled(this)?"Shizuku":"🔒 Shizuku","shizuku");
         addTab("Supabase","supabase");
         scroller.addView(nav);
         root.addView(scroller,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -274,8 +277,9 @@ public final class MainActivity extends Activity {
         else if("applications".equals(id))renderApplications("");
         else if("access".equals(id))renderSpecialAccess();
         else if("integrity".equals(id))renderIntegrity();
-        else if("shizuku".equals(id)){ if(previewTier>=TIER_PAID)renderShizuku(); else renderUpgradeGate(); }
+        else if("shizuku".equals(id)){ if(ProductAccess.paidEnabled(this))renderShizuku(); else renderUpgradeGate(); }
         else if("supabase".equals(id))renderSupabase();
+        else if("licence".equals(id))renderUpgradeCheckout();
         else if("status".equals(id))renderAivStatus();
         else renderPresentation();
     }
@@ -769,7 +773,7 @@ public final class MainActivity extends Activity {
         integrityCell(3,1,s.optBoolean("core_active")?"OPÉRATIONNEL":"À VÉRIFIER");integrityCell(3,2,"Couverture "+(s.optBoolean("coverage_complete")?"COMPLÈTE":"PARTIELLE")+" · Collecte "+yesNo(s.optBoolean("collector_active"))+" · Corrélation "+yesNo(s.optBoolean("correlation_active"))+" · VPN "+(s.optBoolean("vpn_expected")?yesNo(s.optBoolean("vpn_active")):"OPTIONNEL")+" · Shizuku "+yesNo(s.optBoolean("shizuku_active"))+" · Alertes "+s.optLong("unread_anomalies")+" · Historique "+(analysis==null?0:analysis.optLong("historical_unread")));
         integrityCell(5,1,s.optString("observed_package","—"));integrityCell(6,1,s.optInt("node_count")+" nœuds");integrityCell(6,2,s.optInt("text_node_count")+" nœuds texte");integrityCell(7,1,s.optString("comparison_status"));integrityCell(7,2,s.optString("scope")+" · "+s.optString("visual_reason"));integrityCell(8,1,(s.optBoolean("appops_active")?"OBSERVÉ":"NON DISPONIBLE")+(op==null?"":" · "+op.optString("state")));integrityCell(8,2,String.valueOf(op));
     }
-    private void authorizeShizukuObservation(){try{
+    private void authorizeShizukuObservation(){if(!ProductAccess.paidEnabled(this)){renderUpgradeGate();return;}try{
         if(!rikka.shizuku.Shizuku.pingBinder()){showDetail("Observation AppOps","Démarre Shizuku puis autorise AIV pour lire AppOps.","Ouvrir Shizuku",()->openPackage("moe.shizuku.privileged.api"));return;}
         if(rikka.shizuku.Shizuku.shouldShowRequestPermissionRationale()){showDetail("Observation AppOps","Autorise AIV dans Shizuku. Le lecteur AIV utilise uniquement les commandes AppOps de lecture.","Ouvrir Shizuku",()->openPackage("moe.shizuku.privileged.api"));return;}
         rikka.shizuku.Shizuku.requestPermission(SHIZUKU_PERMISSION_REQUEST);
@@ -894,6 +898,11 @@ public final class MainActivity extends Activity {
 
     private void renderSupabase(){
         page.removeAllViews();
+        page.addView(sectionTitle("Réglages > Sauvegarde personnelle > Supabase"));
+        page.addView(note("Vos données restent sur cet appareil sauf export volontaire."));
+        if(!ProductAccess.paidEnabled(this)){page.addView(note("Sauvegarde personnelle optionnelle disponible avec AIV Founder."));page.addView(action("Exporter le journal local",v->beginJournalExport()));return;}
+        personalBackupControls();
+        if(!PersonalBackup.enabled(this)){page.addView(note("Sauvegarde distante désactivée. Aucune connexion testée."));return;}
         page.addView(sectionTitle("Supabase · archive"));
         page.addView(note("État de l’archive distante. AIV envoie seulement les segments scellés du journal; un segment contient jusqu’à 50 000 événements. Un segment courant non scellé reste local jusqu’à sa fermeture."));
         try{
@@ -942,6 +951,23 @@ public final class MainActivity extends Activity {
         }
     }
 
+    private void personalBackupControls(){
+        page.addView(note("1. Créer votre projet Supabase.\n2. Exécuter la migration SQL AIV fournie.\n3. Activer les connexions anonymes dans Supabase Auth (session privée, RLS par utilisateur).\n4. Entrer l’URL et la publishable key.\n5. Tester puis activer volontairement la sauvegarde. Purge automatique désactivée."));
+        page.addView(action("Exporter le schéma Supabase personnel v1",v->startActivityForResult(new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("text/plain").putExtra(Intent.EXTRA_TITLE,"AIV-Supabase-schema-v1.sql"),PERSONAL_SCHEMA_REQUEST)));
+        try{JSONObject test=PersonalBackup.testStatus(this);page.addView(note(test.optBoolean("tested")?"Test réussi · Schéma v"+test.optInt("schema_version")+" · Lecture : "+yesNo(test.optBoolean("read_ok"))+" · Écriture : "+yesNo(test.optBoolean("write_ok")):"Connexion non testée / non validée"));}catch(Exception e){page.addView(note("Connexion non validée"));}
+        page.addView(action("Configurer / tester Supabase",v->{
+            LinearLayout form=new LinearLayout(this);form.setOrientation(LinearLayout.VERTICAL);
+            EditText url=new EditText(this);url.setHint("https://projet.supabase.co");form.addView(url);
+            EditText key=new EditText(this);key.setHint("sb_publishable_...");key.setInputType(129);form.addView(key);
+            new AlertDialog.Builder(this).setTitle("Votre Supabase personnel").setView(form).setPositiveButton("Enregistrer et tester",(d,w)->new Thread(()->{try{
+                PersonalBackup.configure(this,url.getText().toString(),key.getText().toString());
+                JSONObject result=PersonalBackup.test(this);
+                main.post(()->{renderSupabase();showJsonDetail("Tests réels Supabase",result,null);});
+            }catch(Exception e){main.post(()->showDetail("Configuration refusée",e.getMessage(),null,null));}},"aiv-byo-test").start()).setNegativeButton("Annuler",null).show();
+        }));
+        page.addView(action("Activer la sauvegarde après test réussi",v->{try{PersonalBackup.enable(this);renderSupabase();}catch(Exception e){showDetail("Sauvegarde",e.getMessage(),null,null);}}));
+        page.addView(action("Désactiver la sauvegarde",v->{PersonalBackup.disable(this);renderSupabase();}));
+    }
     private void renderShizuku(){
         renderPermissionApps("",0);
     }
@@ -1325,25 +1351,35 @@ public final class MainActivity extends Activity {
 
     private void renderUpgradeGate(){
         page.removeAllViews();
-        page.addView(sectionTitle("Shizuku · User Paid"));
-        page.addView(card("User Free",
-            "Tu peux observer le journal, les applications, les permissions, les flux, les traqueurs, les anomalies et l'intégrité d'affichage."));
-        page.addView(card("User Paid",
-            "Ajoute le contrôle Shizuku, le retrait contrôlé des permissions, la restauration, la surveillance persistante et l'identité cryptographique VPN."));
-        page.addView(action("Passer à User Paid",v->renderUpgradeCheckout()));
+        page.addView(sectionTitle("🔒 Shizuku · AIV complet"));
+        page.addView(card("AIV Free","Journal, flux, inventaire, permissions publiques, anomalies, intégrité et export local."));
+        page.addView(note("Information supplémentaire disponible avec AIV complet / Shizuku"));
+        page.addView(card("AIV Founder","Analyse AppOps, contrôle Shizuku, maintien des refus et corrélations avancées. Les décisions manuelles restent prioritaires."));
+        page.addView(action("Débloquer AIV complet",v->renderUpgradeCheckout()));
     }
-
     private void renderUpgradeCheckout(){
         page.removeAllViews();
-        page.addView(sectionTitle("Passer à User Paid"));
-        page.addView(note("Écran de conversion produit. Le fournisseur de paiement n'est pas encore connecté dans cette build."));
-        page.addView(card("User Paid",
-            "Contrôle Shizuku · plan de retrait · application par lots · vérification avant/après · restauration · watcher persistant · identité cryptographique VPN Android Keystore"));
-        Button pay=action("Continuer vers le paiement",v->toast("Paiement à connecter avant commercialisation"));
-        page.addView(pay);
-        page.addView(action("Voir l'aperçu User Paid",v->{previewTier=TIER_PAID;refreshTierFooter();showPage("shizuku");}));
+        boolean active=LicenseClient.active(this);
+        page.addView(sectionTitle(ProductAccess.paidEnabled(this)?"AIV Founder — Lifetime Updates":"AIV Free"));
+        page.addView(note("ALL IN VISIBLE · AIV 2.2.4-final"));
+        page.addView(card("Offre fondateur","Débloquer AIV complet\n50 $ CAD une seule fois\nMises à jour à vie\nOffre fondateur limitée aux 1 000 premières licences"));
+        if(active){
+            page.addView(note("Votre licence AIV Founder est active"));
+            int number=LicenseClient.founderNumber(this);
+            if(number>0)page.addView(note("Licence fondateur : "+number+" / 1000"));
+            if(!ProductAccess.paidEnabled(this))page.addView(action("Installer AIV Founder signé",v->licenseJob(()->FounderUpgrade.download(this),"APK vérifié : installation Android proposée")));
+        }
+        page.addView(action("Continuer vers PayPal",v->licenseJob(()->{
+            JSONObject order=LicenseClient.createOrder(this);
+            String approval=order.getString("approve_url");
+            main.post(()->startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(approval))));
+        },"Commande créée : confirme le paiement dans PayPal")));
+        page.addView(action("Vérifier le paiement et la licence",v->licenseJob(()->LicenseClient.confirm(this),"Vérification serveur terminée")));
+        page.addView(note("Le retour du navigateur ne débloque aucune fonction. La confirmation vient du serveur de licence."));
+        page.addView(note("Vos données restent sur cet appareil sauf export volontaire."));
     }
-
+    private interface LicenseJob {void run()throws Exception;}
+    private void licenseJob(LicenseJob job,String success){new Thread(()->{try{job.run();main.post(()->{previewTier=ProductAccess.demoTier(this);renderUpgradeCheckout();toast(success);});}catch(Exception e){main.post(()->showDetail("Licence AIV",e.getMessage(),null,null));}},"aiv-licence").start();}
     private void renderTiPreview(){
         currentPage="ti";
         generation.incrementAndGet();
@@ -1459,6 +1495,10 @@ public final class MainActivity extends Activity {
 
     @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){
         super.onActivityResult(requestCode,resultCode,data);
+        if(requestCode==PERSONAL_SCHEMA_REQUEST&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){
+            try(java.io.InputStream in=getAssets().open("aiv-supabase-schema-v1.sql");java.io.OutputStream out=getContentResolver().openOutputStream(data.getData())){if(out==null)throw new java.io.IOException("Destination indisponible");byte[] buffer=new byte[8192];int n;while((n=in.read(buffer))!=-1)out.write(buffer,0,n);toast("Schéma SQL v1 exporté");}catch(Exception e){showDetail("Export SQL",e.getMessage(),null,null);}return;
+        }
+
         if(requestCode==VPN_REQUEST&&resultCode==RESULT_OK){
             activateNetworkCapture();
         }else if((requestCode==EXPORT_REQUEST||requestCode==JSONL_EXPORT_REQUEST||requestCode==SQLITE_EXPORT_REQUEST)&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null){
@@ -1474,6 +1514,7 @@ public final class MainActivity extends Activity {
 
     @Override public void onResume(){
         super.onResume();
+        LicenseClient.refreshIfNeeded(this);
         main.removeCallbacks(headerStatusPulse);
         main.post(headerStatusPulse);
         if(page!=null&&"presentation".equals(currentPage))main.postDelayed(this::renderPresentation,250);

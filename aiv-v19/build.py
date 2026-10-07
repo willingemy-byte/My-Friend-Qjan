@@ -10,6 +10,9 @@ p=argparse.ArgumentParser()
 p.add_argument('--android-jar',required=True,type=Path)
 p.add_argument('--build-tools',required=True,type=Path)
 p.add_argument('--shizuku-dir',required=True,type=Path)
+p.add_argument('--edition',choices=['FREE','FOUNDER_FULL'])
+p.add_argument('--version-code',type=int)
+p.add_argument('--license-config',type=Path)
 native=p.add_mutually_exclusive_group(required=True)
 native.add_argument('--ndk',type=Path)
 native.add_argument('--reuse-native-apk',type=Path)
@@ -38,6 +41,31 @@ run('python3',root/'tools/generate_access_policy.py')
 # Build facts are generated outside tracked sources, using the actual manifest.
 manifest=ET.parse(root/'app/src/main/AndroidManifest.xml').getroot()
 android='{http://schemas.android.com/apk/res/android}'
+build_manifest=root/'app/src/main/AndroidManifest.xml'
+if a.edition:
+    if a.version_code is None or a.version_code<=224:
+        raise SystemExit('Public editions require a versionCode above baseline 224')
+    manifest.set(android+'versionCode',str(a.version_code))
+    manifest.set(android+'versionName','2.2.4-final')
+    # Installation stays on Android's Package Installer; URI access is temporary.
+    ET.SubElement(manifest,'uses-permission',{android+'name':'android.permission.REQUEST_INSTALL_PACKAGES'})
+    app=manifest.find('application')
+    app.set(android+'name','fr.erick.journallocal.AivApplication')
+    ET.SubElement(app,'provider',{android+'name':'fr.erick.journallocal.UpgradeFileProvider',android+'authorities':'com.allinvisible.aiv.upgrade',android+'exported':'false',android+'grantUriPermissions':'true'})
+    build_manifest=build/'edition-manifest.xml'
+    ET.ElementTree(manifest).write(build_manifest,encoding='utf-8',xml_declaration=True)
+settings=json.loads(a.license_config.read_text()) if a.license_config else {}
+if set(settings)-{'base_url','public_key_spki_b64','apk_origin','apk_certificate_sha256'}:
+    raise SystemExit('Only public license configuration is accepted')
+for key in ('base_url','apk_origin'):
+    if settings.get(key) and not settings[key].startswith('https://'):
+        raise SystemExit('License and distribution URLs require HTTPS')
+edition_source=build/'generated/fr/erick/journallocal/EditionConfig.java'
+edition_source.parent.mkdir(parents=True,exist_ok=True)
+edition_source.write_text('package fr.erick.journallocal;\nfinal class EditionConfig {\n'+
+    'static final String EDITION='+json.dumps(a.edition or 'LEGACY_OWNER')+';\n'+
+    '\n'.join('static final String '+name+'='+json.dumps(settings.get(key,''))+';' for name,key in
+        [('LICENSE_URL','base_url'),('LICENSE_PUBLIC_KEY','public_key_spki_b64'),('APK_ORIGIN','apk_origin'),('APK_CERTIFICATE','apk_certificate_sha256')])+'\n}\n')
 commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip()
 dirty=bool(subprocess.check_output(['git','status','--porcelain','--untracked-files=normal'],cwd=root,text=True).strip())
 source_hash=hashlib.sha256()
@@ -87,7 +115,7 @@ for abi,target in [('arm64-v8a','aarch64-linux-android26'),('x86_64','x86_64-lin
         cpp/'relay.c',cpp/'tls_sni.c',cpp/'jni.c','-L'+str(out),'-ljournal_zdtun',
         '-o',out/'libjournalrelay.so')
 
-sources=sorted((root/'app/src/main/java').rglob('*.java'))+[metadata]
+sources=sorted((root/'app/src/main/java').rglob('*.java'))+[metadata,edition_source]
 depdir=build/'deps'
 if depdir.exists(): shutil.rmtree(depdir)
 depdir.mkdir(parents=True,exist_ok=True)
@@ -101,6 +129,13 @@ for name in ['aidl-13.1.5.aar','shared-13.1.5.aar','api-13.1.5.aar','provider-13
     dep_jars.append(out)
 annotation=a.shizuku_dir/'annotation-1.3.0.jar'
 if not annotation.is_file(): raise SystemExit('Missing AndroidX annotation dependency: '+str(annotation))
+# The distribution upgrade verifies the APK cryptographically before handing it to Android.
+apksig=depdir/'apksig.jar'
+with zipfile.ZipFile(a.build_tools/'lib/apksigner.jar') as src, zipfile.ZipFile(apksig,'w') as dst:
+    for entry in src.infolist():
+        if entry.filename.startswith('com/android/apksig/'):
+            dst.writestr(entry,src.read(entry))
+dep_jars.append(apksig)
 compile_cp=os.pathsep.join(str(x) for x in dep_jars+[annotation])
 bootclasspath=os.pathsep.join([str(a.android_jar),str(a.build_tools/'core-lambda-stubs.jar')])
 run('javac','-encoding','UTF-8','-source','8','-target','8','-bootclasspath',bootclasspath,
@@ -124,9 +159,12 @@ for src in asset_src.rglob('*'):
     dst=runtime_assets/src.relative_to(asset_src)
     dst.parent.mkdir(parents=True,exist_ok=True)
     shutil.copy2(src,dst)
+personal_schema=root.parent/'supabase/personal/schema-v1.sql'
+if personal_schema.is_file():
+    shutil.copy2(personal_schema,runtime_assets/'aiv-supabase-schema-v1.sql')
 
 unsigned=build/'all-in-visible-unsigned.apk'
-run(a.build_tools/'aapt2','link','--manifest',root/'app/src/main/AndroidManifest.xml',
+run(a.build_tools/'aapt2','link','--manifest',build_manifest,
     '-I',a.android_jar,'-A',runtime_assets,'--min-sdk-version','26',
     '--target-sdk-version','35','-o',unsigned,resources)
 

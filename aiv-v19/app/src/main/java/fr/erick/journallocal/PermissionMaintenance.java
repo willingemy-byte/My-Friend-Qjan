@@ -58,7 +58,7 @@ final class PermissionMaintenance {
         write(c,"policy.json",p);rights=p.getJSONObject("targets").length();known=p.getJSONObject("known").length();pending=p.getJSONObject("pending").length();
     }
     private static void access()throws Exception{
-        if(!AccessPolicy.allows("shizuku.control",AccessPolicy.DISTRIBUTION_TIER)||!PermissionControl.authorized())throw new IllegalStateException("Shizuku arrêté ou non autorisé");
+        if(!AccessPolicy.allows("shizuku.control",ProductAccess.verifiedTier())||!PermissionControl.authorized())throw new IllegalStateException("Shizuku arrêté ou non autorisé");
     }
     private static List<PackageInfo> installed(Context c)throws Exception{
         List<PackageInfo> list=c.getPackageManager().getInstalledPackages(PackageManager.GET_PERMISSIONS|PackageManager.MATCH_DISABLED_COMPONENTS);list.removeIf(p->p.applicationInfo==null||p.applicationInfo.uid/100000!=USER);list.sort(Comparator.comparing(p->p.packageName));

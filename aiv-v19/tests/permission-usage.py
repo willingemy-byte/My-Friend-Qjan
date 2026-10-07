@@ -12,6 +12,7 @@ existing=ast.literal_eval(next(n.value for n in tree.body if isinstance(n,ast.As
 keep=['android/content/ContentValues.java','android/database/Cursor.java','android/database/sqlite/SQLiteDatabase.java','android/database/sqlite/SQLiteOpenHelper.java','android/os/SystemClock.java','android/os/Build.java']
 stubs={k:existing[k] for k in keep}
 stubs.update({
+'fr/erick/journallocal/ProductAccess.java':'package fr.erick.journallocal;class ProductAccess{static boolean paidEnabled(Object c){return true;}}',
 'fr/erick/journallocal/ScreenIntegrityService.java':'package fr.erick.journallocal;import org.json.*;class ScreenIntegrityService{static JSONObject state(){return new JSONObject();}}',
 'fr/erick/journallocal/NetworkReport.java':'''package fr.erick.journallocal;import android.content.Context;import org.json.JSONObject;class NetworkReport{static void enrich(Context c,JSONObject e){}static String brief(JSONObject e){return "";}static String explain(JSONObject e){return "";}}''',
 'android/os/Process.java':'''package android.os;public class Process{public static int myUid(){return 10444;}}''',

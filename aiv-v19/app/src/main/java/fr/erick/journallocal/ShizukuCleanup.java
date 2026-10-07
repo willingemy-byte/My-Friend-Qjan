@@ -160,7 +160,7 @@ public final class ShizukuCleanup {
 
     public static void requestOrRun(){
         if(DeveloperControl.isBusy()){status="Intervention de contrôle en cours";return;}
-        if(!AccessPolicy.allows("shizuku.control",AccessPolicy.DISTRIBUTION_TIER)){status="Contrôle Shizuku réservé au palier 2";pending=false;return;}
+        if(!AccessPolicy.allows("shizuku.control",ProductAccess.verifiedTier())){status="Contrôle Shizuku réservé au palier 2";pending=false;return;}
         pending=true;
         status="Préparation du nettoyage Shizuku";
         attemptRun();
@@ -266,7 +266,7 @@ public final class ShizukuCleanup {
     }
 
     public static synchronized JSONObject restore(Context c)throws Exception{
-        if(!AccessPolicy.allows("shizuku.restore",AccessPolicy.DISTRIBUTION_TIER))throw new SecurityException("Restauration réservée au palier 2");
+        if(!AccessPolicy.allows("shizuku.restore",ProductAccess.verifiedTier()))throw new SecurityException("Restauration réservée au palier 2");
         if(running||DeveloperControl.isBusy())throw new IllegalStateException("Une action est déjà en cours");
         File f=snapshotFile(c);
         if(!f.isFile())return EventStore.object("restored",0,"failed",0,"error","Aucun snapshot de nettoyage");
@@ -301,7 +301,7 @@ public final class ShizukuCleanup {
     }
 
     public static synchronized JSONObject normalize(Context c,String pkg,String profile,String stamp)throws Exception {
-        if(!AccessPolicy.allows("shizuku.control",AccessPolicy.DISTRIBUTION_TIER))throw new SecurityException("Contrôle réservé au palier 2");
+        if(!AccessPolicy.allows("shizuku.control",ProductAccess.verifiedTier()))throw new SecurityException("Contrôle réservé au palier 2");
         if(running||DeveloperControl.isBusy())throw new IllegalStateException("Une action est déjà en cours");
         if(!Shizuku.pingBinder()||Shizuku.checkSelfPermission()!=PackageManager.PERMISSION_GRANTED)throw new IllegalStateException("Démarre et autorise Shizuku avant d’appliquer la norme");
         JSONObject preview=PermissionNorms.preview(c,pkg,profile);
@@ -369,7 +369,7 @@ public final class ShizukuCleanup {
     private static final class ExecResult{final int code;final String out,err;ExecResult(int c,String o,String e){code=c;out=o;err=e;}}
 
     private static ExecResult exec(String command)throws Exception{
-        if(!AccessPolicy.allows("shizuku.control",AccessPolicy.DISTRIBUTION_TIER))throw new SecurityException("Contrôle réservé au palier 2");
+        if(!AccessPolicy.allows("shizuku.control",ProductAccess.verifiedTier()))throw new SecurityException("Contrôle réservé au palier 2");
         if(!Shizuku.pingBinder()||Shizuku.checkSelfPermission()!=PackageManager.PERMISSION_GRANTED)throw new IllegalStateException("Shizuku non autorisé");
         ControlShell.Result r=ControlShell.run(command);
         return new ExecResult(r.code,r.out,r.err);

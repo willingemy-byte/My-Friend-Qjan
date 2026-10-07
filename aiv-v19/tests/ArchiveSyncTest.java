@@ -24,7 +24,7 @@ public final class ArchiveSyncTest {
             db.setTransactionSuccessful();
         }finally{db.endTransaction();}
         c.getSharedPreferences("aiv_archive_status",0).edit().putLong("next_attempt_ms",Long.MAX_VALUE).commit();
-        return c;
+        ArchiveSync.state(c);return c;
     }
     static final class Remote implements ArchiveSync.Transport {
         final TreeMap<Long,String> events=new TreeMap<>();int batches,posted,failBatch=-1;boolean lostAck,badSha,badCount,alreadyVerified;String identity,manifest;long count;
@@ -47,6 +47,7 @@ public final class ArchiveSyncTest {
                 return EventStore.object("ok",true);
             }
             if("finalize".equals(action)){
+                if(alreadyVerified)return receipt();
                 StringJoiner lines=new StringJoiner("\n");for(Map.Entry<Long,String> e:events.entrySet())lines.add(e.getKey()+":"+e.getValue());
                 check(sha(lines.toString()).equals(manifest),"ordered LF manifest agrees independently");check(events.size()==count,"server count exact");return receipt();
             }
@@ -54,11 +55,11 @@ public final class ArchiveSyncTest {
         }
         JSONObject receipt(){return EventStore.object("ok",true,"state","VERIFIED","received_count",badCount?count-1:count,"server_segment_sha256",badSha?"0".repeat(64):manifest);}
     }
-    static void failed(Context c,Remote remote)throws Exception{boolean caught=false;try{ArchiveSync.sync(c,remote);}catch(IOException e){caught=true;}check(caught,"failure rejected");check(scalar(EventStore.instance.db,"SELECT COUNT(*) FROM journal_archive_state WHERE remote_state='VERIFIED'")==0,"unverified data never marked verified");}
+    static void failed(Context c,Remote remote)throws Exception{boolean caught=false;try{ArchiveSync.sync(c,remote);}catch(IOException e){caught=true;}check(caught,"failure rejected");check(scalar(EventStore.instance.db,"SELECT COUNT(*) FROM personal_archive_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa WHERE remote_state='VERIFIED'")==0,"unverified data never marked verified");}
     public static void main(String[] args)throws Exception{
         File root=new File(args[0]);root.mkdirs();
         Context c=fixture(root,"resume",250,true);Remote remote=new Remote();remote.failBatch=3;
-        failed(c,remote);check(scalar(EventStore.instance.db,"SELECT uploaded_through_id FROM journal_archive_state")==409,"only acknowledged prefix committed");
+        failed(c,remote);check(scalar(EventStore.instance.db,"SELECT uploaded_through_id FROM personal_archive_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")==409,"only acknowledged prefix committed");
         EventStore.instance.db.close();c=new Context(c.root);new EventStore(c);remote.failBatch=-1;
         ArchiveSync.sync(c,remote);check(remote.posted==250&&remote.batches==4,"restart sent remaining 50 only");
         check(ArchiveSync.state(c).getLong("verified_segments")==1,"durable verified status");check(scalar(EventStore.instance.db,"SELECT COUNT(*) FROM events")==250,"raw observations preserved");EventStore.instance.db.close();

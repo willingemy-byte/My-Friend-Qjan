@@ -28,7 +28,7 @@ final class PermissionControl {
         catch(Throwable t){return false;}
     }
     private static void access()throws Exception{
-        if(!AccessPolicy.allows("shizuku.control",AccessPolicy.DISTRIBUTION_TIER))throw new SecurityException("Contrôle indisponible dans cette édition");
+        if(!AccessPolicy.allows("shizuku.control",ProductAccess.verifiedTier()))throw new SecurityException("Contrôle indisponible dans cette édition");
         if(!authorized())throw new IllegalStateException("Démarre Shizuku puis autorise AIV dans Shizuku");
     }
     private static SharedPreferences prefs(Context c){return c.getSharedPreferences("permission-control",Context.MODE_PRIVATE);}
@@ -496,7 +496,7 @@ final class PermissionControl {
         status="Intervention interrompue : "+e.getMessage();try{report.put("phase","interrupted").put("error",e.toString());saveReport(c,report);}catch(Exception ignored){}
     }
     static synchronized JSONObject restore(Context context)throws Exception{
-        access();if(!AccessPolicy.allows("shizuku.restore",AccessPolicy.DISTRIBUTION_TIER))throw new SecurityException("Restauration indisponible");
+        access();if(!AccessPolicy.allows("shizuku.restore",ProductAccess.verifiedTier()))throw new SecurityException("Restauration indisponible");
         if(!ControlCoordinator.acquire())throw new IllegalStateException("Une intervention est déjà en cours");Context c=context.getApplicationContext();
         try{
             String id=prefs(c).getString("last_apply_report","");if(id.isEmpty())throw new IllegalStateException("Aucun retrait à restaurer");

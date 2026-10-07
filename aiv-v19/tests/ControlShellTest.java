@@ -19,6 +19,10 @@ public final class ControlShellTest {
     }
     static InputStream empty(){return new ByteArrayInputStream(new byte[0]);}
     public static void main(String[] args)throws Exception{
+        ProductAccess.enabled=false;int blockedCalls=Shizuku.calls;
+        try{ControlShell.run("cmd appops set example.app CAMERA deny");throw new AssertionError("FREE mutation permitted");}catch(SecurityException expected){}
+        try{ControlShell.readAppOps(null,0,1024);throw new AssertionError("FREE Shizuku read permitted");}catch(SecurityException expected){}
+        check(Shizuku.calls==blockedCalls,"FREE spawns no Shizuku process");ProductAccess.enabled=true;
         Remote normal=new Remote("flags verified".getBytes("UTF-8"),empty(),false);Shizuku.process=normal;
         ControlShell.Result result=ControlShell.run("dumpsys package com.example.app",1024);
         check(result.code==0&&result.complete&&result.out.equals("flags verified"),"Completed remote process returns complete stdout");
