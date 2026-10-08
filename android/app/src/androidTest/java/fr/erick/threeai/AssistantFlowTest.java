@@ -41,7 +41,9 @@ public class AssistantFlowTest {
         Context c=ApplicationProvider.getApplicationContext();new LocalStore(c).write("conversations.json","[]");c.getSharedPreferences("settings",0).edit().putString("draft","").commit();
         Intent intent=new Intent(c,MainActivity.class).setAction(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,"Rapport AIV de test");
         try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(intent)){
-            scenario.onActivity(a->{List<EditText> e=new ArrayList<>();edits(root(a),e);assertEquals("Rapport AIV de test",e.get(0).getText().toString());tap(a,"Accès");assertNotNull(find(root(a),"Autoriser Shizuku"));});
+            scenario.onActivity(a->{List<EditText> e=new ArrayList<>();edits(root(a),e);assertEquals("",e.get(0).getText().toString());});
+            clickDialog("Ajouter");
+            scenario.onActivity(a->{List<EditText> e=new ArrayList<>();edits(root(a),e);assertTrue(e.get(0).getText().toString().contains("Rapport AIV de test"));tap(a,"Accès");assertNotNull(find(root(a),"Autoriser Shizuku"));});
         }
         assertEquals("[]",new LocalStore(c).read("conversations.json",""));
     }
@@ -56,6 +58,24 @@ public class AssistantFlowTest {
             scenario.onActivity(a->{tap(a,"Accès");assertTrue(contains(root(a),"Microphone :"));assertTrue(contains(root(a),"Contacts :"));assertTrue(contains(root(a),"Agenda :"));assertNotNull(find(root(a),"Demander les accès manquants"));assertTrue(contains(root(a),"Réparer les accès de 3AI"));});
             scenario.recreate();scenario.onActivity(a->{assertTrue(contains(root(a),"Contacts :"));assertTrue(contains(root(a),"Agenda :"));});
         }
+    }
+
+    private android.view.accessibility.AccessibilityNodeInfo node(android.view.accessibility.AccessibilityNodeInfo root,String label){if(root==null)return null;if(label.contentEquals(root.getText()==null?"":root.getText()))return root;for(int i=0;i<root.getChildCount();i++){android.view.accessibility.AccessibilityNodeInfo result=node(root.getChild(i),label);if(result!=null)return result;}return null;}
+    private void clickDialog(String label)throws Exception {long until=System.currentTimeMillis()+5000;while(System.currentTimeMillis()<until){android.view.accessibility.AccessibilityNodeInfo button=node(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().getUiAutomation().getRootInActiveWindow(),label);if(button!=null&&button.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK)){androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().waitForIdleSync();return;}Thread.sleep(50);}fail("Dialog button missing: "+label);}
+    @Test public void hugeDraftCanBeClearedWithoutDeletingMemoryOrChat() throws Exception {
+        Context c=ApplicationProvider.getApplicationContext();LocalStore store=new LocalStore(c);store.write("memory.txt","Mémoire à conserver");store.write("conversations.json","[]");String huge="data:image/jpeg;base64,"+String.join("",Collections.nCopies(100000,"A"));c.getSharedPreferences("settings",0).edit().putString("draft",huge).commit();
+        try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)){
+            scenario.onActivity(a->{List<EditText> e=new ArrayList<>();edits(root(a),e);assertEquals(huge,e.get(0).getText().toString());tap(a,"Vider brouillon");});
+            clickDialog("Annuler");scenario.onActivity(a->{List<EditText> e=new ArrayList<>();edits(root(a),e);assertEquals(huge,e.get(0).getText().toString());tap(a,"Vider brouillon");});
+            clickDialog("Vider");scenario.recreate();scenario.onActivity(a->{List<EditText> e=new ArrayList<>();edits(root(a),e);assertEquals("",e.get(0).getText().toString());});
+        }
+        assertEquals("",c.getSharedPreferences("settings",0).getString("draft","missing"));assertEquals("Mémoire à conserver",store.read("memory.txt",""));assertEquals("[]",store.read("conversations.json",""));
+    }
+    @Test public void binaryImportsAreRejectedAndFrenchReportsPreserved() throws Exception {
+        for(byte[] data:new byte[][]{{'P','K',3,4,0},{(byte)0xff,(byte)0xd8,(byte)0xff}}){try{LocalStore.readImportText(new java.io.ByteArrayInputStream(data),1024);fail("Binary accepted");}catch(java.io.IOException expected){}}
+        String report="{\"résumé\":\"Permissions vérifiées\"}\n";assertEquals(report,LocalStore.readImportText(new java.io.ByteArrayInputStream(report.getBytes("UTF-8")),1024));
+        try{LocalStore.validateImportText("data:image/png;base64,AAAA");fail("Encoded image accepted as text");}catch(java.io.IOException expected){}
+        try{LocalStore.readImportText(new java.io.ByteArrayInputStream("abcd".getBytes("UTF-8")),3);fail("Limit ignored");}catch(java.io.IOException expected){}
     }
 
 }

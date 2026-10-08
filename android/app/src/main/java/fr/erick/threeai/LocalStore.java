@@ -25,6 +25,18 @@ final class LocalStore {
         }
         return out.toString("UTF-8");
     }
+    static String readImportText(InputStream in,int maximum)throws IOException {
+        ByteArrayOutputStream out=new ByteArrayOutputStream();byte[] buffer=new byte[8192];int count;
+        while((count=in.read(buffer))!=-1){if(out.size()+count>maximum)throw new IOException("Fichier trop volumineux.");out.write(buffer,0,count);}
+        String value;
+        try{value=StandardCharsets.UTF_8.newDecoder().onMalformedInput(java.nio.charset.CodingErrorAction.REPORT).onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT).decode(java.nio.ByteBuffer.wrap(out.toByteArray())).toString();}
+        catch(java.nio.charset.CharacterCodingException e){throw new IOException("Ce fichier contient des données binaires. Importer un rapport texte/JSON; joindre une image avec le bouton Image.");}
+        validateImportText(value);return value;
+    }
+    static void validateImportText(String value)throws IOException {
+        for(int i=0;i<value.length();i++){char c=value.charAt(i);if((c<32&&c!='\n'&&c!='\r'&&c!='\t')||c==127)throw new IOException("Ce fichier contient des données binaires, pas un rapport texte/JSON.");}
+        if(value.startsWith("%PDF-")||value.startsWith("data:image/")||value.startsWith("data:application/"))throw new IOException("Contenu de fichier encodé reçu. Choisir un rapport texte/JSON ou joindre l’image séparément.");
+    }
     synchronized void write(String name, String value) throws IOException {
         byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
         if (bytes.length > MAX_FILE) throw new IOException("Stockage local plein : exporter avant de continuer.");
