@@ -1,93 +1,64 @@
-# TreeAI — application Android indépendante
+# 3AI — assistant Android indépendant
 
-![Logo TreeAI](assets/branding/treeai-logo.jpg)
+![Logo 3AI](assets/branding/treeai-logo.jpg)
 
-Nom affiché : **TreeAI** — `T` majuscule, `ree` minuscules, `AI` majuscules. Le logo original conserve l'inscription stylisée **3AI**, conformément au choix d'Erick. Le nom Jarvis désignait ce projet avant ce choix de marque.
+**3AI** est le nom public choisi par Erick le 8 octobre 2026. **Jarvis** est le nom personnel de l’assistant, modifiable dans les réglages. Le logo original est conservé.
 
-Branche de travail : `jarvis-standalone`.
+Branche : `jarvis-standalone`. Paquet Android : `fr.erick.threeai`. Version : `0.1.0`. Android 8 ou ultérieur. Application native Java, indépendante des services de collecte et du CRM/licences d’All In Visible.
 
-Projet dédié à TreeAI, créé avec un arbre de fichiers neuf dans le dépôt My-Friend-Qjan. L'historique Git du dépôt reste accessible. Les autres branches conservent leurs fichiers.
+## Utilisation
 
-## Première étape : clé Ollama
+1. Installer l’APK signé fourni dans la conversation.
+2. Dans **Réglages**, coller sa clé Ollama existante, enregistrer, puis tester. Valeurs initiales : `https://ollama.com/v1` et `gemma4:31b`.
+3. Dans **Mémoire**, coller son texte personnel et enregistrer. La mémoire reste dans les données privées de l’application, séparée du prompt et des conversations. Exporter une copie avant de désinstaller ou de vider les données Android.
+4. Dans **Chat**, utiliser le texte, joindre une image ou appuyer sur **Parler**. Autoriser le microphone. La lecture des réponses utilise une voix française Android. L’option de conversation continue envoie la transcription puis reprend l’écoute après la lecture.
+5. Dans **Accès**, autoriser Shizuku et lancer le diagnostic. Ouvrir AIV ou importer un rapport; le texte importé reste un brouillon jusqu’à son envoi explicite.
 
-Ouvrir [les environnements GitHub du dépôt](https://github.com/willingemy-byte/My-Friend-Qjan/settings/environments).
+Aucun gros modèle n’est installé sur le téléphone. Le modèle reçoit les messages et le bloc mémoire si son utilisation est activée. Les clés sont chiffrées par Android Keystore et associées à l’adresse exacte de l’API. Aucun secret GitHub n’est intégré dans l’APK.
 
-1. Cliquer **New environment**, nommer l'environnement **jarvis**, puis **Configure environment**.
-2. Dans **Deployment branches and tags**, choisir **Selected branches and tags**, puis autoriser la branche **jarvis-standalone**.
-3. Dans **Environment secrets**, cliquer **Add secret**.
-4. Nom : **OLLAMA_API_KEY**. Valeur : la clé créée dans le compte Ollama.
-5. Enregistrer, puis indiquer dans la conversation : « Le secret jarvis est créé ».
+## Écrans et limites
 
-Un secret GitHub est associé à un environnement ou au dépôt, pas directement à une branche. La restriction de l'environnement réserve son usage à cette branche. Les futurs jobs TreeAI devront déclarer `environment: jarvis`.
+- **Chat** : texte, une image par requête, dictée, lecture vocale, conversation continue, export JSON et nouveau chat.
+- **Mémoire** : texte éditable jusqu’à 2 Mo, import/export, conservation locale et boutons de synchronisation Supabase à configurer.
+- **Réglages** : nom, prompt, température, tokens, contexte estimé, fournisseur, URL, modèle et clé.
+- **Accès** : Shizuku, ouverture d’AIV, import/partage de rapports, contacts et agenda autorisés par Android.
 
-Le secret reste dans GitHub : il n'est pas copié dans un fichier public ni dans l'APK. Il sera fourni au processus de test via sa variable d'environnement. Sa création ne connecte pas automatiquement l'application Android et ne déploie pas un serveur.
+Historique local limité à 1 000 messages ou 5 Mo. Les 80 derniers messages sont affichés; jusqu’à 40 messages sont envoyés au modèle. La mémoire est envoyée intégralement: si le budget estimé est dépassé, la requête est refusée sans couper le texte. Le serveur peut imposer ses propres limites. Les images restent jointes à leur requête actuelle, pas archivées dans le chat.
 
-## Objectif de l'application
+La voix utilise les services Android, avec reconnaissance sur appareil privilégiée si disponible. Un service vocal Android peut utiliser son cloud. Les fonctions vocales OpenAI ne sont pas utilisées.
 
-- APK TreeAI distinct : paquet Android, données et signature propres.
-- Ollama Cloud pour le modèle; aucune installation du gros modèle sur le téléphone.
-- Projet Supabase dédié à TreeAI, distinct du projet de journal AIV.
-- Conversations et mémoire persistante conservées séparément.
-- Écran pour consulter, créer, modifier et supprimer les souvenirs.
-- TreeAI peut proposer des souvenirs; l'utilisateur décide des changements à la mémoire durable.
-- Connexions Android/Shizuku à développer selon les autorisations accordées sur l'appareil.
-- Interface lisible, boutons cohérents, voix et images à vérifier avec le modèle et les services choisis.
-- CRM, licences et PayPal gérés dans le projet AIV.
+Shizuku permet ici une connexion réelle à un UserService et un diagnostic limité à `id` et deux propriétés système. Cette version ne donne pas au modèle l’exécution de commandes arbitraires. Le niveau d’accès dépend du démarrage Shizuku (ADB ou root). L’ouverture d’AIV et l’import d’un rapport ne sont pas un accès direct à ses données privées.
 
-## Procédure Ollama à suivre avant l'intégration
+## Changer de modèle
 
-Lire :
-- https://docs.ollama.com/llms.txt
-- https://docs.ollama.com/cloud.md
-- https://docs.ollama.com/api/introduction.md
-- https://docs.ollama.com/api/authentication.md
-- https://docs.ollama.com/api/openai-compatibility.md si un connecteur compatible OpenAI est utilisé.
+Modifier **URL de l’API**, **Modèle** et la clé correspondante dans les réglages, enregistrer puis tester. La mémoire locale reste intacte.
 
-API native : `https://ollama.com/api`.
-API compatible OpenAI : `https://ollama.com/v1`.
-Authentification : `Authorization: Bearer` avec `OLLAMA_API_KEY`.
-Vérifier le nom exact du modèle dans https://ollama.com/api/tags avant de faire le test.
+Ollama Cloud utilise `https://ollama.com/v1`. Alibaba Model Studio demande son URL compatible OpenAI de région et sa propre clé. Un serveur ECS doit d’abord héberger une API Chat Completions compatible OpenAI, protégée par HTTPS et authentification. Le choisir dans l’application ne déploie pas le serveur.
 
-Ne pas commencer l'intégration authentifiée si la clé est absente. Après ajout du secret, préparer un test borné, effectuer une requête et conserver la réponse réelle. Un test GitHub Actions terminé ne constitue pas un serveur permanent pour l'APK.
+Pas de clé Ollama implicitement envoyée à une autre adresse, de redirection HTTP, de repli automatique sur un autre modèle ou d’achat de crédits. Chaque fournisseur/modèle doit être vérifié pour les images, les limites et les paramètres pris en charge.
 
-## État au 8 octobre 2026
+## Supabase — préparé, pas déployé
 
-Le connecteur serveur et un test authentifié sont publiés. Aucun nouvel APK, projet Supabase TreeAI ou backend permanent n'est encore réalisé.
+`supabase/setup.sql` prépare deux stockages séparés dans un **nouveau projet dédié à 3AI** : `threeai_memory` et `threeai_messages`. Accès par utilisateur avec RLS, connexion Supabase Auth et révision optimiste de la mémoire. Le code Android possède les opérations de connexion, envoi mémoire/conversations et lecture de la mémoire.
 
-La branche technique `jarvis-standalone` et l'environnement `jarvis` gardent leurs noms pour poursuivre la configuration déjà commencée. Le nom de l'application sera TreeAI.
+Le projet 3AI n’est pas encore créé, son schéma n’est pas appliqué et cette synchronisation n’est pas testée de bout en bout. Le projet AIV existant n’est pas utilisé. Dans cette version, la mémoire et les conversations restent locales; les copies locales sont conservées après un envoi manuel. Aucun ménage automatique du journal SQLite AIV n’est effectué.
 
-## Premier test distant — 8 octobre 2026
+## Compilation et vérification
 
-Connecteur natif minimal : server/ollama_client.py. Test borné : tools/test_ollama.py. GitHub Actions : .github/workflows/treeai-ollama-test.yml.
+Projet : `android/`. Gradle 8.9, AGP 8.7.3, Java 17 pour compiler, compile/target SDK 35. Dépendances Shizuku 13.1.5. Workflow `.github/workflows/threeai-android.yml` : compilation release/debug, APK de test, quatre tests instrumentés Android 15 et captures des quatre onglets. L’artefact public contient l’APK **non signé** et l’outil officiel de signature. La clé privée de signature est conservée séparément et n’est jamais publiée.
 
-Le secret OLLAMA_API_KEY est présent dans le job et masqué. Le catalogue cloud a été lu; la requête de génération vers deepseek-v4-pro:0813 a reçu HTTP 402. Aucune réponse du modèle n'est obtenue. Vérifier l'accès au modèle, l'offre et le solde Ollama; le détail de l'erreur n'a pas été enregistré. Ne pas présenter ce test comme réussi.
+Les tests couvrent une mémoire de 270 000 caractères après recréation, le changement de modèle sans perte de mémoire, le chiffrement d’une clé de test, le partage d’un rapport comme brouillon et le refus d’un budget insuffisant. Les fonctions vocales et Shizuku doivent encore être essayées sur le téléphone réel.
 
-Run : https://github.com/willingemy-byte/My-Friend-Qjan/actions/runs/37797282192
-Commit testé : 780b495428afd49f9559e8c9bb103842f68a9708
+## Ollama : procédure et preuve distante
 
-Les contrôles locaux couvrent secret absent, réponse complète et réponse interrompue. Aucun nouvel APK ou projet Supabase n'est encore créé.
+Documentation lue avant intégration : [index](https://docs.ollama.com/llms.txt), [cloud](https://docs.ollama.com/cloud.md), [introduction](https://docs.ollama.com/api/introduction.md), [authentification](https://docs.ollama.com/api/authentication.md), [compatibilité OpenAI](https://docs.ollama.com/api/openai-compatibility.md).
 
-## Changer de modèle ou de fournisseur
+Le secret `OLLAMA_API_KEY` existe dans l’environnement GitHub **jarvis**, réservé à cette branche. Il sert au test Python; GitHub ne le rend pas lisible pour préconfigurer l’APK. Aucune nouvelle création de secret n’est nécessaire.
 
-Le connecteur actif `server/model_client.py` utilise le protocole Chat Completions compatible OpenAI, avec une configuration serveur :
-- `TREEAI_BASE_URL` : adresse HTTPS de l'API, sans /chat/completions.
-- `TREEAI_MODEL` : identifiant exact du modèle.
-- `TREEAI_KEY_ENV` : nom de la variable qui contient la clé du fournisseur.
+Le [test Gemma du 8 octobre](https://github.com/willingemy-byte/My-Friend-Qjan/actions/runs/37803839584), commit `4bf02fa8c9c4b11e49fc61b98e8e8d16699eadfc`, a reçu **TREEAI_OK**, 24 tokens d’entrée et 5 de sortie. Huit tests Python ont réussi. Cette preuve concerne le connecteur texte vers Ollama, pas un essai de chat depuis le Samsung. Un test antérieur DeepSeek avait reçu HTTP 402; aucun achat ni modification de facturation n’a été effectué.
 
-Par défaut : Ollama Cloud, https://ollama.com/v1, gemma4:31b, clé OLLAMA_API_KEY. La capture Usage fournie par Erick confirme Gemma 4 31B dans les modèles accessibles avec ses crédits gratuits. Choix initial pour texte et images; aucune affirmation de classement universel. Aucun achat ni changement de facturation effectué.
+Le connecteur Python `server/model_client.py` garde les variables historiques `TREEAI_BASE_URL`, `TREEAI_MODEL` et `TREEAI_KEY_ENV` pour éviter de casser le workflow. L’application personnelle actuelle appelle directement l’API avec la clé saisie sur l’appareil. Une distribution commerciale devra utiliser un service protégeant les clés partagées; le secret du propriétaire ne doit pas être embarqué dans un APK distribué.
 
-Pour remplacer seulement le modèle Ollama, modifier TREEAI_MODEL (par exemple gpt-oss:120b pour du texte). Pour Alibaba Model Studio, fournir l'adresse compatible OpenAI de la région/espace, l'identifiant du modèle et une clé Alibaba dans une variable distincte. Pour un modèle hébergé sur ECS, installer et exposer une API compatible OpenAI protégée par HTTPS et authentification, puis fournir son adresse, son modèle et sa clé ECS. ECS ne fournit pas un modèle opérationnel par sa seule création : déploiement et dimensionnement du serveur restent à réaliser.
+## Vérification de l’APK 0.1.0
 
-La clé Ollama n'est jamais implicitement réutilisée sur un autre hôte. Pas de redirection, de relance automatique ni de changement automatique vers un modèle payant. Limite de réponse configurable et contrôlée. Le connecteur ne dépend pas du stockage des conversations ou des souvenirs; il reçoit les messages préparés par le futur backend. La mémoire Supabase reste à construire séparément. Changer le modèle ne doit pas déclencher une migration/suppression de cette mémoire. Si le modèle d'embeddings change un jour, réindexer les vecteurs séparément.
-
-L'APK utilisera le backend TreeAI avec une adresse stable. Les champs visibles Fournisseur / Modèle et le bouton Tester puis Enregistrer sont prévus pour l'interface future, pas encore implémentés. La configuration serveur peut déjà changer sans modifier le connecteur; l'application Android et l'interface ne sont pas encore construites. Les fonctions avancées (images, outils, voix) doivent être vérifiées pour chaque modèle.
-
-Local : lancer `python3 -m unittest discover -s tests -v`. Le test distant fait une seule requête avec une réponse limitée à 128 tokens. Les variables sont injectées par GitHub Actions ou le déploiement; cet exemple .env n'est pas chargé automatiquement par le connecteur.
-
-Documentation : https://docs.ollama.com/api/openai-compatibility et https://www.alibabacloud.com/help/en/model-studio/base-url.
-
-## Test Gemma confirmé
-
-Le 8 octobre 2026, run 37803839584, job 113402789845, commit testé 4bf02fa8c9c4b11e49fc61b98e8e8d16699eadfc : huit tests locaux réussis et une requête réelle réussie vers gemma4:31b via https://ollama.com/v1/chat/completions. Réponse exacte : TREEAI_OK. Usage retourné : 24 tokens d'entrée, 5 tokens de sortie. Aucun achat ni appel à un modèle hors liste gratuite. Cela confirme seulement le connecteur texte Ollama; images, APK, mémoire Supabase et Alibaba/ECS ne sont pas encore testés/déployés.
-
-Lien : https://github.com/willingemy-byte/My-Friend-Qjan/actions/runs/37803839584
+[Build et tests Android réussis](https://github.com/willingemy-byte/My-Friend-Qjan/actions/runs/37809436292), source `84f154a3d3c4cbeccf589bd131390f614f7c2797` : quatre tests instrumentés, zéro échec, captures des quatre onglets. APK signé fourni dans la conversation : 414 341 octets, signature v2/v3 vérifiée. SHA-256 : `34ccc66384c444948b7bc6e26d5fd044b1ad54a914169f8d4f6403046026b671`.
