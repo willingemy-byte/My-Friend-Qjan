@@ -1,10 +1,12 @@
-# Instructions de travail
+# Instructions — Jarvis indépendant
 
-- Lire `REPRISE.md` avant de commencer. Communiquer en français simple et concis.
-- Respecter la tâche courante ; ne pas inspecter d’anciens dépôts ou relancer une recherche générale sans nécessité.
-- Le dossier `journal-local/` est la version 0.4 livrée. Ne pas reconstruire le projet depuis zéro.
-- Le proxy est une option en discussion. Ne pas l’ajouter automatiquement.
-- Ne jamais versionner de clé API, clé de signature, capture personnelle ou journal brut du téléphone.
-- Ne pas attribuer une connexion à un paquet précis sur le seul critère d’un UID partagé ou d’un horodatage proche.
-- Tester les changements concrets avec les vérifications existantes adaptées ; ne pas prétendre avoir testé sur le téléphone.
-- Garder les tâches API bornées. Ne pas lancer de boucle ou d’agents supplémentaires sans demande explicite.
+- Lire REPRISE.md et README.md avant d'intervenir. Communiquer en français simple et concis.
+- Travailler sur jarvis-standalone. Ce projet doit produire son propre APK, sans reprendre les services de collecte AIV.
+- Respecter la procédure officielle Ollama. Lire la documentation avant d'écrire l'intégration. Si OLLAMA_API_KEY manque, demander sa configuration sécurisée.
+- Ne jamais enregistrer de clé API, clé privée de signature, conversation privée ou journal personnel dans Git.
+- Utiliser l'environnement GitHub jarvis pour les jobs recevant OLLAMA_API_KEY; borner les appels de test et ne jamais afficher la clé.
+- Prévoir un projet Supabase distinct pour Jarvis. L'utilisateur contrôle les modifications de la mémoire persistante.
+- Distinguer création, compilation, signature, test simulé, requête distante confirmée et essai Android réel.
+- Ne pas annoncer un APK installé/testé sur le téléphone sans preuve.
+- Ne pas fusionner cette branche dans une branche AIV dans le cadre de cette tâche.
+- Ne pas lancer d'agents supplémentaires ni de boucle autonome illimitée.
