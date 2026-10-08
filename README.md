@@ -52,7 +52,7 @@ Ne pas commencer l'intégration authentifiée si la clé est absente. Après ajo
 
 ## État au 8 octobre 2026
 
-Branche et procédure initiales uniquement. Aucun nouvel APK, appel Ollama authentifié, projet Supabase TreeAI ou déploiement n'est encore réalisé.
+Le connecteur serveur et un test authentifié sont publiés. Aucun nouvel APK, projet Supabase TreeAI ou backend permanent n'est encore réalisé.
 
 La branche technique `jarvis-standalone` et l'environnement `jarvis` gardent leurs noms pour poursuivre la configuration déjà commencée. Le nom de l'application sera TreeAI.
 
@@ -66,3 +66,22 @@ Run : https://github.com/willingemy-byte/My-Friend-Qjan/actions/runs/37797282192
 Commit testé : 780b495428afd49f9559e8c9bb103842f68a9708
 
 Les contrôles locaux couvrent secret absent, réponse complète et réponse interrompue. Aucun nouvel APK ou projet Supabase n'est encore créé.
+
+## Changer de modèle ou de fournisseur
+
+Le connecteur actif `server/model_client.py` utilise le protocole Chat Completions compatible OpenAI, avec une configuration serveur :
+- `TREEAI_BASE_URL` : adresse HTTPS de l'API, sans /chat/completions.
+- `TREEAI_MODEL` : identifiant exact du modèle.
+- `TREEAI_KEY_ENV` : nom de la variable qui contient la clé du fournisseur.
+
+Par défaut : Ollama Cloud, https://ollama.com/v1, gemma4:31b, clé OLLAMA_API_KEY. La capture Usage fournie par Erick confirme Gemma 4 31B dans les modèles accessibles avec ses crédits gratuits. Choix initial pour texte et images; aucune affirmation de classement universel. Aucun achat ni changement de facturation effectué.
+
+Pour remplacer seulement le modèle Ollama, modifier TREEAI_MODEL (par exemple gpt-oss:120b pour du texte). Pour Alibaba Model Studio, fournir l'adresse compatible OpenAI de la région/espace, l'identifiant du modèle et une clé Alibaba dans une variable distincte. Pour un modèle hébergé sur ECS, installer et exposer une API compatible OpenAI protégée par HTTPS et authentification, puis fournir son adresse, son modèle et sa clé ECS. ECS ne fournit pas un modèle opérationnel par sa seule création : déploiement et dimensionnement du serveur restent à réaliser.
+
+La clé Ollama n'est jamais implicitement réutilisée sur un autre hôte. Pas de redirection, de relance automatique ni de changement automatique vers un modèle payant. Limite de réponse configurable et contrôlée. Le connecteur ne dépend pas du stockage des conversations ou des souvenirs; il reçoit les messages préparés par le futur backend. La mémoire Supabase reste à construire séparément. Changer le modèle ne doit pas déclencher une migration/suppression de cette mémoire. Si le modèle d'embeddings change un jour, réindexer les vecteurs séparément.
+
+L'APK utilisera le backend TreeAI avec une adresse stable. Les champs visibles Fournisseur / Modèle et le bouton Tester puis Enregistrer sont prévus pour l'interface future, pas encore implémentés. La configuration serveur peut déjà changer sans modifier le connecteur; l'application Android et l'interface ne sont pas encore construites. Les fonctions avancées (images, outils, voix) doivent être vérifiées pour chaque modèle.
+
+Local : lancer `python3 -m unittest discover -s tests -v`. Le test distant fait une seule requête avec une réponse limitée à 128 tokens. Les variables sont injectées par GitHub Actions ou le déploiement; cet exemple .env n'est pas chargé automatiquement par le connecteur.
+
+Documentation : https://docs.ollama.com/api/openai-compatibility et https://www.alibabacloud.com/help/en/model-studio/base-url.

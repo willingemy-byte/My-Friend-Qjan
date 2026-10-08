@@ -1,10 +1,11 @@
-name: TreeAI — test Ollama Cloud
+name: TreeAI — test modèle configurable
 
 on:
   push:
     branches: [jarvis-standalone]
     paths:
-      - server/ollama_client.py
+      - server/model_client.py
+      - tests/test_model_client.py
       - tools/test_ollama.py
       - .github/workflows/treeai-ollama-test.yml
 
@@ -26,8 +27,12 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
-      - name: Vérifier la clé et appeler DeepSeek une fois
+      - name: Vérifier les changements de fournisseur sans réseau
+        run: python3 -m unittest discover -s tests -v
+      - name: Appeler Gemma 4 une seule fois avec les crédits disponibles
         env:
           OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
-          OLLAMA_MODEL: deepseek-v4-pro:0813
+          TREEAI_BASE_URL: https://ollama.com/v1
+          TREEAI_MODEL: gemma4:31b
+          TREEAI_KEY_ENV: OLLAMA_API_KEY
         run: python3 tools/test_ollama.py
