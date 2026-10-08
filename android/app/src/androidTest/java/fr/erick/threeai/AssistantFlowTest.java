@@ -50,4 +50,12 @@ public class AssistantFlowTest {
         try{LocalStore.payload(h,"prompt",memory,true,null,2048,128);fail("Expected budget error");}catch(java.io.IOException expected){}
         assertTrue(LocalStore.payload(h,"prompt",memory,true,null,262144,128).getJSONObject(0).getString("content").endsWith(memory));
     }
+    private boolean contains(View v,String part){if(v instanceof TextView&&((TextView)v).getText().toString().contains(part))return true;if(v instanceof ViewGroup){ViewGroup g=(ViewGroup)v;for(int i=0;i<g.getChildCount();i++)if(contains(g.getChildAt(i),part))return true;}return false;}
+    @Test public void accessStatusRemainsVisibleWithoutShizuku() throws Exception {
+        try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)){
+            scenario.onActivity(a->{tap(a,"Accès");assertTrue(contains(root(a),"Microphone :"));assertTrue(contains(root(a),"Contacts :"));assertTrue(contains(root(a),"Agenda :"));assertNotNull(find(root(a),"Demander les accès manquants"));assertTrue(contains(root(a),"Réparer les accès de 3AI"));});
+            scenario.recreate();scenario.onActivity(a->{assertTrue(contains(root(a),"Contacts :"));assertTrue(contains(root(a),"Agenda :"));});
+        }
+    }
+
 }
