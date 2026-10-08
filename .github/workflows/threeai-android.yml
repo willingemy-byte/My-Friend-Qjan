@@ -1,0 +1,69 @@
+name: 3AI — APK et vérifications Android
+on:
+  push:
+    branches: [jarvis-standalone]
+    paths:
+      - android/**
+      - tools/android_ui_check.py
+      - .github/workflows/threeai-android.yml
+permissions:
+  contents: read
+concurrency:
+  group: threeai-android
+  cancel-in-progress: false
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a
+        with:
+          gradle-version: '8.9'
+          cache-disabled: true
+      - name: Compiler les APK indépendants sans clé privée
+        working-directory: android
+        run: |
+          sdkmanager 'platforms;android-35' 'build-tools;35.0.0' > /dev/null
+          gradle :app:assembleRelease :app:assembleDebug :app:assembleDebugAndroidTest --console=plain
+      - name: Préparer l’APK non signé et l’outil officiel de signature
+        run: |
+          mkdir -p deliverables
+          cp android/app/build/outputs/apk/release/app-release-unsigned.apk deliverables/3AI-0.1.0-unsigned.apk
+          cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" deliverables/apksigner.jar
+          sha256sum deliverables/* > deliverables/SHA256SUMS.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: threeai-unsigned
+          path: deliverables/
+          retention-days: 14
+      - name: Activer KVM pour les tests Android
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Vérifier la mémoire, le modèle, les secrets et les écrans sur Android 15
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7
+          ram-size: 2048M
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: |
+            gradle -p android :app:connectedDebugAndroidTest --console=plain
+            python3 tools/android_ui_check.py
+      - name: Conserver les preuves de vérification
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: threeai-android-qa
+          path: |
+            qa/
+            android/app/build/reports/androidTests/
+            android/app/build/outputs/androidTest-results/
+          retention-days: 14
