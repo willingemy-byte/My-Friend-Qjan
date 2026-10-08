@@ -13,3 +13,5 @@
 - Conserver la clé de signature privée pour les mises à jour du même paquet. Ne jamais remplacer ou modifier la signature d’AIV.
 - Ne pas fusionner cette branche dans AIV dans le cadre de cette tâche.
 - Ne pas lancer d’agents supplémentaires ni de boucle autonome illimitée.
+
+- Les actions JavaScript des workflows doivent déclarer node24, avec versions épinglées par SHA et runner Ubuntu explicite. Vérifier action.yml de chaque action avant une mise à jour; ne pas réintroduire node20 ni le contournement ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION.
