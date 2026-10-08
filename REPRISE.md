@@ -33,3 +33,9 @@ Certificat SHA-256 : 8f8103714f539f3489136ea7eb892d11c2438cf59538196e31134984372
 Fichiers privés mis à disposition dans la conversation : APK signé, guide 3AI-INSTALLATION.txt et sauvegarde 3AI-signature-private.zip. Les artefacts GitHub restent non signés; ne pas publier la sauvegarde de signature.
 
 Résultat final confirmé : run 37809436292 terminé avec succès, job 113422436329. Quatre tests instrumentés Android 15, zéro échec/erreur/skip, puis les quatre onglets capturés avec UI Automator. Artefacts : threeai-unsigned (11564776349) et threeai-android-qa (11563909368). Les captures sont vérifiées visuellement. Huit tests Python repassés localement avec succès.
+
+## Mise à jour 0.1.1 livrée
+
+Correction des états et demandes des permissions; explications vers le bouton de récupération AIV. Paquet/signature conservés, versionCode 2. Build et tests réussis : run 37817492047, job 113449736628, commit 88a54357b3daf7e45be1a0a5933259f62f4e0e78. Cinq tests instrumentés sans échec et captures vérifiées; SHA256 APK cdafc786a4bf8fecb4ebdc8189c308570a08d1d82f930e3a9af6af17cf64d77b. Certificat inchangé 8f8103714f539f3489136ea7eb892d11c2438cf59538196e31134984372c84ad.
+
+AIV 2.3.3-owner-trio (237) construit et signé avec le certificat AIV existant, depuis la source privée Owner 236. Jarvis/Ollama retirés d’AIV, trio AIV/Shizuku/3AI protégé en permanence, bouton de récupération des trois droits avec rapport durable et identité/signature épinglées. Publication des sources AIV refusée par auto-review faute d’autorisation explicite; ne pas contourner ce blocage. Snapshot privé de sources AIV conservé avec les APK. Aucun effacement du journal 47,88 Go. Réparation sur le téléphone reste à vérifier, verrous Android/politique et UID respectés.

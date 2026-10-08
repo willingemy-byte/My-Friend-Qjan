@@ -4,7 +4,7 @@
 
 **3AI** est le nom public choisi par Erick le 8 octobre 2026. **Jarvis** est le nom personnel de l’assistant, modifiable dans les réglages. Le logo original est conservé.
 
-Branche : `jarvis-standalone`. Paquet Android : `fr.erick.threeai`. Version : `0.1.0`. Android 8 ou ultérieur. Application native Java, indépendante des services de collecte et du CRM/licences d’All In Visible.
+Branche : `jarvis-standalone`. Paquet Android : `fr.erick.threeai`. Version : `0.1.1`. Android 8 ou ultérieur. Application native Java, indépendante des services de collecte et du CRM/licences d’All In Visible.
 
 ## Utilisation
 
@@ -45,7 +45,7 @@ Le projet 3AI n’est pas encore créé, son schéma n’est pas appliqué et ce
 
 ## Compilation et vérification
 
-Projet : `android/`. Gradle 8.9, AGP 8.7.3, Java 17 pour compiler, compile/target SDK 35. Dépendances Shizuku 13.1.5. Workflow `.github/workflows/threeai-android.yml` : compilation release/debug, APK de test, quatre tests instrumentés Android 15 et captures des quatre onglets. L’artefact public contient l’APK **non signé** et l’outil officiel de signature. La clé privée de signature est conservée séparément et n’est jamais publiée.
+Projet : `android/`. Gradle 8.9, AGP 8.7.3, Java 17 pour compiler, compile/target SDK 35. Dépendances Shizuku 13.1.5. Workflow `.github/workflows/threeai-android.yml` : compilation release/debug, APK de test, cinq tests instrumentés Android 15 et captures des quatre onglets. L’artefact public contient l’APK **non signé** et l’outil officiel de signature. La clé privée de signature est conservée séparément et n’est jamais publiée.
 
 Les tests couvrent une mémoire de 270 000 caractères après recréation, le changement de modèle sans perte de mémoire, le chiffrement d’une clé de test, le partage d’un rapport comme brouillon et le refus d’un budget insuffisant. Les fonctions vocales et Shizuku doivent encore être essayées sur le téléphone réel.
 
@@ -62,3 +62,9 @@ Le connecteur Python `server/model_client.py` garde les variables historiques `T
 ## Vérification de l’APK 0.1.0
 
 [Build et tests Android réussis](https://github.com/willingemy-byte/My-Friend-Qjan/actions/runs/37809436292), source `84f154a3d3c4cbeccf589bd131390f614f7c2797` : quatre tests instrumentés, zéro échec, captures des quatre onglets. APK signé fourni dans la conversation : 414 341 octets, signature v2/v3 vérifiée. SHA-256 : `34ccc66384c444948b7bc6e26d5fd044b1ad54a914169f8d4f6403046026b671`.
+
+## Mise à jour 0.1.1 — récupération des accès
+
+Même paquet et certificat que 0.1.0, versionCode 2. Onglet Accès : microphone, contacts et agenda affichés même sans Shizuku; demande des droits manquants et guide vers la réparation dans AIV Owner 2.3.3. Une mise à jour ne réaccorde pas seule les droits refusés.
+
+[Build et tests Android 15](https://github.com/willingemy-byte/My-Friend-Qjan/actions/runs/37817492047), commit 88a54357b3daf7e45be1a0a5933259f62f4e0e78 : cinq tests instrumentés, aucun échec, captures des quatre onglets. Signature de mise à jour vérifiée en privé. APK SHA256 : cdafc786a4bf8fecb4ebdc8189c308570a08d1d82f930e3a9af6af17cf64d77b. Téléphone personnel non testé.
