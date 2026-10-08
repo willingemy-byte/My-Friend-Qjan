@@ -5,6 +5,7 @@
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />
     <queries>
+        <package android:name="com.allinvisible.aiv" />
         <package android:name="fr.erick.journallocal" />
         <package android:name="moe.shizuku.privileged.api" />
         <intent><action android:name="android.speech.RecognitionService" /></intent>
