@@ -34,6 +34,7 @@ public class MainActivity extends Activity {
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private JSONArray history = new JSONArray();
     private String memory = "", draft = "", pendingImage, exportKind = "", loadError = "";
+    private String lastConnectionError = "";
     private LinearLayout root, content, chatRows;
     private TextView status, connectionStatus;
     private EditText input, memoryInput;
@@ -87,7 +88,14 @@ public class MainActivity extends Activity {
     private void row(LinearLayout parent, Button... buttons) { LinearLayout r = new LinearLayout(this); for (Button b : buttons) { LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT,1); p.setMargins(dp(3),dp(5),dp(3),dp(5)); r.addView(b,p); } parent.addView(r); }
     private LinearLayout form() { ScrollView scroll = new ScrollView(this); LinearLayout box = new LinearLayout(this); box.setOrientation(LinearLayout.VERTICAL); box.setPadding(0,dp(6),0,dp(16)); scroll.addView(box); content.addView(scroll,new LinearLayout.LayoutParams(-1,-1)); return box; }
     private void note(String value) { if (status != null) status.setText(value); }
-    private void fail(Exception e) { note(e instanceof IOException ? e.getMessage() : "Opération impossible. Vérifier la configuration et réessayer."); }
+    private void fail(Exception e) { String message=e instanceof IOException ? e.getMessage() : "Opération impossible. Vérifier la configuration et réessayer."; if(message==null)message="Opération impossible.";lastConnectionError=message;note(message+"\nToucher ce message pour les détails."); }
+    String connectionReport() {
+        String endpoint=prefs.getString("model_base","https://ollama.com/v1"),model=prefs.getString("model_name","gemma4:31b"),keyState;
+        try {keyState=secrets.get("model:"+ApiClient.base(endpoint)).isEmpty()?"absente pour cette adresse":"enregistrée pour cette adresse";} catch(Exception e){keyState="illisible ou adresse invalide; réenregistrer la clé";}
+        String route;try{route=new java.net.URI(ApiClient.base(endpoint)).getPath();if(!"/v1".equals(route))route="chemin personnalisé (vérifier le champ Adresse API HTTPS)";}catch(Exception e){route="invalide";}
+        return "3AI "+BuildConfig.VERSION_NAME+"\nConfiguration enregistrée\nServeur : "+ApiClient.origin(endpoint)+"\nChemin API : "+route+"\nModèle : "+model+"\nClé : "+keyState+"\n\n"+(lastConnectionError.isEmpty()?"Aucun échec constaté dans cette session.":lastConnectionError)+"\n\nLe chat utilise la clé saisie sur ce téléphone. Supabase et Shizuku ne sont pas requis pour le chat. Les champs modifiés doivent être enregistrés avant le test. Aucune clé n’est affichée ici.";
+    }
+    private void connectionDiagnostic(){new AlertDialog.Builder(this).setTitle("Diagnostic connexion").setMessage(connectionReport()).setNegativeButton("Fermer",null).setPositiveButton("Réglages",(d,w)->showTab(2)).show();}
     private boolean capture() {
         if (input != null) draft = input.getText().toString();
         if (memoryInput != null) {
@@ -114,7 +122,7 @@ public class MainActivity extends Activity {
         TextView title = text("  3AI · " + prefs.getString("assistant_name", "Jarvis"),24,WHITE); head.addView(title,new LinearLayout.LayoutParams(0,-2,1)); root.addView(head);
         LinearLayout tabs = new LinearLayout(this); String[] labels={"Chat","Mémoire","Réglages","Accès"};
         for (int i=0;i<labels.length;i++) { final int index=i; Button b=button(labels[i],()->showTab(index)); b.setTextSize(14); b.setBackground(background(tab==i ? Color.rgb(25,61,83):PANEL,tab==i?ORANGE:0)); LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(48),1); p.setMargins(dp(2),dp(4),dp(2),dp(4)); tabs.addView(b,p); } root.addView(tabs);
-        status=text(busy?"Réponse en cours…":"",14,MUTED); status.setMaxLines(4); root.addView(status);
+        status=text(busy?"Réponse en cours…":"",14,MUTED); status.setMaxLines(4);status.setOnClickListener(v->connectionDiagnostic());root.addView(status);
         content=new LinearLayout(this); content.setOrientation(LinearLayout.VERTICAL); root.addView(content,new LinearLayout.LayoutParams(-1,0,1)); setContentView(root);
         if(tab==0) chatView(); else if(tab==1) memoryView(); else if(tab==2) settingsView(); else accessView();
     }
@@ -217,11 +225,12 @@ public class MainActivity extends Activity {
             if(!newKey.isEmpty())secrets.set("model:"+endpoint,newKey);
             prefs.edit().putString("model_base",endpoint).putString("model_name",modelName).putString("assistant_name",name.getText().toString().trim()).putString("prompt",prompt.getText().toString()).putInt("provider",provider.getSelectedItemPosition()).putFloat("temperature",t).putInt("tokens",n).putInt("context",c).commit();key.setText("");note("Réglages enregistrés. La clé est protégée sur ce téléphone.");
         }catch(Exception e){fail(e);}}));
-        box.addView(button("Tester la connexion",this::testModel));
+        box.addView(button("Tester la connexion",()->{if(!base.getText().toString().trim().replaceAll("/+$","").equals(prefs.getString("model_base","https://ollama.com/v1"))||!model.getText().toString().trim().equals(prefs.getString("model_name","gemma4:31b"))||!key.getText().toString().trim().isEmpty()){note("Modifications non enregistrées. Appuyer sur Enregistrer les réglages, puis Tester la connexion.");return;}testModel();}));
+        box.addView(button("Diagnostic connexion",this::connectionDiagnostic));
         box.addView(text("Supabase · stockage séparé",23,WHITE));EditText cloudUrl=field(box,"URL du projet Supabase 3AI",prefs.getString("supabase_url",""),false),publicKey=field(box,"Clé publique Supabase (publishable)",prefs.getString("supabase_key",""),false);
         box.addView(button("Enregistrer Supabase",()->{try{String url=ApiClient.base(cloudUrl.getText().toString());String k=publicKey.getText().toString().trim();if(k.isEmpty()||k.startsWith("sb_secret_"))throw new IOException("Utiliser uniquement la clé publique Supabase.");prefs.edit().putString("supabase_url",url).putString("supabase_key",k).commit();note("Projet enregistré. Se connecter pour synchroniser.");}catch(Exception e){fail(e);}}));
         row(box,button("Se connecter",this::cloudLogin),button("Se déconnecter",()->worker.execute(()->{try{cloud.logout();runOnUiThread(()->note("Déconnecté de Supabase."));}catch(Exception e){runOnUiThread(()->fail(e));}})));
-        box.addView(text("3AI 0.1.1 · application indépendante\nVoix : services Android; reconnaissance locale privilégiée si disponible. Sinon, le service vocal choisi par Android peut utiliser son cloud.\nAucune clé du compte GitHub n’est incluse dans cet APK.",15,MUTED));
+        box.addView(text("3AI "+BuildConfig.VERSION_NAME+" · application indépendante\nVoix : services Android; reconnaissance locale privilégiée si disponible. Sinon, le service vocal choisi par Android peut utiliser son cloud.\nAucune clé du compte GitHub n’est incluse dans cet APK.",15,MUTED));
     }
     private EditText field(LinearLayout parent,String label,String value,boolean multi){parent.addView(text(label,16,MUTED));EditText e=edit(label,value,multi);parent.addView(e,new LinearLayout.LayoutParams(-1,-2));return e;}
     private void testModel(){if(busy){note("Attendre la requête actuelle.");return;}busy=true;note("Test de la configuration enregistrée…");worker.execute(()->{try{String base=prefs.getString("model_base","https://ollama.com/v1"),key=secrets.get("model:"+ApiClient.base(base));JSONArray messages=new JSONArray().put(new JSONObject().put("role","user").put("content","Réponds uniquement TREEAI_OK."));String result=api.chat(base,prefs.getString("model_name","gemma4:31b"),key,messages,0,128);runOnUiThread(()->{busy=false;note("Réponse du test : "+result);});}catch(Exception e){runOnUiThread(()->{busy=false;fail(e);});}});}

@@ -4,7 +4,7 @@
 
 **3AI** est le nom public choisi par Erick le 8 octobre 2026. **Jarvis** est le nom personnel de l’assistant, modifiable dans les réglages. Le logo original est conservé.
 
-Branche : `jarvis-standalone`. Paquet Android : `fr.erick.threeai`. Version : `0.1.2`. Android 8 ou ultérieur. Application native Java, indépendante des services de collecte et du CRM/licences d’All In Visible.
+Branche : `jarvis-standalone`. Paquet Android : `fr.erick.threeai`. Version : `0.1.3`. Android 8 ou ultérieur. Application native Java, indépendante des services de collecte et du CRM/licences d’All In Visible.
 
 ## Utilisation
 
@@ -76,3 +76,9 @@ Chat → Vider brouillon → Vider efface tout le texte non envoyé et l’image
 L’onglet Accès comporte Aide Shizuku / hors Wi-Fi et le [guide officiel](https://shizuku.rikka.app/guide/setup/). Le chat n’exige pas Shizuku. Les réglages conseillés et le test de passage Wi-Fi → données mobiles sont proposés sans modification automatique d’Android ni garantie sur Samsung.
 
 [Build et sept tests instrumentés Android 15 réussis](https://github.com/willingemy-byte/My-Friend-Qjan/actions/runs/37828224221), source 90f220029782a003386f0475c7189ec9d47c65a5; aucun échec/erreur/skip, captures des quatre onglets. Tests ajoutés : gros brouillon effaçable après confirmation (annulation et recréation), mémoire/conversations conservées, rapports français acceptés et binaire/encodage refusés. Certificat de signature conservé; versionCode 3. APK SHA256 : 7dc9f7d51219e31a5bf6b6feb6e3d494c559ed8a08dbc5ae8b692aef32081aa7. Aucun test de maintien Shizuku hors Wi-Fi sur le téléphone réel.
+
+## Mise à jour 0.1.3 — diagnostic du refus de connexion
+
+L’erreur HTTP conserve son code exact et le serveur appelé. Un 401, un 403, une réponse HTML, un échec DNS, un délai réseau et un échec HTTPS sont distingués. Aucun corps d’erreur distant ni en-tête de clé ne sont affichés. Toucher le message d’erreur ou Réglages → Diagnostic connexion montre le serveur, le modèle et la présence de la clé pour l’adresse enregistrée. Le test bloque les champs modifiés non enregistrés au lieu de tester silencieusement les anciens réglages. La version affichée est lue depuis le build.
+
+Cette version améliore le diagnostic; la cause du refus sur le Samsung ne peut pas être établie sans ce diagnostic. Le succès de la clé GitHub ne prouve pas la configuration enregistrée sur le téléphone. Aucun contournement de refus, envoi à un autre fournisseur ou changement automatique de clé. Tests Android à vérifier avant livraison.
