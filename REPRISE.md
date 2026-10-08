@@ -15,3 +15,9 @@ Aucun secret n'est fourni à ce point. GitHub Actions injecte les secrets dans s
 ## Identité visuelle adoptée
 
 Nom public : TreeAI. Logo original : assets/branding/treeai-logo.jpg, conservé sans modification, avec 3AI dans le dessin. Branche et secret restent configurés selon les noms techniques existants. Aucun APK n'a encore été généré.
+
+## Avancement confirmé après configuration du secret
+
+L'utilisateur a ajouté le secret et limité l'environnement à une branche. Le workflow a effectivement reçu OLLAMA_API_KEY, masquée dans les logs. La requête Ollama Cloud avec le modèle deepseek-v4-pro:0813 a reçu HTTP 402. Run 37797282192; commit 780b495428afd49f9559e8c9bb103842f68a9708. Il ne faut plus demander à l'utilisateur de refaire la configuration GitHub : le blocage suivant est le refus Ollama. Sa cause financière exacte reste à confirmer; aucun achat n'est autorisé automatiquement.
+
+Le connecteur natif Python standard-library et son test sont publiés. Trois contrôles locaux passent. Aucune génération confirmée du modèle, aucun APK et aucune mémoire Supabase à ce point.

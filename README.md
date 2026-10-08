@@ -55,3 +55,14 @@ Ne pas commencer l'intégration authentifiée si la clé est absente. Après ajo
 Branche et procédure initiales uniquement. Aucun nouvel APK, appel Ollama authentifié, projet Supabase TreeAI ou déploiement n'est encore réalisé.
 
 La branche technique `jarvis-standalone` et l'environnement `jarvis` gardent leurs noms pour poursuivre la configuration déjà commencée. Le nom de l'application sera TreeAI.
+
+## Premier test distant — 8 octobre 2026
+
+Connecteur natif minimal : server/ollama_client.py. Test borné : tools/test_ollama.py. GitHub Actions : .github/workflows/treeai-ollama-test.yml.
+
+Le secret OLLAMA_API_KEY est présent dans le job et masqué. Le catalogue cloud a été lu; la requête de génération vers deepseek-v4-pro:0813 a reçu HTTP 402. Aucune réponse du modèle n'est obtenue. Vérifier l'accès au modèle, l'offre et le solde Ollama; le détail de l'erreur n'a pas été enregistré. Ne pas présenter ce test comme réussi.
+
+Run : https://github.com/willingemy-byte/My-Friend-Qjan/actions/runs/37797282192
+Commit testé : 780b495428afd49f9559e8c9bb103842f68a9708
+
+Les contrôles locaux couvrent secret absent, réponse complète et réponse interrompue. Aucun nouvel APK ou projet Supabase n'est encore créé.
