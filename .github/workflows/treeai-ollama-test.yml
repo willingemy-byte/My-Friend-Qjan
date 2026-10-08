@@ -1,0 +1,33 @@
+name: TreeAI — test Ollama Cloud
+
+on:
+  push:
+    branches: [jarvis-standalone]
+    paths:
+      - server/ollama_client.py
+      - tools/test_ollama.py
+      - .github/workflows/treeai-ollama-test.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: treeai-ollama-test
+  cancel-in-progress: false
+
+jobs:
+  test:
+    if: github.ref == 'refs/heads/jarvis-standalone'
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    environment: jarvis
+    steps:
+      - name: Lire le code du commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Vérifier la clé et appeler DeepSeek une fois
+        env:
+          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+          OLLAMA_MODEL: deepseek-v4-pro:0813
+        run: python3 tools/test_ollama.py
