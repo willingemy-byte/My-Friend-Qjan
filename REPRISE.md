@@ -29,3 +29,9 @@ La capture Usage 11 h 41 confirme les modèles gratuits : gemma4:31b, gpt-oss:12
 Choix initial : Gemma 4 31B pour conversation et images. Nouveau connecteur compatible OpenAI server/model_client.py : TREEAI_BASE_URL, TREEAI_MODEL, TREEAI_KEY_ENV. Réutilisation du secret Ollama existant uniquement pour Ollama; Alibaba/ECS demandent leur propre clé et adresse explicites. Le connecteur natif antérieur reste une référence, mais tools/test_ollama.py utilise le connecteur configurable.
 
 Huit tests locaux passent : changement de fournisseur/modèle/clé, clé absente, URL invalide, protection de la clé, redirections refusées, réponse tronquée et erreur 402 sans repli. Le push déclenche une seule nouvelle génération Gemma, limitée à 128 tokens; vérifier le résultat GitHub avant d'annoncer une réponse réelle. Interface Android, backend permanent, mémoire Supabase et serveur ECS restent à créer. Le switch de configuration est réalisé au niveau du connecteur serveur; les boutons de l'APK sont une exigence future, pas livrés.
+
+## Test Gemma confirmé
+
+Le 8 octobre 2026, run 37803839584, job 113402789845, commit testé 4bf02fa8c9c4b11e49fc61b98e8e8d16699eadfc : huit tests locaux réussis et une requête réelle réussie vers gemma4:31b via https://ollama.com/v1/chat/completions. Réponse exacte : TREEAI_OK. Usage retourné : 24 tokens d'entrée, 5 tokens de sortie. Aucun achat ni appel à un modèle hors liste gratuite. Cela confirme seulement le connecteur texte Ollama; images, APK, mémoire Supabase et Alibaba/ECS ne sont pas encore testés/déployés.
+
+Lien : https://github.com/willingemy-byte/My-Friend-Qjan/actions/runs/37803839584

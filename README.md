@@ -85,3 +85,9 @@ L'APK utilisera le backend TreeAI avec une adresse stable. Les champs visibles F
 Local : lancer `python3 -m unittest discover -s tests -v`. Le test distant fait une seule requête avec une réponse limitée à 128 tokens. Les variables sont injectées par GitHub Actions ou le déploiement; cet exemple .env n'est pas chargé automatiquement par le connecteur.
 
 Documentation : https://docs.ollama.com/api/openai-compatibility et https://www.alibabacloud.com/help/en/model-studio/base-url.
+
+## Test Gemma confirmé
+
+Le 8 octobre 2026, run 37803839584, job 113402789845, commit testé 4bf02fa8c9c4b11e49fc61b98e8e8d16699eadfc : huit tests locaux réussis et une requête réelle réussie vers gemma4:31b via https://ollama.com/v1/chat/completions. Réponse exacte : TREEAI_OK. Usage retourné : 24 tokens d'entrée, 5 tokens de sortie. Aucun achat ni appel à un modèle hors liste gratuite. Cela confirme seulement le connecteur texte Ollama; images, APK, mémoire Supabase et Alibaba/ECS ne sont pas encore testés/déployés.
+
+Lien : https://github.com/willingemy-byte/My-Friend-Qjan/actions/runs/37803839584
