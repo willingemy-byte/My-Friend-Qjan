@@ -1,0 +1,10 @@
+{
+  "app_display_name": "TreeAI",
+  "logo": "assets/branding/treeai-logo.jpg",
+  "logo_text": "3AI",
+  "preserve_original_logo": true,
+  "source_format": "JPEG",
+  "git_branch": "jarvis-standalone",
+  "github_environment": "jarvis",
+  "status": "Branding saved; Android launcher icon not generated yet"
+}

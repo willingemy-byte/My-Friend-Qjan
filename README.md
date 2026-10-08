@@ -1,8 +1,12 @@
-# Jarvis — application Android indépendante
+# TreeAI — application Android indépendante
+
+![Logo TreeAI](assets/branding/treeai-logo.jpg)
+
+Nom affiché : **TreeAI** — `T` majuscule, `ree` minuscules, `AI` majuscules. Le logo original conserve l'inscription stylisée **3AI**, conformément au choix d'Erick. Le nom Jarvis désignait ce projet avant ce choix de marque.
 
 Branche de travail : `jarvis-standalone`.
 
-Projet dédié à Jarvis, créé avec un arbre de fichiers neuf dans le dépôt My-Friend-Qjan. L'historique Git du dépôt reste accessible. Les autres branches conservent leurs fichiers.
+Projet dédié à TreeAI, créé avec un arbre de fichiers neuf dans le dépôt My-Friend-Qjan. L'historique Git du dépôt reste accessible. Les autres branches conservent leurs fichiers.
 
 ## Première étape : clé Ollama
 
@@ -14,18 +18,18 @@ Ouvrir [les environnements GitHub du dépôt](https://github.com/willingemy-byte
 4. Nom : **OLLAMA_API_KEY**. Valeur : la clé créée dans le compte Ollama.
 5. Enregistrer, puis indiquer dans la conversation : « Le secret jarvis est créé ».
 
-Un secret GitHub est associé à un environnement ou au dépôt, pas directement à une branche. La restriction de l'environnement réserve son usage à cette branche. Les futurs jobs Jarvis devront déclarer `environment: jarvis`.
+Un secret GitHub est associé à un environnement ou au dépôt, pas directement à une branche. La restriction de l'environnement réserve son usage à cette branche. Les futurs jobs TreeAI devront déclarer `environment: jarvis`.
 
 Le secret reste dans GitHub : il n'est pas copié dans un fichier public ni dans l'APK. Il sera fourni au processus de test via sa variable d'environnement. Sa création ne connecte pas automatiquement l'application Android et ne déploie pas un serveur.
 
 ## Objectif de l'application
 
-- APK Jarvis distinct : paquet Android, données et signature propres.
+- APK TreeAI distinct : paquet Android, données et signature propres.
 - Ollama Cloud pour le modèle; aucune installation du gros modèle sur le téléphone.
-- Projet Supabase dédié à Jarvis, distinct du projet de journal AIV.
+- Projet Supabase dédié à TreeAI, distinct du projet de journal AIV.
 - Conversations et mémoire persistante conservées séparément.
 - Écran pour consulter, créer, modifier et supprimer les souvenirs.
-- Jarvis peut proposer des souvenirs; l'utilisateur décide des changements à la mémoire durable.
+- TreeAI peut proposer des souvenirs; l'utilisateur décide des changements à la mémoire durable.
 - Connexions Android/Shizuku à développer selon les autorisations accordées sur l'appareil.
 - Interface lisible, boutons cohérents, voix et images à vérifier avec le modèle et les services choisis.
 - CRM, licences et PayPal gérés dans le projet AIV.
@@ -48,4 +52,6 @@ Ne pas commencer l'intégration authentifiée si la clé est absente. Après ajo
 
 ## État au 8 octobre 2026
 
-Branche et procédure initiales uniquement. Aucun nouvel APK, appel Ollama authentifié, projet Supabase Jarvis ou déploiement n'est encore réalisé.
+Branche et procédure initiales uniquement. Aucun nouvel APK, appel Ollama authentifié, projet Supabase TreeAI ou déploiement n'est encore réalisé.
+
+La branche technique `jarvis-standalone` et l'environnement `jarvis` gardent leurs noms pour poursuivre la configuration déjà commencée. Le nom de l'application sera TreeAI.
