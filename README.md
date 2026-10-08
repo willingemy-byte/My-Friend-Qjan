@@ -4,7 +4,7 @@
 
 **3AI** est le nom public choisi par Erick le 8 octobre 2026. **Jarvis** est le nom personnel de l’assistant, modifiable dans les réglages. Le logo original est conservé.
 
-Branche : `jarvis-standalone`. Paquet Android : `fr.erick.threeai`. Version : `0.1.1`. Android 8 ou ultérieur. Application native Java, indépendante des services de collecte et du CRM/licences d’All In Visible.
+Branche : `jarvis-standalone`. Paquet Android : `fr.erick.threeai`. Version : `0.1.2`. Android 8 ou ultérieur. Application native Java, indépendante des services de collecte et du CRM/licences d’All In Visible.
 
 ## Utilisation
 
@@ -68,3 +68,11 @@ Le connecteur Python `server/model_client.py` garde les variables historiques `T
 Même paquet et certificat que 0.1.0, versionCode 2. Onglet Accès : microphone, contacts et agenda affichés même sans Shizuku; demande des droits manquants et guide vers la réparation dans AIV Owner 2.3.3. Une mise à jour ne réaccorde pas seule les droits refusés.
 
 [Build et tests Android 15](https://github.com/willingemy-byte/My-Friend-Qjan/actions/runs/37817492047), commit 88a54357b3daf7e45be1a0a5933259f62f4e0e78 : cinq tests instrumentés, aucun échec, captures des quatre onglets. Signature de mise à jour vérifiée en privé. APK SHA256 : cdafc786a4bf8fecb4ebdc8189c308570a08d1d82f930e3a9af6af17cf64d77b. Téléphone personnel non testé.
+
+## Mise à jour 0.1.2 — vider un brouillon et vérifier les imports
+
+Chat → Vider brouillon → Vider efface tout le texte non envoyé et l’image jointe, sans modifier mémoire ni conversations. Annuler conserve le texte. Les rapports partagés/importés demandent confirmation avec aperçu borné; les données binaires, UTF-8 invalide et data:image/data:application sont refusés comme texte. Les images partagées passent par la voie image. Le contenu exact du bloc signalé sur le téléphone n’a pas été reçu; son origine précise n’est pas confirmée.
+
+L’onglet Accès comporte Aide Shizuku / hors Wi-Fi et le [guide officiel](https://shizuku.rikka.app/guide/setup/). Le chat n’exige pas Shizuku. Les réglages conseillés et le test de passage Wi-Fi → données mobiles sont proposés sans modification automatique d’Android ni garantie sur Samsung.
+
+[Build et sept tests instrumentés Android 15 réussis](https://github.com/willingemy-byte/My-Friend-Qjan/actions/runs/37828224221), source 90f220029782a003386f0475c7189ec9d47c65a5; aucun échec/erreur/skip, captures des quatre onglets. Tests ajoutés : gros brouillon effaçable après confirmation (annulation et recréation), mémoire/conversations conservées, rapports français acceptés et binaire/encodage refusés. Certificat de signature conservé; versionCode 3. APK SHA256 : 7dc9f7d51219e31a5bf6b6feb6e3d494c559ed8a08dbc5ae8b692aef32081aa7. Aucun test de maintien Shizuku hors Wi-Fi sur le téléphone réel.
