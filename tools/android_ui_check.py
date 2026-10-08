@@ -8,6 +8,7 @@ OUT = pathlib.Path("qa"); OUT.mkdir(exist_ok=True)
 def adb(*args):
     return subprocess.check_output(["adb", *args])
 
+adb("install", "-r", "android/app/build/outputs/apk/debug/app-debug.apk")
 adb("shell", "pm", "clear", "fr.erick.threeai")
 adb("shell", "am", "start", "-W", "-n", "fr.erick.threeai/.MainActivity")
 for name, label in [("chat", None), ("memoire", "Mémoire"), ("reglages", "Réglages"), ("acces", "Accès")]:
