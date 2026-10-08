@@ -27,6 +27,7 @@ jobs:
         uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407
         with:
           log-accepted-android-sdk-licenses: false
+          packages: 'platform-tools emulator'
       - name: Compiler les APK indépendants sans clé privée
         working-directory: android
         run: |

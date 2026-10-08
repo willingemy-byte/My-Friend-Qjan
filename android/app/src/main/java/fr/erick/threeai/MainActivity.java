@@ -104,7 +104,7 @@ public class MainActivity extends Activity {
         if (tts != null) tts.stop(); tab = next; input = null; memoryInput = null; connectionStatus = null;
         root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL); root.setPadding(dp(12),dp(8),dp(12),dp(8)); root.setBackgroundColor(BG);
         root.setOnApplyWindowInsetsListener((view,insets) -> {
-            if (Build.VERSION.SDK_INT >= 30) { android.graphics.Insets i = insets.getInsets(WindowInsets.Type.systemBars()); view.setPadding(dp(12)+i.left,dp(8)+i.top,dp(12)+i.right,dp(8)+i.bottom); }
+            if (Build.VERSION.SDK_INT >= 30) { android.graphics.Insets i = insets.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.ime()); view.setPadding(dp(12)+i.left,dp(8)+i.top,dp(12)+i.right,dp(8)+i.bottom); }
             else view.setPadding(dp(12),dp(8)+insets.getSystemWindowInsetTop(),dp(12),dp(8)+insets.getSystemWindowInsetBottom());
             return insets;
         });
