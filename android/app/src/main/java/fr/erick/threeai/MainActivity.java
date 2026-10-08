@@ -37,6 +37,7 @@ public class MainActivity extends Activity {
     private LinearLayout root, content, chatRows;
     private TextView status, connectionStatus;
     private EditText input, memoryInput;
+    private CheckBox conversationBox;
     private ScrollView chatScroll;
     private int tab, requestGeneration;
     private boolean busy, active, listening, ttsReady, shellBound;
@@ -71,7 +72,7 @@ public class MainActivity extends Activity {
         }));
         tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
             @Override public void onStart(String id) {}
-            @Override public void onDone(String id) { runOnUiThread(() -> { if (active && tab == 0 && !busy && prefs.getBoolean("conversation_voice", false)) startListening(); }); }
+            @Override public void onDone(String id) { runOnUiThread(() -> { if ("last".equals(id) && active && tab == 0 && !busy && prefs.getBoolean("conversation_voice", false)) startListening(); }); }
             @Override public void onError(String id) { runOnUiThread(() -> note("Lecture vocale indisponible. La réponse reste affichée.")); }
         });
         showTab(saved == null ? 0 : saved.getInt("tab", 0));
@@ -101,7 +102,7 @@ public class MainActivity extends Activity {
     }
     private void showTab(int next) {
         capture(); if (recognizer != null && listening) { recognizer.cancel(); listening = false; }
-        if (tts != null) tts.stop(); tab = next; input = null; memoryInput = null; connectionStatus = null;
+        if (tts != null) tts.stop(); tab = next; input = null; memoryInput = null; connectionStatus = null; conversationBox = null;
         root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL); root.setPadding(dp(12),dp(8),dp(12),dp(8)); root.setBackgroundColor(BG);
         root.setOnApplyWindowInsetsListener((view,insets) -> {
             if (Build.VERSION.SDK_INT >= 30) { android.graphics.Insets i = insets.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.ime()); view.setPadding(dp(12)+i.left,dp(8)+i.top,dp(12)+i.right,dp(8)+i.bottom); }
@@ -120,7 +121,7 @@ public class MainActivity extends Activity {
     private void chatView() {
         chatScroll=new ScrollView(this); chatRows=new LinearLayout(this); chatRows.setOrientation(LinearLayout.VERTICAL); chatScroll.addView(chatRows); content.addView(chatScroll,new LinearLayout.LayoutParams(-1,0,1)); renderMessages();
         CheckBox voice=new CheckBox(this); voice.setText("Lire les réponses à voix haute"); voice.setTextColor(WHITE); voice.setChecked(prefs.getBoolean("read_voice",true)); voice.setOnCheckedChangeListener((b,v)->prefs.edit().putBoolean("read_voice",v).apply()); content.addView(voice);
-        CheckBox conversation=new CheckBox(this); conversation.setText("Conversation vocale continue"); conversation.setTextColor(WHITE); conversation.setChecked(prefs.getBoolean("conversation_voice",false)); conversation.setOnCheckedChangeListener((b,v)->prefs.edit().putBoolean("conversation_voice",v).apply()); content.addView(conversation);
+        CheckBox conversation=new CheckBox(this); conversationBox=conversation; conversation.setText("Conversation vocale continue"); conversation.setTextColor(WHITE); conversation.setChecked(prefs.getBoolean("conversation_voice",false)); conversation.setOnCheckedChangeListener((b,v)->prefs.edit().putBoolean("conversation_voice",v).apply()); content.addView(conversation);
         input=edit("Écrire à Jarvis…",draft,true); input.setSaveEnabled(false); input.setMaxLines(4); content.addView(input,new LinearLayout.LayoutParams(-1,-2));
         row(content,button("Parler",this::startListening),button("Image",()->pick("image/*",101)),button("Arrêter",this::stop));
         row(content,button("Envoyer",this::send),button("Nouveau chat",this::newChat),button("Exporter",()->export("chat")));
@@ -164,7 +165,7 @@ public class MainActivity extends Activity {
         });
     }
     private void speak(String value){if(ttsReady){int limit=TextToSpeech.getMaxSpeechInputLength();for(int start=0;start<value.length();start+=limit){String part=value.substring(start,Math.min(start+limit,value.length()));tts.speak(part,start==0?TextToSpeech.QUEUE_FLUSH:TextToSpeech.QUEUE_ADD,null,start+limit>=value.length()?"last":"part");}}else note("Réponse reçue. Une voix française doit être installée dans les réglages Android.");}
-    private void stop(){++requestGeneration;busy=false;api.cancel();prefs.edit().putBoolean("conversation_voice",false).apply();if(recognizer!=null){recognizer.cancel();listening=false;}if(tts!=null)tts.stop();note("Conversation vocale et requête arrêtées.");}
+    private void stop(){++requestGeneration;busy=false;api.cancel();prefs.edit().putBoolean("conversation_voice",false).apply();if(conversationBox!=null)conversationBox.setChecked(false);if(recognizer!=null){recognizer.cancel();listening=false;}if(tts!=null)tts.stop();note("Conversation vocale et requête arrêtées.");}
     private void newChat(){if(busy){note("Arrêter la réponse avant d’ouvrir un nouveau chat.");return;}new AlertDialog.Builder(this).setTitle("Nouvelle conversation").setMessage("Exporter le chat pour garder une copie. La mémoire personnelle restera intacte.").setNegativeButton("Annuler",null).setNeutralButton("Exporter",(d,w)->export("chat")).setPositiveButton("Vider le chat",(d,w)->{try{store.write("conversations.json","[]");history=new JSONArray();showTab(0);}catch(Exception e){fail(e);}}).show();}
     private void startListening(){
         if(!active || busy || listening || tab!=0)return;
