@@ -12,8 +12,8 @@ final class SpeechText {
             .replaceAll("https?://\\S+", " lien ")
             .replaceAll("(?m)^\\s*(?:[-*+] |\\d+[.)] )", "")
             .replaceAll("(?m)^\\s*[#>]+\\s*", "")
-            .replaceAll("(?m)^\\s*[-=_|:]{3,}\\s*$", "")
-            .replaceAll("[*_`#<>\\[\\]~]", "")
+            .replaceAll("(?m)^\\s*[-=_|: ]{3,}\\s*$", "")
+            .replaceAll("[*_`#<>\\[\\]~«»“”\"]", "")
             .replace('|', ',').replace('(', ',').replace(')', ',')
             .replaceAll("\\n\\s*\\n", ". ").replace('\n', ' ')
             .replaceAll("\\s+", " ").trim();

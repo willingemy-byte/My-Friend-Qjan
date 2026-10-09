@@ -52,8 +52,8 @@ final class Attachments {
         if(name.endsWith(".pdf")||mime.equals("application/pdf")){
             PDFBoxResourceLoader.init(context);try(PDDocument doc=PDDocument.load(f)){
                 if(doc.getNumberOfPages()>50)throw new IOException("PDF limité à 50 pages par pièce jointe.");
-                PDFTextStripper stripper=new PDFTextStripper();StringWriter out=new StringWriter(){@Override public void write(String str,int off,int len){if(getBuffer().length()+len>131072)throw new IllegalStateException("Texte du PDF trop long.");super.write(str,off,len);}};
-                stripper.writeText(doc,out);result=out.toString();
+                PDFTextStripper stripper=new PDFTextStripper();StringBuilder extracted=new StringBuilder();Writer out=new Writer(){@Override public void write(char[] chars,int off,int len)throws IOException{if(extracted.length()+len>131072)throw new IOException("Texte du PDF trop long (128 Ko maximum).");extracted.append(chars,off,len);}public void flush(){}public void close(){}};
+                stripper.writeText(doc,out);result=extracted.toString();
             }
         }else if(name.endsWith(".docx")){
             try(ZipFile zip=new ZipFile(f)){ZipEntry e=zip.getEntry("word/document.xml");if(e==null)throw new IOException("Document Word invalide.");String xml;try(InputStream in=zip.getInputStream(e)){xml=LocalStore.readBounded(in,2*1024*1024);}
