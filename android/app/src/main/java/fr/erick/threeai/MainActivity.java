@@ -14,6 +14,8 @@ import android.provider.ContactsContract;
 import android.speech.*;
 import android.speech.tts.*;
 import android.text.InputType;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.view.*;
 import android.widget.*;
 import org.json.*;
@@ -38,6 +40,9 @@ public class MainActivity extends Activity {
     private LinearLayout root, content, chatRows;
     private TextView status, connectionStatus;
     private EditText input, memoryInput;
+    private final Map<String, EditText> settingsFields = new LinkedHashMap<>();
+    private EditText settingsKey;
+    private boolean settingsDirty, changingSettings;
     private CheckBox conversationBox;
     private ScrollView chatScroll;
     private int tab, requestGeneration;
@@ -97,6 +102,7 @@ public class MainActivity extends Activity {
     }
     private void connectionDiagnostic(){new AlertDialog.Builder(this).setTitle("Diagnostic connexion").setMessage(connectionReport()).setNegativeButton("Fermer",null).setPositiveButton("Réglages",(d,w)->showTab(2)).show();}
     private boolean capture() {
+        if (!persistSettingsDraft()) return false;
         if (input != null) draft = input.getText().toString();
         if (memoryInput != null) {
             String value = memoryInput.getText().toString();
@@ -109,7 +115,7 @@ public class MainActivity extends Activity {
         return true;
     }
     private void showTab(int next) {
-        capture(); if (recognizer != null && listening) { recognizer.cancel(); listening = false; }
+        if (!capture()) return; settingsFields.clear(); settingsKey = null; settingsDirty = false; if (recognizer != null && listening) { recognizer.cancel(); listening = false; }
         if (tts != null) tts.stop(); tab = next; input = null; memoryInput = null; connectionStatus = null; conversationBox = null;
         root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL); root.setPadding(dp(12),dp(8),dp(12),dp(8)); root.setBackgroundColor(BG);
         root.setOnApplyWindowInsetsListener((view,insets) -> {
@@ -119,7 +125,7 @@ public class MainActivity extends Activity {
         });
         LinearLayout head = new LinearLayout(this); head.setGravity(Gravity.CENTER_VERTICAL);
         ImageView logo = new ImageView(this); logo.setImageResource(R.drawable.logo); logo.setContentDescription("Logo 3AI"); head.addView(logo,new LinearLayout.LayoutParams(dp(62),dp(62)));
-        TextView title = text("  3AI · " + prefs.getString("assistant_name", "Jarvis"),24,WHITE); head.addView(title,new LinearLayout.LayoutParams(0,-2,1)); root.addView(head);
+        TextView title = text("  3AI · " + prefs.getString("assistant_name", "Jarvis"),24,WHITE); head.addView(title,new LinearLayout.LayoutParams(0,-2,1)); head.addView(button("Web",()->openBrowser(null))); root.addView(head);
         LinearLayout tabs = new LinearLayout(this); String[] labels={"Chat","Mémoire","Réglages","Accès"};
         for (int i=0;i<labels.length;i++) { final int index=i; Button b=button(labels[i],()->showTab(index)); b.setTextSize(14); b.setBackground(background(tab==i ? Color.rgb(25,61,83):PANEL,tab==i?ORANGE:0)); LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(48),1); p.setMargins(dp(2),dp(4),dp(2),dp(4)); tabs.addView(b,p); } root.addView(tabs);
         status=text(busy?"Réponse en cours…":"",14,MUTED); status.setMaxLines(4);status.setOnClickListener(v->connectionDiagnostic());root.addView(status);
@@ -209,21 +215,31 @@ public class MainActivity extends Activity {
         box.addView(text("La synchronisation distante devient disponible après configuration du projet Supabase séparé et connexion à ton compte. Aucun texte n’est téléversé automatiquement.",15,MUTED));
     }
     private void settingsView(){LinearLayout box=form();box.addView(text("Assistant et modèle",23,WHITE));
-        EditText name=field(box,"Nom personnel de l’assistant",prefs.getString("assistant_name","Jarvis"),false);
-        Spinner provider=new Spinner(this);String[] labels={"Ollama Cloud","Alibaba Model Studio","Mon serveur ECS / autre API"};ArrayAdapter<String> adapter=new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,labels);provider.setAdapter(adapter);box.addView(provider);
-        final EditText base=field(box,"Adresse API HTTPS",prefs.getString("model_base","https://ollama.com/v1"),false),model=field(box,"Modèle",prefs.getString("model_name","gemma4:31b"),false),key=field(box,"Clé d’accès — laisser vide pour garder celle de cette adresse","",false);
+        EditText name=field(box,"Nom personnel de l’assistant",settingsValue("assistant_name","Jarvis"),false);
+        box.addView(text("Adresse, modèle et clé : API Chat Completions compatible. La saisie est conservée avant validation.",15,MUTED));
+        final EditText base=field(box,"Adresse API HTTPS",settingsValue("model_base","https://ollama.com/v1"),false),model=field(box,"Modèle",settingsValue("model_name","gemma4:31b"),false),key=field(box,"Clé d’accès — laisser vide pour garder celle de cette adresse",pendingSettingsKey(),false);
         key.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);key.setSaveEnabled(false);key.setAutofillHints(View.AUTOFILL_HINT_PASSWORD);
-        provider.setSelection(prefs.getInt("provider",0));provider.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){boolean first=true;public void onNothingSelected(AdapterView<?> p){}public void onItemSelected(AdapterView<?> p,View v,int pos,long id){if(first){first=false;return;}key.setText("");if(pos==0){base.setText("https://ollama.com/v1");model.setText("gemma4:31b");}else{base.setText("");model.setText("");note("Entrer l’adresse et le modèle de ce fournisseur. Sa clé reste distincte de celle d’Ollama.");}}});
-        box.addView(button("Ouvrir mes clés Ollama",()->open(new Intent(Intent.ACTION_VIEW,Uri.parse("https://ollama.com/settings/keys")))));
-        EditText prompt=field(box,"Consignes / prompt de Jarvis",prefs.getString("prompt",DEFAULT_PROMPT),true);prompt.setMinLines(6);
-        EditText temp=field(box,"Température (0 à 2)",Float.toString(prefs.getFloat("temperature",.7f)),false);temp.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL);
-        EditText tokens=field(box,"Maximum de tokens par réponse (128 à 8192)",Integer.toString(prefs.getInt("tokens",2048)),false);tokens.setInputType(InputType.TYPE_CLASS_NUMBER);
-        EditText context=field(box,"Budget de contexte estimé (2048 à 262144)",Integer.toString(prefs.getInt("context",64000)),false);context.setInputType(InputType.TYPE_CLASS_NUMBER);
+        row(box,button("Navigateur intégré",()->openBrowser(null)),button("Mes clés Ollama",()->openBrowser("https://ollama.com/settings/keys")));
+
+        EditText prompt=field(box,"Consignes / prompt de Jarvis",settingsValue("prompt",DEFAULT_PROMPT),true);prompt.setMinLines(6);
+        EditText temp=field(box,"Température (0 à 2)",settingsValue("temperature",Float.toString(prefs.getFloat("temperature",.7f))),false);temp.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        EditText tokens=field(box,"Maximum de tokens par réponse (128 à 8192)",settingsValue("tokens",Integer.toString(prefs.getInt("tokens",2048))),false);tokens.setInputType(InputType.TYPE_CLASS_NUMBER);
+        EditText context=field(box,"Budget de contexte estimé (2048 à 262144)",settingsValue("context",Integer.toString(prefs.getInt("context",64000))),false);context.setInputType(InputType.TYPE_CLASS_NUMBER);
+        settingsFields.put("assistant_name",name); settingsFields.put("model_base",base); settingsFields.put("model_name",model);
+        settingsFields.put("prompt",prompt); settingsFields.put("temperature",temp); settingsFields.put("tokens",tokens); settingsFields.put("context",context); settingsKey=key;
+        TextWatcher watcher=new TextWatcher(){public void beforeTextChanged(CharSequence s,int start,int count,int after){} public void onTextChanged(CharSequence s,int start,int before,int count){if(!changingSettings){settingsDirty=true;persistSettingsDraft();}} public void afterTextChanged(Editable e){}};
+        for(EditText f:settingsFields.values()){f.setSaveEnabled(false);f.addTextChangedListener(watcher);} key.addTextChangedListener(watcher);
         box.addView(text("La mémoire est envoyée intégralement, avec les 40 derniers messages au maximum. Le budget est estimé; un refus du serveur sera affiché. Le gros modèle reste sur le cloud.",15,MUTED));
-        box.addView(button("Enregistrer les réglages",()->{try{String endpoint=ApiClient.base(base.getText().toString());String modelName=model.getText().toString().trim();String newKey=key.getText().toString().trim();float t=Float.parseFloat(temp.getText().toString());int n=Integer.parseInt(tokens.getText().toString()),c=Integer.parseInt(context.getText().toString());
+        box.addView(button("Enregistrer les réglages",()->{try{String endpoint=ApiClient.base(base.getText().toString());String modelName=model.getText().toString().trim();String newKey=key.getText().toString().trim();
+            if(!newKey.isEmpty()){
+                if(newKey.startsWith("Bearer ")||newKey.contains("\n")||newKey.contains("\r"))throw new IOException("Coller uniquement la clé, sans Bearer ni saut de ligne.");
+                secrets.set("model:"+endpoint,newKey);
+            }
+            if(modelName.isEmpty()){note("Adresse et clé conservées. Ajouter le nom du modèle puis enregistrer. La configuration du chat n’a pas encore changé.");return;}
+            float t=Float.parseFloat(temp.getText().toString());int n=Integer.parseInt(tokens.getText().toString()),c=Integer.parseInt(context.getText().toString());
             if(modelName.isEmpty()||Float.isNaN(t)||t<0||t>2||n<128||n>8192||c<2048||c>262144||c<=n)throw new IOException("Vérifier le modèle et les limites de génération.");
-            if(!newKey.isEmpty())secrets.set("model:"+endpoint,newKey);
-            prefs.edit().putString("model_base",endpoint).putString("model_name",modelName).putString("assistant_name",name.getText().toString().trim()).putString("prompt",prompt.getText().toString()).putInt("provider",provider.getSelectedItemPosition()).putFloat("temperature",t).putInt("tokens",n).putInt("context",c).commit();key.setText("");note("Réglages enregistrés. La clé est protégée sur ce téléphone.");
+            if(!prefs.edit().putString("model_base",endpoint).putString("model_name",modelName).putString("assistant_name",name.getText().toString().trim()).putString("prompt",prompt.getText().toString()).putFloat("temperature",t).putInt("tokens",n).putInt("context",c).commit())throw new IOException("Réglages non enregistrés : stockage indisponible.");
+            clearSettingsDraft(); changingSettings=true; key.setText(""); changingSettings=false; settingsDirty=false; note("Réglages enregistrés. La clé est protégée sur ce téléphone.");
         }catch(Exception e){fail(e);}}));
         box.addView(button("Tester la connexion",()->{if(!base.getText().toString().trim().replaceAll("/+$","").equals(prefs.getString("model_base","https://ollama.com/v1"))||!model.getText().toString().trim().equals(prefs.getString("model_name","gemma4:31b"))||!key.getText().toString().trim().isEmpty()){note("Modifications non enregistrées. Appuyer sur Enregistrer les réglages, puis Tester la connexion.");return;}testModel();}));
         box.addView(button("Diagnostic connexion",this::connectionDiagnostic));
@@ -232,6 +248,24 @@ public class MainActivity extends Activity {
         row(box,button("Se connecter",this::cloudLogin),button("Se déconnecter",()->worker.execute(()->{try{cloud.logout();runOnUiThread(()->note("Déconnecté de Supabase."));}catch(Exception e){runOnUiThread(()->fail(e));}})));
         box.addView(text("3AI "+BuildConfig.VERSION_NAME+" · application indépendante\nVoix : services Android; reconnaissance locale privilégiée si disponible. Sinon, le service vocal choisi par Android peut utiliser son cloud.\nAucune clé du compte GitHub n’est incluse dans cet APK.",15,MUTED));
     }
+    private String settingsValue(String name,String fallback){return prefs.getString("settings_draft_"+name,prefs.contains(name)?String.valueOf(prefs.getAll().get(name)):fallback);}
+    private String pendingSettingsKey(){if(!prefs.contains("settings_draft_model_base"))return "";try{return secrets.get("settings_draft_key");}catch(Exception e){fail(new IOException("Saisie de clé illisible. La copie existante est conservée."));return "";}}
+    private boolean persistSettingsDraft(){
+        if(!settingsDirty||settingsKey==null)return true;
+        try{
+            secrets.set("settings_draft_key",settingsKey.getText().toString());
+            SharedPreferences.Editor editor=prefs.edit();
+            for(Map.Entry<String,EditText> f:settingsFields.entrySet())editor.putString("settings_draft_"+f.getKey(),f.getValue().getText().toString());
+            if(!editor.commit())throw new IOException("Saisie non enregistrée : stockage indisponible.");
+            return true;
+        }catch(Exception e){fail(new IOException("Conservation de la saisie impossible. Garder cet écran ouvert et réessayer."));return false;}
+    }
+    private void clearSettingsDraft()throws Exception{
+        SharedPreferences.Editor editor=prefs.edit();for(String name:settingsFields.keySet())editor.remove("settings_draft_"+name);
+        if(!editor.commit())throw new IOException("Réglages validés; effacement de la saisie temporaire impossible.");
+        secrets.set("settings_draft_key","");
+    }
+    private void openBrowser(String url){if(!capture())return;Intent intent=new Intent(this,BrowserActivity.class);if(url!=null)intent.putExtra("url",url);startActivity(intent);}
     private EditText field(LinearLayout parent,String label,String value,boolean multi){parent.addView(text(label,16,MUTED));EditText e=edit(label,value,multi);parent.addView(e,new LinearLayout.LayoutParams(-1,-2));return e;}
     private void testModel(){if(busy){note("Attendre la requête actuelle.");return;}busy=true;note("Test de la configuration enregistrée…");worker.execute(()->{try{String base=prefs.getString("model_base","https://ollama.com/v1"),key=secrets.get("model:"+ApiClient.base(base));JSONArray messages=new JSONArray().put(new JSONObject().put("role","user").put("content","Réponds uniquement TREEAI_OK."));String result=api.chat(base,prefs.getString("model_name","gemma4:31b"),key,messages,0,128);runOnUiThread(()->{busy=false;note("Réponse du test : "+result);});}catch(Exception e){runOnUiThread(()->{busy=false;fail(e);});}});}
     private void cloudLogin(){LinearLayout box=new LinearLayout(this);box.setPadding(dp(18),0,dp(18),0);box.setOrientation(LinearLayout.VERTICAL);EditText email=edit("Adresse courriel","",false),password=edit("Mot de passe Supabase","",false);email.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);password.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);box.addView(email);box.addView(password);new AlertDialog.Builder(this).setTitle("Compte Supabase 3AI").setView(box).setNegativeButton("Annuler",null).setPositiveButton("Connexion",(d,w)->{String e=email.getText().toString(),p=password.getText().toString();password.setText("");note("Connexion Supabase…");worker.execute(()->{try{cloud.login(e,p);runOnUiThread(()->note("Connecté. La mémoire peut être synchronisée."));}catch(Exception err){runOnUiThread(()->fail(err));}});}).show();}
