@@ -47,20 +47,34 @@ adb("shell","am","force-stop","com.google.android.apps.nexuslauncher")
 adb("shell","pm","clear","fr.erick.threeai")
 adb("shell","am","start","-W","-n","fr.erick.threeai/.MainActivity")
 capture("chat")
+# The emulator can advertise a hardware keyboard. Keep this setting local to CI.
+adb("shell","settings","put","secure","show_ime_with_hard_keyboard","1")
+ime=adb("shell","settings","get","secure","default_input_method").decode().strip()
+ime_package=ime.split("/")[0]
+if not ime_package or ime_package=="null": raise RuntimeError("No default input method on emulator")
+keyboard_detection=""
 for attempt in range(3):
     root=tree();edit=next(n for n in root.iter("node") if n.attrib.get("class")=="android.widget.EditText");x1,y1,x2,y2=bounds(edit);adb("shell","input","tap",str((x1+x2)//2),str((y1+y2)//2));
     root=tree()
-    if any(n.attrib.get("package")=="com.google.android.inputmethod.latin" for n in root.iter("node")):break
-else: raise RuntimeError("Keyboard did not open")
+    if any(n.attrib.get("package")==ime_package for n in root.iter("node")):
+        keyboard_detection="visible_ime_ui";break
+    ime_state=adb("shell","dumpsys","input_method").decode()
+    if re.search(r"\bmInputShown=true\b",ime_state):
+        keyboard_detection="input_method_reports_shown";break
+else:
+    capture("clavier-echec")
+    (OUT/"input-method-echec.txt").write_bytes(adb("shell","dumpsys","input_method"))
+    raise RuntimeError("Keyboard did not open")
 adb("shell","input","text","Bonjour%ssans%sperdre%sle%schat")
 capture("chat-clavier")
 root=tree();messages=next(n for n in root.iter("node") if n.attrib.get("content-desc")=="Messages du chat");x1,y1,x2,y2=bounds(messages)
 if y2-y1<200: raise RuntimeError("Keyboard leaves too little room for messages: "+str(y2-y1))
 if not any(n.attrib.get("text")=="Envoyer" for n in root.iter("node")): raise RuntimeError("Send hidden by keyboard")
-(OUT/"keyboard-check.json").write_text(json.dumps({"chat_height_px_with_keyboard":y2-y1,"send_visible":True,"launcher_recoveries":launcher_recoveries},indent=2))
+(OUT/"keyboard-check.json").write_text(json.dumps({"chat_height_px_with_keyboard":y2-y1,"send_visible":True,"launcher_recoveries":launcher_recoveries,"ime_package":ime_package,"keyboard_detection":keyboard_detection},indent=2))
 adb("shell","input","keyevent","4")
 tap("Menu");capture("panneau");tap("Fermer le panneau")
 for name,label in [("memoire","Mémoire"),("reglages","Réglages"),("acces","Accès")]:
     tap("Menu");tap(label);capture(name)
 adb("shell","am","force-stop","fr.erick.threeai")
 print("Native chat, keyboard, drawer and settings verified.")
+
