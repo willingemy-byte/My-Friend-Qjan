@@ -38,7 +38,11 @@ def capture(name):
     tree();(OUT/(name+".xml")).write_bytes(adb("shell","cat","/sdcard/window.xml"));(OUT/(name+".png")).write_bytes(adb("exec-out","screencap","-p"))
 
 adb("install","-r","android/app/build/outputs/apk/debug/app-debug.apk")
-adb("pull","/sdcard/Android/data/fr.erick.threeai/files/preview-image-test.png",str(OUT/"image-ouverte.png"))
+
+# Gradle can uninstall the test target and remove its external files.
+# Opening the image is asserted in instrumentation; its optional capture must not block keyboard QA.
+if subprocess.run(["adb","shell","test","-f","/sdcard/Android/data/fr.erick.threeai/files/preview-image-test.png"]).returncode==0:
+    adb("pull","/sdcard/Android/data/fr.erick.threeai/files/preview-image-test.png",str(OUT/"image-ouverte.png"))
 adb("shell","am","force-stop","com.google.android.apps.nexuslauncher")
 adb("shell","pm","clear","fr.erick.threeai")
 adb("shell","am","start","-W","-n","fr.erick.threeai/.MainActivity")
