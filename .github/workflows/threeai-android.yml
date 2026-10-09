@@ -63,6 +63,7 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: |
+            adb shell am force-stop com.google.android.apps.nexuslauncher
             gradle -p android :app:connectedDebugAndroidTest --console=plain
             python3 tools/android_ui_check.py
       - name: Conserver les preuves de vérification

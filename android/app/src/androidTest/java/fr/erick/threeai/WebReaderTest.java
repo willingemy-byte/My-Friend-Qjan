@@ -31,7 +31,7 @@ public class WebReaderTest {
             String body=url.getPath().endsWith("/repos")?"[{\"full_name\":\"erick/3AI\",\"html_url\":\"https://github.com/erick/3AI\",\"default_branch\":\"main\"}]":"{\"login\":\"erick\",\"name\":\"Erick\",\"bio\":\"Projet Android\"}";
             Page page=new Page(url,200,body,"application/json",null);pages.add(page);return page;
         });
-        String result=reader.read("https://github.com/erick","test-token");assertTrue(result.contains("erick/3AI"));assertTrue(result.contains("Projet Android"));assertEquals(2,pages.size());for(Page page:pages)assertEquals("Bearer test-token",page.getRequestProperty("Authorization"));
+        String result=reader.read("https://github.com/erick","test-token");assertEquals("erick/3AI",new org.json.JSONObject(result.substring(result.indexOf('{'))).getJSONArray("public_repositories").getJSONObject(0).getString("name"));assertTrue(result.contains("Projet Android"));assertEquals(2,pages.size());for(Page page:pages)assertEquals("Bearer test-token",page.getRequestProperty("Authorization"));
     }
     @Test public void downgradeAndServerRefusalAreReported()throws Exception{
         for(int code:new int[]{302,404}){
