@@ -34,6 +34,7 @@ public class MainActivity extends Activity {
     private CloudMemory cloud;
     private final ApiClient api = new ApiClient();
     private final AlibabaSpeech speech = new AlibabaSpeech();
+    private final WebReader internet = new WebReader();
     private final VoiceCapture microphone = new VoiceCapture();
     private Attachments attachments;
     private JSONArray pendingFiles = new JSONArray();
@@ -59,7 +60,8 @@ public class MainActivity extends Activity {
     private boolean settingsDirty, changingSettings;
     private CheckBox conversationBox;
     private ScrollView chatScroll;
-    private int tab, requestGeneration;
+    private int tab;
+    private volatile int requestGeneration;
     private boolean busy, active, listening, ttsReady, shellBound, voiceTranscribing, usingRecorder;
     private TextToSpeech tts;
     private SpeechRecognizer recognizer;
@@ -153,6 +155,7 @@ public class MainActivity extends Activity {
         ScrollView scroll=new ScrollView(this);LinearLayout panel=new LinearLayout(this);panel.setOrientation(LinearLayout.VERTICAL);panel.setPadding(dp(16),dp(12),dp(16),dp(16));panel.setBackgroundColor(PANEL);panel.setOnClickListener(v->{});scroll.addView(panel);
         FrameLayout.LayoutParams position=new FrameLayout.LayoutParams(Math.min(dp(320),getResources().getDisplayMetrics().widthPixels-dp(36)),-1,Gravity.START);overlay.addView(scroll,position);
         panel.addView(text("3AI · commandes",22,WHITE));panel.addView(button("Fermer le panneau",()->drawer.setVisibility(View.GONE)));
+        panel.addView(button("Lire un lien Internet",this::readLink));
         String[] labels={"Chat","Mémoire","Réglages","Accès"};for(int i=0;i<labels.length;i++){final int index=i;panel.addView(button(labels[i],()->showTab(index)));}
         panel.addView(text("Conversation",18,ORANGE));panel.addView(button("Nouveau chat",this::newChat));panel.addView(button("Exporter",()->export("chat")));panel.addView(button("Vider brouillon",this::clearDraft));
         CheckBox voice=new CheckBox(this);voice.setText("Lire les réponses à voix haute");voice.setTextColor(WHITE);voice.setChecked(prefs.getBoolean("read_voice",true));voice.setOnCheckedChangeListener((v,on)->{prefs.edit().putBoolean("read_voice",on).apply();if(!on)stopPlayback();});panel.addView(voice);
@@ -175,7 +178,7 @@ public class MainActivity extends Activity {
     private void pendingAttachments(){String[] names=new String[pendingFiles.length()];for(int i=0;i<names.length;i++)names[i]=pendingFiles.optJSONObject(i).optString("name");new AlertDialog.Builder(this).setTitle("Pièces jointes du brouillon").setItems(names,(d,i)->previewAttachment(pendingFiles.optJSONObject(i))).setNeutralButton("Retirer les pièces jointes",(d,w)->{pendingFiles=new JSONArray();pendingImage=null;capture();updateAttachments();}).setNegativeButton("Fermer",null).show();}
     private void previewAttachment(JSONObject item){
         note("Ouverture de la pièce jointe…");worker.execute(()->{try{
-            if(item.optBoolean("image")){String image=attachments.imageData(item);byte[] bytes=android.util.Base64.decode(image.substring(image.indexOf(',')+1),android.util.Base64.DEFAULT);Bitmap bitmap=BitmapFactory.decodeByteArray(bytes,0,bytes.length);runOnUiThread(()->{if(isDestroyed()){bitmap.recycle();return;}ImageView view=new ImageView(this);view.setAdjustViewBounds(true);view.setImageBitmap(bitmap);ScrollView scroll=new ScrollView(this);scroll.addView(view);AlertDialog dialog=new AlertDialog.Builder(this).setTitle(item.optString("name")).setView(scroll).setNegativeButton("Fermer",null).create();dialog.setOnDismissListener(d->{view.setImageDrawable(null);bitmap.recycle();});dialog.show();note("");});}
+            if(item.optBoolean("image")){String image=attachments.imageData(item);byte[] bytes=android.util.Base64.decode(image.substring(image.indexOf(',')+1),android.util.Base64.DEFAULT);Bitmap bitmap=BitmapFactory.decodeByteArray(bytes,0,bytes.length);runOnUiThread(()->{if(isDestroyed()){bitmap.recycle();return;}ImageView view=new ImageView(this);view.setAdjustViewBounds(true);view.setContentDescription("Aperçu : "+item.optString("name"));view.setImageBitmap(bitmap);ScrollView scroll=new ScrollView(this);scroll.addView(view);AlertDialog dialog=new AlertDialog.Builder(this).setTitle(item.optString("name")).setView(scroll).setNegativeButton("Fermer",null).create();dialog.setOnDismissListener(d->{view.setImageDrawable(null);bitmap.recycle();});dialog.show();note("");});}
             else{String value=attachments.extract(item);runOnUiThread(()->{if(isDestroyed())return;TextView view=text(value,16,WHITE);view.setTextIsSelectable(true);view.setPadding(dp(14),dp(8),dp(14),dp(8));view.setBackgroundColor(BG);ScrollView scroll=new ScrollView(this);scroll.addView(view);new AlertDialog.Builder(this).setTitle(item.optString("name")).setView(scroll).setNegativeButton("Fermer",null).show();note("");});}
         }catch(Exception e){runOnUiThread(()->fail(e));}});
     }
@@ -191,7 +194,7 @@ public class MainActivity extends Activity {
     }
     private void renderMessages() {
         if(chatRows==null || tab!=0)return; chatRows.removeAllViews();
-        if(history.length()==0)chatRows.addView(text("Bonjour. Colle ta mémoire dans l’onglet Mémoire, puis parle-moi ou écris-moi.",20,MUTED));
+        if(history.length()==0)chatRows.addView(text("Bonjour. Tu peux me parler, écrire, joindre un fichier ou me donner un lien HTTPS. Menu ouvre la mémoire et les réglages.",20,MUTED));
         if(history.length()>80)chatRows.addView(text("Les 80 derniers messages sont affichés. L’export conserve tout le fichier local.",14,MUTED));
         for(int i=Math.max(0,history.length()-80);i<history.length();i++) {
             JSONObject item=history.optJSONObject(i); if(item==null)continue; boolean assistant="assistant".equals(item.optString("role"));
@@ -214,7 +217,8 @@ public class MainActivity extends Activity {
         busy=true;streamingText="";final int generation=++requestGeneration;renderMessages();note("Préparation du message…");
         worker.execute(()->{boolean submitted=false;try{
             String image=null;for(int i=0;i<files.length();i++)if(files.getJSONObject(i).optBoolean("image"))image=attachments.imageData(files.getJSONObject(i));
-            String body=(question.isEmpty()?"Analyse les pièces jointes.":question)+attachments.dataForChat(files);JSONObject user=LocalStore.message("user",body).put("attachments",files);snapshot.put(user);
+            StringBuilder sources=new StringBuilder();for(String url:WebReader.links(question)){if(generation!=requestGeneration)return;runOnUiThread(()->{if(generation==requestGeneration)note("Lecture Internet : "+ApiClient.origin(url));});try{sources.append("\n\n").append(internet.read(url,secrets.get("service:github")));}catch(Exception e){sources.append("\n\nLecture Internet non aboutie pour ").append(ApiClient.origin(url)).append(" : ").append(e instanceof IOException?e.getMessage():"adresse ou réponse invalide.");}}
+            String body=(question.isEmpty()?"Analyse les pièces jointes.":question)+attachments.dataForChat(files)+sources;JSONObject user=LocalStore.message("user",body).put("attachments",files);snapshot.put(user);
             JSONArray messages=LocalStore.payload(snapshot,prompt,savedMemory,useMemory,image,context,tokens);
             java.util.concurrent.CountDownLatch committed=new java.util.concurrent.CountDownLatch(1);java.util.concurrent.atomic.AtomicBoolean accepted=new java.util.concurrent.atomic.AtomicBoolean(false);
             runOnUiThread(()->{try{if(generation!=requestGeneration||isDestroyed())return;store.write("conversations.json",snapshot.toString());history=snapshot;draft="";pendingFiles=new JSONArray();pendingImage=null;if(input!=null)input.setText("");capture();updateAttachments();renderMessages();note("Connexion au modèle…");accepted.set(true);}catch(Exception e){busy=false;fail(e);}finally{committed.countDown();}});
@@ -246,7 +250,7 @@ public class MainActivity extends Activity {
     }
     private void releasePlayer(){if(player!=null){player.release();player=null;}if(playingFile!=null){playingFile.delete();playingFile=null;}}
     private void stopPlayback(){++voiceGeneration;speech.cancel();if(tts!=null)tts.stop();releasePlayer();voiceQueue=Collections.emptyList();}
-    private void stop(){++requestGeneration;busy=false;voiceTranscribing=false;api.cancel();microphone.cancel();listening=false;stopPlayback();prefs.edit().putBoolean("conversation_voice",false).apply();if(conversationBox!=null)conversationBox.setChecked(false);if(recognizer!=null)recognizer.cancel();if(!streamingText.trim().isEmpty())saveAnswer(streamingText,"cancelled");else renderMessages();note("Microphone, lecture et requête arrêtés.");}
+    private void stop(){++requestGeneration;busy=false;voiceTranscribing=false;api.cancel();microphone.cancel();internet.cancel();listening=false;stopPlayback();prefs.edit().putBoolean("conversation_voice",false).apply();if(conversationBox!=null)conversationBox.setChecked(false);if(recognizer!=null)recognizer.cancel();if(!streamingText.trim().isEmpty())saveAnswer(streamingText,"cancelled");else renderMessages();note("Microphone, lecture et requête arrêtés.");}
     private void newChat(){if(busy){note("Arrêter la réponse avant d’ouvrir un nouveau chat.");return;}new AlertDialog.Builder(this).setTitle("Nouvelle conversation").setMessage("Exporter le chat pour garder une copie. La mémoire personnelle restera intacte.").setNegativeButton("Annuler",null).setNeutralButton("Exporter",(d,w)->export("chat")).setPositiveButton("Vider le chat",(d,w)->{try{store.write("conversations.json","[]");history=new JSONArray();showTab(0);}catch(Exception e){fail(e);}}).show();}
     private void startListening(){
         if(!active||busy||listening||tab!=0)return;if(drawer!=null)drawer.setVisibility(View.GONE);
@@ -292,12 +296,13 @@ public class MainActivity extends Activity {
         new AlertDialog.Builder(this).setTitle("Connexion vocale Alibaba").setView(box).setNegativeButton("Annuler",null).setNeutralButton("Utiliser la connexion du modèle",(d,w)->{prefs.edit().remove("voice_base").apply();note("La voix utilisera la connexion Alibaba du modèle.");}).setPositiveButton("Enregistrer",(d,w)->{try{String base=ApiClient.base(url.getText().toString());AlibabaSpeech.compatible(base);String value=key.getText().toString().trim();if(!value.isEmpty())secrets.set("voice:"+base,value);prefs.edit().putString("voice_base",base).commit();key.setText("");note("Connexion vocale enregistrée. Le modèle du chat reste inchangé.");}catch(Exception e){fail(e);}}).show();
     }
     private void serviceAccess(LinearLayout box){
-        box.addView(text("Services et fichiers",21,ORANGE));box.addView(text("Les clés sont protégées sur ce téléphone. Se connecter à un site dans Web ne donne pas automatiquement sa clé API à Jarvis.",15,MUTED));
+        box.addView(text("Services et fichiers",21,ORANGE));box.addView(button("Lire un lien Internet",this::readLink));box.addView(text("Les liens HTTPS écrits dans un message sont lus avant son envoi au modèle : trois liens maximum. Profils GitHub, dépôts et fichiers utilisent l’API GitHub. Les pages demandant une connexion ou JavaScript peuvent nécessiter Web.",15,MUTED));box.addView(text("Les clés sont protégées sur ce téléphone. Se connecter à un site dans Web ne donne pas automatiquement sa clé API à Jarvis.",15,MUTED));
         row(box,button("GitHub · accès API",this::githubAccess),button("Lire un fichier GitHub",this::githubFile));
         row(box,button("Alibaba · console",()->openBrowser("https://modelstudio.console.alibabacloud.com/")),button("Modèle et voix",()->showTab(2)));
         row(box,button("Ajouter une API HTTPS",this::addService),button("Mes API",this::readService));
         box.addView(text("GitHub : lecture du compte et des fichiers autorisés par ton jeton. Autres API : lecture HTTPS explicite avec une clé Bearer. Le résultat peut être ajouté au brouillon avant envoi au modèle. Chaque service garde ses permissions propres.",15,MUTED));
     }
+    private void readLink(){EditText url=edit("https://…","",false);new AlertDialog.Builder(this).setTitle("Lire un lien Internet").setView(url).setNegativeButton("Annuler",null).setPositiveButton("Lire",(d,w)->{String link=url.getText().toString().trim();note("Lecture Internet…");worker.execute(()->{try{String content=internet.read(link,secrets.get("service:github"));runOnUiThread(()->confirmImport(content));}catch(Exception e){runOnUiThread(()->fail(e));}});}).show();}
     private void githubAccess(){
         LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(16),0,dp(16),0);box.addView(text("Créer un jeton GitHub avec accès en lecture aux dépôts souhaités, puis le coller ici.",16,MUTED));
         EditText token=field(box,"Jeton GitHub — vide pour garder celui enregistré","",false);token.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);token.setSaveEnabled(false);
@@ -419,5 +424,5 @@ public class MainActivity extends Activity {
     @Override protected void onResume(){super.onResume();active=true;updateAccess();}
     @Override protected void onPause(){capture();active=false;if(recognizer!=null){recognizer.cancel();listening=false;}microphone.cancel();stopPlayback();if(listening){listening=false;note("Dictée arrêtée en quittant le chat.");}if(voiceTranscribing){voiceTranscribing=false;busy=false;}super.onPause();}
     @Override protected void onSaveInstanceState(Bundle state){capture();state.putInt("tab",tab);super.onSaveInstanceState(state);}
-    @Override protected void onDestroy(){++requestGeneration;api.cancel();microphone.cancel();stopPlayback();if(!streamingText.trim().isEmpty())saveAnswer(streamingText,"interrupted");worker.shutdownNow();if(recognizer!=null)recognizer.destroy();if(tts!=null)tts.shutdown();Shizuku.removeBinderReceivedListener(binderReceived);Shizuku.removeBinderDeadListener(binderDead);Shizuku.removeRequestPermissionResultListener(permissionListener);if(shellBound){try{Shizuku.unbindUserService(shellArgs,shellConnection,true);}catch(Exception ignored){}}super.onDestroy();}
+    @Override protected void onDestroy(){++requestGeneration;api.cancel();internet.cancel();microphone.cancel();stopPlayback();if(!streamingText.trim().isEmpty())saveAnswer(streamingText,"interrupted");worker.shutdownNow();if(recognizer!=null)recognizer.destroy();if(tts!=null)tts.shutdown();Shizuku.removeBinderReceivedListener(binderReceived);Shizuku.removeBinderDeadListener(binderDead);Shizuku.removeRequestPermissionResultListener(permissionListener);if(shellBound){try{Shizuku.unbindUserService(shellArgs,shellConnection,true);}catch(Exception ignored){}}super.onDestroy();}
 }
