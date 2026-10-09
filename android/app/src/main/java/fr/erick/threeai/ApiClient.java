@@ -44,7 +44,11 @@ final class ApiClient {
         return s;
     }
     void cancel() { HttpsURLConnection c = active; if (c != null) c.disconnect(); }
+    interface Response<T> { T read(InputStream in,String contentType) throws Exception; }
     String request(String base, String path, String method, Object body, Map<String,String> headers) throws Exception {
+        return response(base,path,method,body,headers,(in,type)->LocalStore.readBounded(in,2*1024*1024));
+    }
+    private <T> T response(String base,String path,String method,Object body,Map<String,String> headers,Response<T> reader)throws Exception {
         HttpsURLConnection c = connections.open(new URL(base(base) + path)); active = c;
         try {
             c.setInstanceFollowRedirects(false); c.setConnectTimeout(15000); c.setReadTimeout(90000); c.setRequestMethod(method);
@@ -60,7 +64,7 @@ final class ApiClient {
                 try (OutputStream out = c.getOutputStream()) { out.write(data); }
             }
             int code = c.getResponseCode(); if (code < 200 || code >= 300) throw new HttpFailure(code, base, c.getContentType() != null && c.getContentType().toLowerCase(java.util.Locale.ROOT).contains("text/html"));
-            try (InputStream in = c.getInputStream()) { return LocalStore.readBounded(in, 2 * 1024 * 1024); }
+            try (InputStream in = c.getInputStream()) { return reader.read(in,c.getContentType()); }
         } catch (UnknownHostException e) { throw new IOException(origin(base) + " · nom du serveur introuvable. Vérifier l’adresse et le réseau.");
         } catch (SocketTimeoutException e) { throw new IOException(origin(base) + " · délai réseau dépassé. Aucun refus HTTP identifié.");
         } catch (SSLException e) { throw new IOException(origin(base) + " · connexion HTTPS non établie. Vérifier l’heure Android et le réseau.");
@@ -74,8 +78,18 @@ final class ApiClient {
         JSONObject result = new JSONObject(request(base, "/chat/completions", "POST", body, Collections.singletonMap("Authorization", "Bearer " + key)));
         JSONObject choice = result.getJSONArray("choices").getJSONObject(0);
         String content = choice.getJSONObject("message").optString("content", "");
-        if (!"stop".equals(choice.optString("finish_reason")) || content.trim().isEmpty())
+        if (content.trim().isEmpty())
             throw new IOException("Réponse interrompue ou vide. Augmenter la limite de réponse si nécessaire.");
         return content;
+    }
+    ChatStream.Result stream(String base,String model,String key,JSONArray messages,double temperature,int tokens,ChatStream.Listener listener)throws Exception {
+        if(key.isEmpty())throw new IOException("Clé absente pour ce serveur. L’ajouter dans Réglages.");
+        if(key.matches("(?s).*\\s.*"))throw new IOException("Clé mal collée.");
+        JSONObject body=new JSONObject().put("model",model).put("messages",messages).put("stream",true).put("temperature",temperature).put("max_tokens",tokens);
+        return response(base,"/chat/completions","POST",body,Collections.singletonMap("Authorization","Bearer "+key),(in,type)->{
+            if(type!=null&&type.toLowerCase(java.util.Locale.ROOT).contains("text/event-stream"))return ChatStream.read(new InputStreamReader(in,StandardCharsets.UTF_8),listener);
+            JSONObject choice=new JSONObject(LocalStore.readBounded(in,2*1024*1024)).getJSONArray("choices").getJSONObject(0);
+            String text=choice.getJSONObject("message").optString("content","");if(text.trim().isEmpty())throw new IOException("Aucune réponse textuelle reçue.");listener.update(text,false);return new ChatStream.Result(text,choice.optString("finish_reason","interrupted"));
+        });
     }
 }
