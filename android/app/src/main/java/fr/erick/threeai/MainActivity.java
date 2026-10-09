@@ -34,6 +34,7 @@ public class MainActivity extends Activity {
     private CloudMemory cloud;
     private final ApiClient api = new ApiClient();
     private final AlibabaSpeech speech = new AlibabaSpeech();
+    private final AlibabaRealtimeAsr realtimeAsr = new AlibabaRealtimeAsr();
     private final WebReader internet = new WebReader();
     private final VoiceCapture microphone = new VoiceCapture();
     private Attachments attachments;
@@ -43,11 +44,17 @@ public class MainActivity extends Activity {
     private TextView streamingView, attachmentLabel;
     private Button micButton, sendButton;
     private String streamingText = "", currentStatus = "";
-    private int voiceGeneration;
+    private volatile int voiceGeneration;
+    private LinearLayout voicePanel;
+    private TextView voiceState, voiceTranscript;
+    private ProgressBar voiceLevel;
+    private String voiceDraftBase = "";
     private android.media.MediaPlayer player;
     private File playingFile;
     private List<String> voiceQueue = Collections.emptyList();
-    private int voiceIndex;
+    private int voiceIndex, speechCursor;
+    private boolean streamingSpeech, speechLoading;
+    private final ExecutorService voiceWorker = Executors.newSingleThreadExecutor();
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private JSONArray history = new JSONArray();
     private String memory = "", draft = "", pendingImage, exportKind = "", loadError = "";
@@ -135,7 +142,7 @@ public class MainActivity extends Activity {
     private void showTab(int next) {
         if(!capture())return;settingsFields.clear();settingsKey=null;settingsDirty=false;
         if(listening){microphone.cancel();speech.cancel();++voiceGeneration;listening=false;}if(recognizer!=null)recognizer.cancel();stopPlayback();
-        if(voiceTranscribing){voiceTranscribing=false;busy=false;}tab=next;input=null;memoryInput=null;connectionStatus=null;conversationBox=null;micButton=null;sendButton=null;streamingView=null;
+        if(voiceTranscribing){voiceTranscribing=false;busy=false;}tab=next;input=null;memoryInput=null;connectionStatus=null;conversationBox=null;micButton=null;sendButton=null;streamingView=null;voicePanel=null;voiceState=null;voiceTranscript=null;voiceLevel=null;
         host=new FrameLayout(this);host.setBackgroundColor(BG);
         root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(dp(10),0,dp(10),dp(4));host.addView(root,new FrameLayout.LayoutParams(-1,-1));
         host.setOnApplyWindowInsetsListener((view,insets)->{
@@ -168,6 +175,7 @@ public class MainActivity extends Activity {
     private void chatView(){
         chatScroll=new ScrollView(this);chatScroll.setContentDescription("Messages du chat");chatScroll.setFillViewport(true);chatRows=new LinearLayout(this);chatRows.setOrientation(LinearLayout.VERTICAL);chatScroll.addView(chatRows);content.addView(chatScroll,new LinearLayout.LayoutParams(-1,0,1));renderMessages();
         attachmentLabel=text("",13,CYAN);attachmentLabel.setMaxLines(2);attachmentLabel.setOnClickListener(v->pendingAttachments());content.addView(attachmentLabel);updateAttachments();
+        voicePanel=new LinearLayout(this);voicePanel.setOrientation(LinearLayout.VERTICAL);voicePanel.setPadding(dp(12),dp(4),dp(12),dp(6));voicePanel.setBackground(background(PANEL,CYAN));voiceState=text("",18,CYAN);voiceState.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);voicePanel.addView(voiceState);voiceLevel=new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);voiceLevel.setMax(100);voiceLevel.setContentDescription("Niveau du microphone");voicePanel.addView(voiceLevel,new LinearLayout.LayoutParams(-1,dp(8)));ScrollView transcriptScroll=new ScrollView(this);voiceTranscript=text("",19,WHITE);voiceTranscript.setTextIsSelectable(true);voiceTranscript.setContentDescription("Transcription en direct");transcriptScroll.addView(voiceTranscript);voicePanel.addView(transcriptScroll,new LinearLayout.LayoutParams(-1,dp(112)));voicePanel.setVisibility(View.GONE);content.addView(voicePanel,new LinearLayout.LayoutParams(-1,-2));
         input=edit("Écrire à Jarvis…",draft,true);input.setSaveEnabled(false);input.setMaxLines(3);input.setMinLines(1);content.addView(input,new LinearLayout.LayoutParams(-1,-2));
         micButton=button("Parler",()->{if(listening){if(usingRecorder)microphone.finish();else if(recognizer!=null)recognizer.stopListening();}else startListening();});sendButton=button(busy?"Arrêter":"Envoyer",()->{if(busy)stop();else send();});
         row(content,button("Joindre",this::chooseAttachment),micButton,sendButton);
@@ -210,11 +218,11 @@ public class MainActivity extends Activity {
     }
     private void send(){
         if(busy||listening){note("Terminer la dictée ou la réponse en cours.");return;}if(!capture())return;
-        final String question=draft.trim();if(question.isEmpty()&&pendingFiles.length()==0){note("Écrire, parler ou joindre un fichier.");return;}
+        if(voicePanel!=null)voicePanel.setVisibility(View.GONE);final String question=draft.trim();if(question.isEmpty()&&pendingFiles.length()==0){note("Écrire, parler ou joindre un fichier.");return;}
         final String base=prefs.getString("model_base","https://ollama.com/v1"),model=prefs.getString("model_name","gemma4:31b");
         final String key;final JSONArray files,snapshot;final int tokens=prefs.getInt("tokens",8192);final double temperature=prefs.getFloat("temperature",.7f);final String prompt=prefs.getString("prompt",DEFAULT_PROMPT),savedMemory=memory;final boolean useMemory=prefs.getBoolean("use_memory",true);final int context=prefs.getInt("context",64000);
         try{if(!loadError.isEmpty())throw new IOException(loadError);key=secrets.get("model:"+ApiClient.base(base));if(key.isEmpty()){showTab(2);note("Ajouter la clé de cette adresse puis enregistrer.");return;}if(history.length()>=999)throw new IOException("Archive pleine. Exporter et ouvrir un nouveau chat.");files=new JSONArray(pendingFiles.toString());snapshot=new JSONArray(history.toString());}catch(Exception e){fail(e);return;}
-        busy=true;streamingText="";final int generation=++requestGeneration;renderMessages();note("Préparation du message…");
+        stopPlayback();final boolean liveSpeech=active&&tab==0&&prefs.getBoolean("read_voice",true)&&prefs.getBoolean("alibaba_tts",true)&&alibabaVoice();if(liveSpeech){streamingSpeech=true;voiceQueue=new ArrayList<>();voiceIndex=0;speechCursor=0;}busy=true;streamingText="";final int generation=++requestGeneration;renderMessages();note("Préparation du message…");
         worker.execute(()->{boolean submitted=false;try{
             String image=null;for(int i=0;i<files.length();i++)if(files.getJSONObject(i).optBoolean("image"))image=attachments.imageData(files.getJSONObject(i));
             StringBuilder sources=new StringBuilder();for(String url:WebReader.links(question)){if(generation!=requestGeneration)return;runOnUiThread(()->{if(generation==requestGeneration)note("Lecture Internet : "+ApiClient.origin(url));});try{sources.append("\n\n").append(internet.read(url,secrets.get("service:github")));}catch(Exception e){sources.append("\n\nLecture Internet non aboutie pour ").append(ApiClient.origin(url)).append(" : ").append(e instanceof IOException?e.getMessage():"adresse ou réponse invalide.");}}
@@ -225,10 +233,10 @@ public class MainActivity extends Activity {
             if(!committed.await(15,java.util.concurrent.TimeUnit.SECONDS)||!accepted.get()||generation!=requestGeneration)return;submitted=true;
             final long[] shown={0};ChatStream.Result result=api.stream(base,model,key,messages,temperature,tokens,(answer,reasoning)->{
                 long now=SystemClock.elapsedRealtime();if(now-shown[0]<80&&answer.equals(streamingText))return;if(now-shown[0]<80&&!reasoning)return;shown[0]=now;
-                runOnUiThread(()->{if(generation!=requestGeneration||isDestroyed())return;streamingText=answer;if(streamingView!=null)streamingView.setText(answer.isEmpty()?"Réflexion du modèle…":answer);note(reasoning&&answer.isEmpty()?"Réflexion du modèle…":"Réception de la réponse…");if(chatScroll!=null&&tab==0)chatScroll.post(()->chatScroll.fullScroll(View.FOCUS_DOWN));});
+                runOnUiThread(()->{if(generation!=requestGeneration||isDestroyed())return;streamingText=answer;if(liveSpeech)queueSpeech(answer,false);if(streamingView!=null)streamingView.setText(answer.isEmpty()?"Réflexion du modèle…":answer);note(reasoning&&answer.isEmpty()?"Réflexion du modèle…":"Réception de la réponse…");if(chatScroll!=null&&tab==0)chatScroll.post(()->chatScroll.fullScroll(View.FOCUS_DOWN));});
             });
-            runOnUiThread(()->{if(generation!=requestGeneration||isDestroyed())return;busy=false;saveAnswer(result.text,result.finish);note(result.complete()?"Réponse reçue · "+model:"Réponse partielle conservée. Limite atteinte ou génération interrompue; augmenter les tokens dans Réglages.");if(tab==0&&active&&prefs.getBoolean("read_voice",true))speak(result.text);});
-        }catch(Exception e){final boolean accepted=submitted;runOnUiThread(()->{if(generation!=requestGeneration||isDestroyed())return;busy=false;if(accepted&&!streamingText.trim().isEmpty())saveAnswer(streamingText,"interrupted");renderMessages();fail(e);});}});
+            runOnUiThread(()->{if(generation!=requestGeneration||isDestroyed())return;busy=false;saveAnswer(result.text,result.finish);note(result.complete()?"Réponse reçue · "+model:"Réponse partielle conservée. Limite atteinte ou génération interrompue; augmenter les tokens dans Réglages.");if(liveSpeech)queueSpeech(result.text,true);else if(tab==0&&active&&prefs.getBoolean("read_voice",true))speak(result.text);});
+        }catch(Exception e){final boolean accepted=submitted;runOnUiThread(()->{if(generation!=requestGeneration||isDestroyed())return;busy=false;if(liveSpeech)queueSpeech(streamingText,true);if(accepted&&!streamingText.trim().isEmpty())saveAnswer(streamingText,"interrupted");renderMessages();fail(e);});}});
     }
     private void saveAnswer(String answer,String finish){try{JSONArray next=new JSONArray(history.toString());next.put(LocalStore.message("assistant",answer).put("finish_reason",finish));store.write("conversations.json",next.toString());history=next;streamingText="";renderMessages();}catch(Exception e){fail(e);}}
     private String voiceBase(){String configured=prefs.getString("voice_base","");return configured.isEmpty()?prefs.getString("model_base","https://ollama.com/v1"):configured;}
@@ -242,38 +250,66 @@ public class MainActivity extends Activity {
         if(ttsReady){List<String> chunks=SpeechText.chunks(value,TextToSpeech.getMaxSpeechInputLength()-20);for(int i=0;i<chunks.size();i++)tts.speak(chunks.get(i),i==0?TextToSpeech.QUEUE_FLUSH:TextToSpeech.QUEUE_ADD,null,i==chunks.size()-1?"last":"part");}
         else note("Installer une voix française Android ou configurer la voix Alibaba dans Réglages.");
     }
+    private void queueSpeech(String raw,boolean finished){
+        if(!streamingSpeech||!active||tab!=0)return;
+        while(speechCursor<raw.length()){
+            int end=finished?raw.length():SpeechText.boundary(raw,speechCursor);
+            if(end<=speechCursor)break;
+            String clean=SpeechText.clean(raw.substring(speechCursor,end));speechCursor=end;
+            if(!clean.isEmpty())voiceQueue.addAll(SpeechText.chunks(clean,350));
+        }
+        if(finished)streamingSpeech=false;
+        if(!speechLoading)nextSpeech(voiceGeneration);
+    }
     private void nextSpeech(int generation){
-        if(generation!=voiceGeneration||!active||isDestroyed())return;if(voiceIndex>=voiceQueue.size()){note("");if(tab==0&&!busy&&prefs.getBoolean("conversation_voice",false))startListening();return;}
-        final String part=voiceQueue.get(voiceIndex++),base=voiceBase();note("Préparation de la voix Alibaba…");worker.execute(()->{File audio=null;try{audio=speech.synthesize(base,voiceKey(),prefs.getString("tts_voice","Ethan"),part,getCacheDir());final File ready=audio;
-            runOnUiThread(()->{if(generation!=voiceGeneration||!active||isDestroyed()){ready.delete();return;}try{player=new android.media.MediaPlayer();playingFile=ready;player.setAudioAttributes(new android.media.AudioAttributes.Builder().setUsage(android.media.AudioAttributes.USAGE_ASSISTANT).setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH).build());player.setDataSource(ready.getPath());player.setOnPreparedListener(p->{if(generation==voiceGeneration&&active){p.start();note("Lecture vocale…");}});player.setOnCompletionListener(p->{releasePlayer();nextSpeech(generation);});player.setOnErrorListener((p,what,extra)->{releasePlayer();note("Lecture audio impossible. La réponse reste affichée.");return true;});player.prepareAsync();}catch(Exception e){releasePlayer();fail(new IOException("Lecture vocale impossible."));}});
-        }catch(Exception e){if(audio!=null)audio.delete();runOnUiThread(()->{if(generation==voiceGeneration){prefs.edit().putBoolean("conversation_voice",false).apply();if(conversationBox!=null)conversationBox.setChecked(false);fail(new IOException("Voix Alibaba indisponible. "+(e instanceof IOException?e.getMessage():"Vérifier le modèle vocal et les droits du compte.")));}});}});
+        if(generation!=voiceGeneration||!active||isDestroyed())return;if(voiceIndex>=voiceQueue.size()){if(streamingSpeech)return;note("");if(tab==0&&!busy&&prefs.getBoolean("conversation_voice",false))startListening();return;}
+        speechLoading=true;final String part=voiceQueue.get(voiceIndex++),base=voiceBase();note("Préparation de la voix Alibaba…");voiceWorker.execute(()->{File audio=null;try{audio=speech.synthesize(base,voiceKey(),prefs.getString("tts_voice","Ethan"),part,getCacheDir());final File ready=audio;
+            runOnUiThread(()->{if(generation!=voiceGeneration||!active||isDestroyed()){ready.delete();return;}try{player=new android.media.MediaPlayer();playingFile=ready;player.setAudioAttributes(new android.media.AudioAttributes.Builder().setUsage(android.media.AudioAttributes.USAGE_ASSISTANT).setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH).build());player.setDataSource(ready.getPath());player.setOnPreparedListener(p->{if(generation==voiceGeneration&&active){p.start();note("Lecture vocale…");}});player.setOnCompletionListener(p->{releasePlayer();speechLoading=false;nextSpeech(generation);});player.setOnErrorListener((p,what,extra)->{releasePlayer();speechLoading=false;streamingSpeech=false;note("Lecture audio impossible. La réponse reste affichée.");return true;});player.prepareAsync();}catch(Exception e){releasePlayer();speechLoading=false;streamingSpeech=false;fail(new IOException("Lecture vocale impossible."));}});
+        }catch(Exception e){if(audio!=null)audio.delete();runOnUiThread(()->{if(generation==voiceGeneration){speechLoading=false;streamingSpeech=false;prefs.edit().putBoolean("conversation_voice",false).apply();if(conversationBox!=null)conversationBox.setChecked(false);fail(new IOException("Voix Alibaba indisponible. "+(e instanceof IOException?e.getMessage():"Vérifier le modèle vocal et les droits du compte.")));}});}});
     }
     private void releasePlayer(){if(player!=null){player.release();player=null;}if(playingFile!=null){playingFile.delete();playingFile=null;}}
-    private void stopPlayback(){++voiceGeneration;speech.cancel();if(tts!=null)tts.stop();releasePlayer();voiceQueue=Collections.emptyList();}
-    private void stop(){++requestGeneration;busy=false;voiceTranscribing=false;api.cancel();microphone.cancel();internet.cancel();listening=false;stopPlayback();prefs.edit().putBoolean("conversation_voice",false).apply();if(conversationBox!=null)conversationBox.setChecked(false);if(recognizer!=null)recognizer.cancel();if(!streamingText.trim().isEmpty())saveAnswer(streamingText,"cancelled");else renderMessages();note("Microphone, lecture et requête arrêtés.");}
+    private void stopPlayback(){++voiceGeneration;realtimeAsr.cancel();microphone.cancel();listening=false;if(input!=null)input.setEnabled(true);speech.cancel();if(tts!=null)tts.stop();releasePlayer();voiceQueue=Collections.emptyList();streamingSpeech=false;speechLoading=false;}
+    private void stop(){if(voicePanel!=null)showVoiceState("Micro arrêté · brouillon conservé",0);++requestGeneration;busy=false;voiceTranscribing=false;api.cancel();microphone.cancel();internet.cancel();listening=false;stopPlayback();prefs.edit().putBoolean("conversation_voice",false).apply();if(conversationBox!=null)conversationBox.setChecked(false);if(recognizer!=null)recognizer.cancel();if(!streamingText.trim().isEmpty())saveAnswer(streamingText,"cancelled");else renderMessages();note("Microphone, lecture et requête arrêtés.");}
     private void newChat(){if(busy){note("Arrêter la réponse avant d’ouvrir un nouveau chat.");return;}new AlertDialog.Builder(this).setTitle("Nouvelle conversation").setMessage("Exporter le chat pour garder une copie. La mémoire personnelle restera intacte.").setNegativeButton("Annuler",null).setNeutralButton("Exporter",(d,w)->export("chat")).setPositiveButton("Vider le chat",(d,w)->{try{store.write("conversations.json","[]");history=new JSONArray();showTab(0);}catch(Exception e){fail(e);}}).show();}
     private void startListening(){
         if(!active||busy||listening||tab!=0)return;if(drawer!=null)drawer.setVisibility(View.GONE);
         if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED){requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO},11);return;}
         stopPlayback();if(alibabaVoice()&&prefs.getBoolean("alibaba_asr",true)){
             final String base=voiceBase(),key;try{key=voiceKey();if(key.isEmpty())throw new IOException("Ajouter la clé Alibaba dans Réglages avant la dictée.");}catch(Exception e){fail(e);return;}
-            usingRecorder=true;listening=true;final int generation=++voiceGeneration;note("Je t’écoute. Pause de 2 secondes ou Terminer pour transcrire.");
-            microphone.start(new VoiceCapture.Listener(){
-                public void level(int level,int seconds){runOnUiThread(()->{if(generation==voiceGeneration&&active)note("Microphone · "+seconds+" s · niveau "+level+" % · Terminer");});}
-                public void done(byte[] wav){runOnUiThread(()->{if(generation==voiceGeneration){listening=false;busy=true;voiceTranscribing=true;note("Transcription Alibaba…");}});worker.execute(()->{try{if(generation!=voiceGeneration){Arrays.fill(wav,(byte)0);return;}String value=speech.transcribe(base,key,wav);Arrays.fill(wav,(byte)0);runOnUiThread(()->{if(generation!=voiceGeneration||!active||isDestroyed())return;busy=false;voiceTranscribing=false;dictated(value);});}catch(Exception e){Arrays.fill(wav,(byte)0);runOnUiThread(()->{if(generation==voiceGeneration){listening=false;busy=false;voiceTranscribing=false;fail(new IOException("Transcription Alibaba : "+(e instanceof IOException?e.getMessage():"réponse invalide.")));}});}});}
-                public void error(String message){runOnUiThread(()->{if(generation==voiceGeneration){listening=false;note(message);}});}
-            });return;
+            if(!capture())return;voiceDraftBase=draft;if(voiceTranscript!=null)voiceTranscript.setText("");usingRecorder=true;busy=true;voiceTranscribing=true;final int generation=++voiceGeneration;
+            showVoiceState("Connexion à la voix en direct…",0);if(input!=null)input.setEnabled(false);note("Connexion vocale Alibaba…");
+            try{realtimeAsr.start(base,key,new AlibabaRealtimeAsr.Listener(){
+                public void ready(){runOnUiThread(()->{if(generation!=voiceGeneration||!active||isDestroyed())return;busy=false;voiceTranscribing=false;listening=true;showVoiceState("Je t’écoute · parle naturellement",0);note("Voix en direct · Terminer après ta phrase.");
+                    try{microphone.start(new VoiceCapture.Listener(){
+                        public void level(int level,int seconds){runOnUiThread(()->{if(generation==voiceGeneration&&active&&listening)showVoiceState("Micro actif · "+seconds+" s",level);});}
+                        public void pcm(byte[] pcm){if(generation==voiceGeneration)realtimeAsr.append(pcm);Arrays.fill(pcm,(byte)0);}
+                        public void done(byte[] ignored){runOnUiThread(()->{if(generation!=voiceGeneration||!active)return;listening=false;busy=true;voiceTranscribing=true;showVoiceState("Je termine la transcription…",0);note("Transcription finale…");realtimeAsr.finish();});}
+                        public void error(String message){runOnUiThread(()->{if(generation==voiceGeneration)voiceError(message);});}
+                    },true);}catch(Exception e){voiceError("Microphone encore occupé. Réessayer.");}
+                });}
+                public void partial(String text){runOnUiThread(()->{if(generation==voiceGeneration&&active&&tab==0)showVoicePreview(text);});}
+                public void done(String text){runOnUiThread(()->{if(generation!=voiceGeneration||!active||isDestroyed())return;busy=false;voiceTranscribing=false;listening=false;finishVoice(text);});}
+                public void error(String message){runOnUiThread(()->{if(generation==voiceGeneration)voiceError(message);});}
+            });}catch(Exception e){voiceError("Connexion vocale impossible. Vérifier l’adresse et la clé Alibaba.");}return;
         }
-        usingRecorder=false;if(!SpeechRecognizer.isRecognitionAvailable(this)){note("Pas de service de dictée Android. Configurer la voix Alibaba dans Réglages.");return;}
+        usingRecorder=false;if(!capture())return;voiceDraftBase=draft;if(voiceTranscript!=null)voiceTranscript.setText("");if(!SpeechRecognizer.isRecognitionAvailable(this)){note("Pas de service de dictée Android. Configurer la voix Alibaba dans Réglages.");return;}
         if(recognizer==null){recognizer=SpeechRecognizer.createSpeechRecognizer(this);recognizer.setRecognitionListener(new RecognitionListener(){
-            public void onReadyForSpeech(Bundle b){note("Je t’écoute…");}public void onBeginningOfSpeech(){}public void onRmsChanged(float v){}public void onBufferReceived(byte[] b){}public void onEndOfSpeech(){note("Transcription Android…");}
-            public void onError(int code){listening=false;note("Dictée Android interrompue ("+code+"). Réessayer ou utiliser Alibaba.");}
-            public void onResults(Bundle b){listening=false;ArrayList<String> values=b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);if(values!=null&&!values.isEmpty()&&active&&tab==0)dictated(values.get(0));}
-            public void onPartialResults(Bundle b){ArrayList<String> values=b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);if(values!=null&&!values.isEmpty())note("Dictée : "+values.get(0));}public void onEvent(int type,Bundle b){}
+            public void onReadyForSpeech(Bundle b){showVoiceState("Je t’écoute · dictée Android",0);note("Je t’écoute…");}public void onBeginningOfSpeech(){}public void onRmsChanged(float v){if(listening)showVoiceState("Micro actif · dictée Android",Math.max(0,Math.min(100,(int)(v*10))));}public void onBufferReceived(byte[] b){}public void onEndOfSpeech(){showVoiceState("Je termine la transcription…",0);note("Transcription Android…");}
+            public void onError(int code){voiceError("Dictée Android interrompue ("+code+"). Réessayer ou utiliser Alibaba.");}
+            public void onResults(Bundle b){listening=false;ArrayList<String> values=b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);if(values!=null&&!values.isEmpty()&&active&&tab==0)finishVoice(values.get(0));}
+            public void onPartialResults(Bundle b){ArrayList<String> values=b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);if(values!=null&&!values.isEmpty()&&listening&&active&&tab==0)showVoicePreview(values.get(0));}public void onEvent(int type,Bundle b){}
         });}
-        Intent intent=new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,RecognizerIntent.LANGUAGE_MODEL_FREE_FORM).putExtra(RecognizerIntent.EXTRA_LANGUAGE,"fr-CA").putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS,true);listening=true;recognizer.startListening(intent);
+        Intent intent=new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,RecognizerIntent.LANGUAGE_MODEL_FREE_FORM).putExtra(RecognizerIntent.EXTRA_LANGUAGE,"fr-CA").putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS,true);listening=true;if(input!=null)input.setEnabled(false);showVoiceState("Démarrage du microphone…",0);note("Démarrage de la dictée…");recognizer.startListening(intent);
     }
-    private void dictated(String value){draft=(draft.trim().isEmpty()?"":draft+" ")+value;if(input!=null)input.setText(draft);capture();note("Texte reconnu. Corriger ou Envoyer.");if(prefs.getBoolean("conversation_voice",false))send();}
+    private void showVoiceState(String label,int level){if(voicePanel!=null)voicePanel.setVisibility(View.VISIBLE);if(voiceState!=null)voiceState.setText(label);if(voiceLevel!=null)voiceLevel.setProgress(level);}
+    private void showVoicePreview(String value){
+        if(voiceTranscript!=null){voiceTranscript.setText(value);View parent=(View)voiceTranscript.getParent();parent.post(()->{if(parent instanceof ScrollView)((ScrollView)parent).fullScroll(View.FOCUS_DOWN);});}
+        draft=(voiceDraftBase.trim().isEmpty()?"":voiceDraftBase+" ")+value;
+        if(input!=null){input.setText(draft);input.setSelection(input.length());}prefs.edit().putString("draft",draft).apply();
+    }
+    private void finishVoice(String value){listening=false;showVoicePreview(value);if(input!=null)input.setEnabled(true);capture();showVoiceState("Texte reconnu · tu peux corriger",0);note("Texte reconnu. Corriger ou Envoyer.");if(prefs.getBoolean("conversation_voice",false))send();}
+    private void voiceError(String message){realtimeAsr.cancel();microphone.cancel();listening=false;busy=false;voiceTranscribing=false;if(input!=null)input.setEnabled(true);showVoiceState("Dictée interrompue · brouillon conservé",0);note(message);}
+
     private void memoryView(){LinearLayout box=form();box.addView(text("Ma mémoire persistante",23,WHITE));box.addView(text("Colle ici ton bagage personnel. Le texte reste dans les données privées de 3AI. Il est ajouté aux messages du modèle quand l’option est activée.",16,MUTED));
         CheckBox include=new CheckBox(this);include.setText("Utiliser cette mémoire dans le chat");include.setTextColor(WHITE);include.setChecked(prefs.getBoolean("use_memory",true));include.setOnCheckedChangeListener((b,v)->prefs.edit().putBoolean("use_memory",v).apply());box.addView(include);
         memoryInput=edit("Coller mon bloc mémoire…",memory,true);memoryInput.setSaveEnabled(false);memoryInput.setMinLines(12);box.addView(memoryInput,new LinearLayout.LayoutParams(-1,-2));
@@ -282,13 +318,13 @@ public class MainActivity extends Activity {
         box.addView(text("La synchronisation distante devient disponible après configuration du projet Supabase séparé et connexion à ton compte. Aucun texte n’est téléversé automatiquement.",15,MUTED));
     }
     private void voiceSettings(LinearLayout box){
-        box.addView(text("Voix · Alibaba",23,WHITE));box.addView(text("DeepSeek garde la conversation. Qwen3-ASR-Flash transcrit le micro; Qwen3-TTS-Flash lit les réponses en français. Ces appels utilisent ton compte Alibaba. Sans adresse vocale séparée, la clé du modèle est réutilisée uniquement sur le même serveur Alibaba.",15,MUTED));
+        box.addView(text("Voix · Alibaba",23,WHITE));box.addView(text("DeepSeek garde la conversation. Qwen3-ASR-Flash-Realtime affiche tes mots pendant que tu parles; Qwen3-TTS-Flash lit les réponses en français. Ces appels utilisent ton compte Alibaba. Sans adresse vocale séparée, la clé du modèle est réutilisée uniquement sur le même serveur Alibaba.",15,MUTED));
         CheckBox asr=new CheckBox(this);asr.setText("Utiliser Alibaba pour la dictée");asr.setTextColor(WHITE);asr.setChecked(prefs.getBoolean("alibaba_asr",true));asr.setOnCheckedChangeListener((b,on)->prefs.edit().putBoolean("alibaba_asr",on).apply());box.addView(asr);
         CheckBox natural=new CheckBox(this);natural.setText("Voix Alibaba naturelle");natural.setTextColor(WHITE);natural.setChecked(prefs.getBoolean("alibaba_tts",true));natural.setOnCheckedChangeListener((b,on)->prefs.edit().putBoolean("alibaba_tts",on).apply());box.addView(natural);
         box.addView(button("Choisir la voix",()->new AlertDialog.Builder(this).setTitle("Voix française Alibaba").setItems(new String[]{"Ethan · masculine","Cherry · féminine","Serena · féminine douce"},(d,i)->{prefs.edit().putString("tts_voice",new String[]{"Ethan","Cherry","Serena"}[i]).apply();note("Voix enregistrée.");}).show()));
         box.addView(button("Configurer une adresse vocale séparée",this::voiceConnection));
         box.addView(button("Tester la voix",()->speak("Bonjour Erick. La voix est prête. Tu peux me parler avec le bouton Parler.")));
-        box.addView(text("La dictée s’arrête après deux secondes de silence, ou en touchant Terminer. Un enregistrement dure au plus une minute. Il est envoyé pour transcription, puis effacé de la mémoire de l’application.",15,MUTED));
+        box.addView(text("Tes mots apparaissent pendant que tu parles. La dictée se termine après une pause de 3,5 secondes ou en touchant Terminer. Une prise continue peut durer dix minutes. Le micro est arrêté en quittant le chat; le texte déjà reconnu reste dans le brouillon.",15,MUTED));
     }
     private void voiceConnection(){
         LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(16),0,dp(16),0);
@@ -422,7 +458,8 @@ public class MainActivity extends Activity {
     private void handleIncoming(Intent intent){if(!Intent.ACTION_SEND.equals(intent.getAction()))return;String value=intent.getStringExtra(Intent.EXTRA_TEXT);if(value!=null){if(value.length()>1048576){note("Texte partagé trop volumineux.");return;}try{LocalStore.validateImportText(value);confirmImport(value);}catch(IOException e){fail(e);}return;}Uri uri=Build.VERSION.SDK_INT>=33?intent.getParcelableExtra(Intent.EXTRA_STREAM,Uri.class):intent.getParcelableExtra(Intent.EXTRA_STREAM);if(uri!=null&&"content".equals(uri.getScheme()))onActivityResult(intent.getType()!=null&&intent.getType().startsWith("image/")?101:105,RESULT_OK,new Intent().setData(uri));}
     @Override public void onRequestPermissionsResult(int request,String[] permissions,int[] grants){super.onRequestPermissionsResult(request,permissions,grants);updateAccess();boolean granted=grants.length>0&&grants[0]==PackageManager.PERMISSION_GRANTED;if(!granted){note("Autorisation refusée. Tu peux la modifier dans les réglages Android de 3AI.");return;}if(request==11)startListening();else if(request==12)personalData(false);else if(request==13)personalData(true);else updateAccess();}
     @Override protected void onResume(){super.onResume();active=true;updateAccess();}
-    @Override protected void onPause(){capture();active=false;if(recognizer!=null){recognizer.cancel();listening=false;}microphone.cancel();stopPlayback();if(listening){listening=false;note("Dictée arrêtée en quittant le chat.");}if(voiceTranscribing){voiceTranscribing=false;busy=false;}super.onPause();}
+    @Override protected void onPause(){capture();active=false;if(recognizer!=null){recognizer.cancel();listening=false;}microphone.cancel();stopPlayback();if(voicePanel!=null&&voicePanel.getVisibility()==View.VISIBLE)showVoiceState("Micro arrêté · brouillon conservé",0);if(voiceTranscribing){voiceTranscribing=false;busy=false;}super.onPause();}
     @Override protected void onSaveInstanceState(Bundle state){capture();state.putInt("tab",tab);super.onSaveInstanceState(state);}
-    @Override protected void onDestroy(){++requestGeneration;api.cancel();internet.cancel();microphone.cancel();stopPlayback();if(!streamingText.trim().isEmpty())saveAnswer(streamingText,"interrupted");worker.shutdownNow();if(recognizer!=null)recognizer.destroy();if(tts!=null)tts.shutdown();Shizuku.removeBinderReceivedListener(binderReceived);Shizuku.removeBinderDeadListener(binderDead);Shizuku.removeRequestPermissionResultListener(permissionListener);if(shellBound){try{Shizuku.unbindUserService(shellArgs,shellConnection,true);}catch(Exception ignored){}}super.onDestroy();}
+    @Override protected void onDestroy(){++requestGeneration;api.cancel();internet.cancel();microphone.cancel();stopPlayback();if(!streamingText.trim().isEmpty())saveAnswer(streamingText,"interrupted");worker.shutdownNow();voiceWorker.shutdownNow();if(recognizer!=null)recognizer.destroy();if(tts!=null)tts.shutdown();Shizuku.removeBinderReceivedListener(binderReceived);Shizuku.removeBinderDeadListener(binderDead);Shizuku.removeRequestPermissionResultListener(permissionListener);if(shellBound){try{Shizuku.unbindUserService(shellArgs,shellConnection,true);}catch(Exception ignored){}}super.onDestroy();}
 }
+
