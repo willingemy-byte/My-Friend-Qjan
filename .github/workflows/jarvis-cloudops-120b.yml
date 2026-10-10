@@ -1,0 +1,31 @@
+name: Jarvis CloudOps - essai manuel 120B
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jarvis-cloudops-120b
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: jarvis
+    steps:
+      - name: Lire la branche Jarvis
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Tester les fichiers du connecteur localement
+        run: python3 -m unittest discover -s tests -v
+      - name: Tester un appel 120B sans aucune donnée personnelle
+        env:
+          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+          TREEAI_BASE_URL: https://ollama.com/v1
+          TREEAI_MODEL: gpt-oss:120b
+          TREEAI_KEY_ENV: OLLAMA_API_KEY
+        run: python3 tools/test_jarvis_cloudops_120b.py
