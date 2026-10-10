@@ -1,0 +1,65 @@
+name: AIV - Test de connexion GitHub vers Alibaba (OIDC)
+
+on:
+  workflow_dispatch: {}
+
+# Pas de deploiement et pas de modification du depot.
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  identite-alibaba:
+    # Uniquement l'execution manuelle depuis la branche main du bon depot.
+    if: github.repository == 'willingemy-byte/My-Friend-Qjan' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: alibaba-audit
+    timeout-minutes: 10
+    steps:
+      - name: Verifier les parametres non secrets
+        shell: bash
+        env:
+          AIV_ROLE_ARN: ${{ vars.AIV_ALIBABA_AUDIT_ROLE_ARN }}
+          AIV_PROVIDER_ARN: ${{ vars.AIV_ALIBABA_OIDC_PROVIDER_ARN }}
+        run: |
+          test -n "$AIV_ROLE_ARN" || { echo "::error::Variable AIV_ALIBABA_AUDIT_ROLE_ARN absente"; exit 1; }
+          test -n "$AIV_PROVIDER_ARN" || { echo "::error::Variable AIV_ALIBABA_OIDC_PROVIDER_ARN absente"; exit 1; }
+
+      - name: Obtenir des identifiants temporaires par OIDC
+        uses: aliyun/configure-aliyun-credentials-action@1e5248c8d5d93a8781ac344a68e19a43341e79e6 # v1
+        with:
+          oidc-provider-arn: ${{ vars.AIV_ALIBABA_OIDC_PROVIDER_ARN }}
+          role-to-assume: ${{ vars.AIV_ALIBABA_AUDIT_ROLE_ARN }}
+          audience: sts.aliyuncs.com
+          role-session-name: aiv-github-audit
+          role-session-expiration: 1800
+
+      - name: Installer le client STS officiel
+        shell: bash
+        run: python3 -m pip install --disable-pip-version-check --no-input 'alibabacloud_sts20150401' 'alibabacloud_credentials'
+
+      - name: Verifier uniquement l'identite (aucune modification)
+        shell: bash
+        env:
+          EXPECTED_ROLE: ${{ vars.AIV_ALIBABA_AUDIT_ROLE_ARN }}
+        run: |
+          python3 - <<'PY'
+          import os
+          from alibabacloud_credentials.client import Client as CredentialsClient
+          from alibabacloud_sts20150401.client import Client as StsClient
+          from alibabacloud_sts20150401 import models as sts_models
+          from alibabacloud_tea_openapi import models as open_api_models
+
+          cfg = open_api_models.Config(
+              credential=CredentialsClient(),
+              endpoint="sts.aliyuncs.com",
+          )
+          result = StsClient(cfg).get_caller_identity(sts_models.GetCallerIdentityRequest())
+          body = result.body
+          expected_role = os.environ["EXPECTED_ROLE"].rsplit("/", 1)[-1].lower()
+          actual_arn = (body.arn or "").lower()
+          if body.identity_type != "AssumedRoleUser" or f":assumed-role/{expected_role}/" not in actual_arn:
+              raise SystemExit("ERREUR: l'identite ne correspond pas au role d'audit attendu.")
+          print("AIV: connexion OIDC verifiee avec le bon role temporaire.")
+          print("Aucune ressource Alibaba n'a ete creee, modifiee ou supprimee.")
+          PY
