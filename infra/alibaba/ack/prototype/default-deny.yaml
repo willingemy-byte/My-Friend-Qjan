@@ -1,0 +1,11 @@
+# Only effective with a CNI that enforces Kubernetes NetworkPolicies.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: aiv-prototype
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
