@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.example.invalid/aiv/user-config/v1",
+  "title": "AIV private local user config v1 - NOT ENROLLED",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "SCHEMA",
+    "CONFIG_REVISION",
+    "USER_ID",
+    "AIV_ID",
+    "POLICY_ID",
+    "CONSENT",
+    "DESTINATIONS",
+    "SECURITY_STATE"
+  ],
+  "properties": {
+    "SCHEMA": {
+      "const": "aiv.user-config.v1"
+    },
+    "CONFIG_REVISION": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "USER_ID": {
+      "type": "string",
+      "pattern": "^usr_[0-9a-f]{32}$"
+    },
+    "AIV_ID": {
+      "type": "string",
+      "pattern": "^aiv_[0-9a-f]{32}$"
+    },
+    "POLICY_ID": {
+      "const": "aiv-privacy-v1"
+    },
+    "CONSENT": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ENCRYPTED_PRIVATE_BACKUP",
+        "SHARE_COLLECTIVE_STATISTICS"
+      ],
+      "properties": {
+        "ENCRYPTED_PRIVATE_BACKUP": {
+          "type": "boolean"
+        },
+        "SHARE_COLLECTIVE_STATISTICS": {
+          "type": "boolean"
+        }
+      }
+    },
+    "DESTINATIONS": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "PRIVATE_VAULT",
+        "COLLECTIVE_ANALYTICS"
+      ],
+      "properties": {
+        "PRIVATE_VAULT": {
+          "enum": [
+            "NOT_CONFIGURED"
+          ]
+        },
+        "COLLECTIVE_ANALYTICS": {
+          "enum": [
+            "DISABLED"
+          ]
+        }
+      }
+    },
+    "SECURITY_STATE": {
+      "enum": [
+        "NOT_ENROLLED"
+      ]
+    }
+  }
+}
