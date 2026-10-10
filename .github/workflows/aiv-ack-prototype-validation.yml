@@ -1,0 +1,39 @@
+name: AIV - ACK prototype offline validation
+
+on:
+  workflow_dispatch: {}
+  pull_request:
+    paths:
+      - 'infra/alibaba/ack/prototype/**'
+      - '.github/workflows/aiv-ack-prototype-validation.yml'
+
+# No Alibaba credentials, no access to private customer data, no deployment.
+permissions:
+  contents: read
+
+jobs:
+  manifest-check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout (read only)
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Render Kubernetes manifests offline
+        shell: bash
+        run: |
+          set -euo pipefail
+          kubectl version --client
+          kubectl kustomize infra/alibaba/ack/prototype > /tmp/aiv-ack-prototype.yaml
+          grep -q '^kind: Namespace$' /tmp/aiv-ack-prototype.yaml
+          grep -q '^kind: NetworkPolicy$' /tmp/aiv-ack-prototype.yaml
+          grep -q '^kind: ResourceQuota$' /tmp/aiv-ack-prototype.yaml
+          grep -q '^kind: ServiceAccount$' /tmp/aiv-ack-prototype.yaml
+          if grep -Eq '^kind: (Secret|Deployment|Job|Pod|Ingress|Service)$' /tmp/aiv-ack-prototype.yaml; then
+            echo 'Unexpected deployable workload or secret in prototype'
+            exit 1
+          fi
+          if ! grep -q 'automountServiceAccountToken: false' /tmp/aiv-ack-prototype.yaml; then
+            echo 'ServiceAccount auto-mount disabled policy missing'
+            exit 1
+          fi
+          echo 'Offline manifests validated. No Alibaba access requested.'
